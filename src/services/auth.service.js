@@ -59,114 +59,145 @@ const loginUser = async (phoneNumber, password) => {
 
 
 // Cập nhật profile
-const updateUserProfile = async (userId, updates, file) => {
+const updateUserProfile = async (userId, updates, files) => {
     try {
-        const { dateOfBirth, gender, phoneNumber, name } = updates;
-        let avatarUrl = null;
-
-        // Xử lý upload ảnh nếu có file
-        if (file) {
-            console.log("🔍 File MIME type:", file.mimetype);
-            const mimeType = file.mimetype;
-            const allowedTypes = ["image/jpeg", "image/png", "image/gif",];
-            if (!allowedTypes.includes(mimeType)) {
-                throw new Error(`Định dạng ảnh không hỗ trợ! MIME type nhận được: ${file.mimetype}`);
-            }
-            const s3Key = `avatars/${userId}/${uuidv4()}.${mimeType.split('/')[1]}`;
-            console.log(process.env.BUCKET_AVATA_PROFILE);
-            
-            await s3.upload({
-                Bucket: process.env.BUCKET_AVATA_PROFILE,
-                Key: s3Key,
-                Body: file.buffer,
-                ContentType: mimeType,
-            }).promise();
-            avatarUrl = `s3://${process.env.BUCKET_AVATA_PROFILE}/${s3Key}`;
-
+      const { dateOfBirth, gender, phoneNumber, name, bio } = updates;
+      let avatarUrl = null;
+      let coverPhotoUrl = null;
+  
+      // Xử lý upload ảnh nếu có file
+      if (files) {
+        if (files.avatar) {
+          console.log("🔍 Avatar MIME type:", files.avatar.mimetype);
+          const mimeType = files.avatar.mimetype;
+          const allowedTypes = ["image/jpeg", "image/png", "image/gif"];
+          if (!allowedTypes.includes(mimeType)) {
+            throw new Error(`Định dạng ảnh avatar không hỗ trợ! MIME type: ${mimeType}`);
+          }
+          const s3Key = `avatars/${userId}/${uuidv4()}.${mimeType.split('/')[1]}`;
+          await s3.upload({
+            Bucket: process.env.BUCKET_AVATA_PROFILE,
+            Key: s3Key,
+            Body: files.avatar.buffer,
+            ContentType: mimeType,
+          }).promise();
+          avatarUrl = `https://${process.env.BUCKET_AVATA_PROFILE}.s3.amazonaws.com/${s3Key}`;
         }
-
-        // Lấy bản ghi hiện tại để kiểm tra các trường đã tồn tại chưa
-        const currentUser = await dynamoDB.get({
-            TableName: "Users",
-            Key: { userId }
-        }).promise();
-
-        if (!currentUser.Item) {
-            throw new Error("Người dùng không tồn tại!");
+  
+        if (files.coverPhoto) {
+          console.log("🔍 Cover photo MIME type:", files.coverPhoto.mimetype);
+          const mimeType = files.coverPhoto.mimetype;
+          const allowedTypes = ["image/jpeg", "image/png", "image/gif"];
+          if (!allowedTypes.includes(mimeType)) {
+            throw new Error(`Định dạng ảnh bìa không hỗ trợ! MIME type: ${mimeType}`);
+          }
+          const s3Key = `coverPhotos/${userId}/${uuidv4()}.${mimeType.split('/')[1]}`;
+          await s3.upload({
+            Bucket: process.env.BUCKET_AVATA_PROFILE,
+            Key: s3Key,
+            Body: files.coverPhoto.buffer,
+            ContentType: mimeType,
+          }).promise();
+          coverPhotoUrl = `https://${process.env.BUCKET_AVATA_PROFILE}.s3.amazonaws.com/${s3Key}`;
         }
-
-        // Chuẩn bị UpdateExpression và ExpressionAttributeValues động
-        let updateExpression = "set";
-        const expressionAttributeValues = {};
-        const expressionAttributeNames = {};
-
-        // Các trường mặc định sẽ được thêm nếu chưa tồn tại
-        const defaultFields = {
-            dateOfBirth: null,
-            gender: null,
-            avatar: null
-        };
-
-        // Thêm các trường mặc định nếu chưa có trong bản ghi hiện tại
-        if (!currentUser.Item.dateOfBirth && !dateOfBirth) {
-            updateExpression += " dateOfBirth = :dobDefault,";
-            expressionAttributeValues[":dobDefault"] = defaultFields.dateOfBirth;
-        }
-        if (!currentUser.Item.gender && !gender) {
-            updateExpression += " gender = :genderDefault,";
-            expressionAttributeValues[":genderDefault"] = defaultFields.gender;
-        }
-        if (!currentUser.Item.avatar && !avatarUrl) {
-            updateExpression += " avatar = :avatarDefault,";
-            expressionAttributeValues[":avatarDefault"] = defaultFields.avatar;
-        }
-
-        // Thêm các trường từ updates hoặc file nếu có
-        if (dateOfBirth) {
-            updateExpression += " dateOfBirth = :dob,";
-            expressionAttributeValues[":dob"] = dateOfBirth;
-        }
-        if (gender) {
-            updateExpression += " gender = :gender,";
-            expressionAttributeValues[":gender"] = gender;
-        }
-        if (avatarUrl) {
-            updateExpression += " avatar = :avatar,";
-            expressionAttributeValues[":avatar"] = avatarUrl;
-        }
-        if (phoneNumber) {
-            const normalizedPhone = normalizePhoneNumber(phoneNumber);
-            updateExpression += " phoneNumber = :phone,";
-            expressionAttributeValues[":phone"] = normalizedPhone;
-        }
-        if (name) {
-            updateExpression += " #name = :name,";
-            expressionAttributeValues[":name"] = name;
-            expressionAttributeNames["#name"] = "name";
-        }
-
-        // Xóa dấu phẩy cuối cùng
-        updateExpression = updateExpression.slice(0, -1);
-        if (updateExpression === "set") {
-            throw new Error("Không có thông tin nào để cập nhật!");
-        }
-
-        const params = {
-            TableName: "Users",
-            Key: { userId },
-            UpdateExpression: updateExpression,
-            ExpressionAttributeValues: expressionAttributeValues,
-            ExpressionAttributeNames: Object.keys(expressionAttributeNames).length > 0 ? expressionAttributeNames : undefined,
-            ReturnValues: "ALL_NEW"
-        };
-
-        const result = await dynamoDB.update(params).promise();
-        return result.Attributes;
+      }
+  
+      // Lấy bản ghi hiện tại
+      const currentUser = await dynamoDB.get({
+        TableName: "Users",
+        Key: { userId }
+      }).promise();
+  
+      if (!currentUser.Item) {
+        throw new Error("Người dùng không tồn tại!");
+      }
+  
+      // Chuẩn bị UpdateExpression và ExpressionAttributeValues động
+      let updateExpression = "set";
+      const expressionAttributeValues = {};
+      const expressionAttributeNames = {};
+  
+      // Các trường mặc định (chỉ thêm nếu chưa tồn tại và không có giá trị mới)
+      const defaultFields = {
+        dateOfBirth: null,
+        gender: null,
+        avatar: null,
+        bio: null,
+        coverPhoto: null
+      };
+  
+      if (!currentUser.Item.dateOfBirth && !dateOfBirth) {
+        updateExpression += " dateOfBirth = :dobDefault,";
+        expressionAttributeValues[":dobDefault"] = defaultFields.dateOfBirth;
+      }
+      if (!currentUser.Item.gender && !gender) {
+        updateExpression += " gender = :genderDefault,";
+        expressionAttributeValues[":genderDefault"] = defaultFields.gender;
+      }
+      if (!currentUser.Item.avatar && !avatarUrl) {
+        updateExpression += " avatar = :avatarDefault,";
+        expressionAttributeValues[":avatarDefault"] = defaultFields.avatar;
+      }
+      if (!currentUser.Item.coverPhoto && !coverPhotoUrl) {
+        updateExpression += " coverPhoto = :coverPhotoDefault,";
+        expressionAttributeValues[":coverPhotoDefault"] = defaultFields.coverPhoto;
+      }
+  
+      // Thêm các trường từ updates hoặc file
+      if (dateOfBirth) {
+        updateExpression += " dateOfBirth = :dob,";
+        expressionAttributeValues[":dob"] = dateOfBirth;
+      }
+      if (gender) {
+        updateExpression += " gender = :gender,";
+        expressionAttributeValues[":gender"] = gender;
+      }
+      if (avatarUrl) {
+        updateExpression += " avatar = :avatar,";
+        expressionAttributeValues[":avatar"] = avatarUrl;
+      }
+      if (typeof bio !== 'undefined') { // Xử lý bio kể cả khi là "" hoặc null
+        updateExpression += " bio = :bio,";
+        expressionAttributeValues[":bio"] = bio === "" ? null : bio; // Chuỗi rỗng -> null
+      }
+      if (coverPhotoUrl) {
+        updateExpression += " coverPhoto = :coverPhoto,";
+        expressionAttributeValues[":coverPhoto"] = coverPhotoUrl;
+      }
+      if (phoneNumber) {
+        const normalizedPhone = normalizePhoneNumber(phoneNumber);
+        updateExpression += " phoneNumber = :phone,";
+        expressionAttributeValues[":phone"] = normalizedPhone;
+      }
+      if (name) {
+        updateExpression += " #name = :name,";
+        expressionAttributeValues[":name"] = name;
+        expressionAttributeNames["#name"] = "name";
+      }
+  
+      // Xóa dấu phẩy cuối cùng
+      updateExpression = updateExpression.slice(0, -1);
+      if (updateExpression === "set") {
+        throw new Error("Không có thông tin nào để cập nhật!");
+      }
+  
+      const params = {
+        TableName: "Users",
+        Key: { userId },
+        UpdateExpression: updateExpression,
+        ExpressionAttributeValues: expressionAttributeValues,
+        ExpressionAttributeNames: Object.keys(expressionAttributeNames).length > 0 ? expressionAttributeNames : undefined,
+        ReturnValues: "ALL_NEW"
+      };
+  
+      const result = await dynamoDB.update(params).promise();
+      return result.Attributes;
     } catch (error) {
-        console.error("❌ Lỗi cập nhật profile:", error);
-        throw new Error(error.message || "Không thể cập nhật profile!");
+      console.error("❌ Lỗi cập nhật profile:", error);
+      throw new Error(error.message || "Không thể cập nhật profile!");
     }
-};
+  };
+  
 const updateUserPassword = async (userId, newPassword,phoneNumber) => {
     const hashedPassword = await bcrypt.hash(newPassword, 10);
     try {

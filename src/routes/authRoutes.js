@@ -13,8 +13,20 @@ const {
 } = require('../controllers/authController'); // Gộp OTP vào authController
 const checkBlacklist = require('../middlewares/checkBlacklist');
 const {authMiddleware ,checkOwnership} = require('../middlewares/authMiddleware');
-const { updateUserPassword } = require('../services/auth.service');
-const upload = multer({ storage: multer.memoryStorage() });
+
+// Cấu hình multer
+const upload = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: 5 * 1024 * 1024 }, // Giới hạn 5MB
+    fileFilter: (req, file, cb) => {
+      const allowedTypes = ['image/jpeg', 'image/png', 'image/gif'];
+      if (allowedTypes.includes(file.mimetype)) {
+        cb(null, true);
+      } else {
+        cb(new Error('Định dạng file không hỗ trợ!'));
+      }
+    }
+  });
 
 // Sử dụng POST cho các hành động tạo mới (register, login, send-otp, reset-password, logout, verify-otp).
 // Sử dụng PATCH cho các hành động cập nhật (profile, reset-password-login).
@@ -30,7 +42,15 @@ router.post('/reset-password', resetPasswordController);
 router.patch('/reset-password-login', authMiddleware, checkBlacklist, changePasswordController);
 
 router.get('/profile', authMiddleware, checkBlacklist, getProfileController);
-router.patch('/profile', authMiddleware, upload.fields([{ name: 'avatar', maxCount: 1 }]), updateUserProfileController);
+router.patch(
+    '/profile',
+    authMiddleware,
+    upload.fields([
+      { name: 'avatar', maxCount: 1 },
+      { name: 'coverPhoto', maxCount: 1 }
+    ]),
+    updateUserProfileController
+  );
 
 
 module.exports = router;

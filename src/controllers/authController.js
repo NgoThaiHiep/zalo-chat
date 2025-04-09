@@ -201,29 +201,55 @@ const verifyOTPController = async (req, res) => {
   }
 };
 
-
 const updateUserProfileController = async (req, res) => {
   try {
     console.log("🔍 req.body:", req.body);
-      console.log("🔍 req.files:", req.files);
-      const { dateOfBirth, gender, phoneNumber, name } = req.body;
-      const userId = req.user.id;
-      const file = req.files?.avatar ? req.files.avatar[0] : null;
+    console.log("🔍 req.files:", req.files);
 
-      if (file) {
-        console.log("🔍 File details:", file);
-      } else {
-          console.log("🔍 No file received");
-      }
-      const updates = { dateOfBirth, gender, phoneNumber, name };
+    // Lấy dữ liệu từ req.body
+    const { dateOfBirth, gender, phoneNumber, name, bio } = req.body;
+    const userId = req.user.id;
 
-      const updatedProfile = await AuthService.updateUserProfile(userId, updates, file);
-      return res.status(200).json({ success: true, data: updatedProfile });
+    // Xử lý file từ req.files
+    const avatarFile = req.files?.avatar ? req.files.avatar[0] : null;
+    const coverPhotoFile = req.files?.coverPhoto ? req.files.coverPhoto[0] : null;
+
+    if (avatarFile) {
+      console.log("🔍 Avatar file details:", avatarFile);
+    } else {
+      console.log("🔍 No avatar file received");
+    }
+    if (coverPhotoFile) {
+      console.log("🔍 Cover photo file details:", coverPhotoFile);
+    } else {
+      console.log("🔍 No cover photo file received");
+    }
+
+    // Tạo object updates
+    const updates = {
+      dateOfBirth,
+      gender,
+      phoneNumber,
+      name,
+      bio
+    };
+
+    // Tạo object files chứa cả avatar và coverPhoto
+    const files = {
+      avatar: avatarFile,
+      coverPhoto: coverPhotoFile
+    };
+
+    // Gọi service với userId, updates, và files
+    const updatedProfile = await AuthService.updateUserProfile(userId, updates, files);
+
+    return res.status(200).json({ success: true, data: updatedProfile });
   } catch (error) {
-      console.error("❌ Lỗi cập nhật profile:", error.message);
-      return res.status(400).json({ success: false, message: error.message });
+    console.error("❌ Lỗi cập nhật profile:", error.message);
+    return res.status(400).json({ success: false, message: error.message });
   }
 };
+
 module.exports = {
   loginController,
   logoutController,
