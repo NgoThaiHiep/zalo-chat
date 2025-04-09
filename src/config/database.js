@@ -1,5 +1,5 @@
 const { DynamoDBClient, CreateTableCommand, DescribeTableCommand } = require('@aws-sdk/client-dynamodb');
-const { S3Client, CreateBucketCommand, HeadBucketCommand } = require('@aws-sdk/client-s3');
+const { S3Client, CreateBucketCommand, HeadBucketCommand, PutBucketPolicyCommand } = require('@aws-sdk/client-s3');
 const {dynamoDB, sns } = require("../config/aws.config");
 require('dotenv').config();
 
@@ -21,32 +21,52 @@ const s3Client = new S3Client({
   },
 });
 
-// Hàm kiểm tra và tạo S3 bucket nếu chưa tồn tại
-const createBucketIfNotExists = async (bucketName) => {
+
+// Hàm kiểm tra và tạo S3 bucket nếu chưa tồn tại, sau đó thêm bucket policy
+const createBucketIfNotExists = async (bucketName, bucketPolicy) => {
   try {
-      await s3Client.send(new HeadBucketCommand({ Bucket: bucketName }));
-      console.log(`Bucket ${bucketName} already exists`);
+    await s3Client.send(new HeadBucketCommand({ Bucket: bucketName }));
+    console.log(`Bucket ${bucketName} already exists`);
   } catch (error) {
-      if (error.name === 'NotFound' || error.$metadata?.httpStatusCode === 404) {
-          try {
-              await s3Client.send(new CreateBucketCommand({
-                  Bucket: bucketName,
-                  CreateBucketConfiguration: {
-                      LocationConstraint: process.env.AWS_REGION || "ap-southeast-1"
-                  }
-              }));
-              console.log(`Bucket ${bucketName} created successfully`);
-          } catch (createError) {
-              console.error(`Error creating bucket ${bucketName}:`, createError);
-              throw createError;
-          }
-      } else {
-          console.error(`Error checking bucket ${bucketName}:`, error);
-          throw error;
+    if (error.name === 'NotFound' || error.$metadata?.httpStatusCode === 404) {
+      try {
+        await s3Client.send(new CreateBucketCommand({
+          Bucket: bucketName,
+          CreateBucketConfiguration: {
+            LocationConstraint: process.env.AWS_REGION || "ap-southeast-1",
+          },
+        }));
+        console.log(`Bucket ${bucketName} created successfully`);
+
+        // Áp dụng bucket policy sau khi tạo bucket
+        if (bucketPolicy) {
+          await applyBucketPolicy(bucketName, bucketPolicy);
+        }
+      } catch (createError) {
+        console.error(`Error creating bucket ${bucketName}:`, createError);
+        throw createError;
       }
+    } else {
+      console.error(`Error checking bucket ${bucketName}:`, error);
+      throw error;
+    }
   }
 };
 
+// Hàm thêm bucket policy
+const applyBucketPolicy = async (bucketName, policy) => {
+  try {
+    const policyCommand = new PutBucketPolicyCommand({
+      Bucket: bucketName,
+      Policy: JSON.stringify(policy), // Chuyển policy thành chuỗi JSON
+    });
+    await s3Client.send(policyCommand);
+    console.log(`Bucket policy applied successfully to ${bucketName}`);
+  } catch (error) {
+    console.error(`Error applying bucket policy to ${bucketName}:`, error);
+    throw error;
+  }
+};
 // Hàm kiểm tra và tạo bảng nếu chưa tồn tại
 const createTableIfNotExists = async (tableName, params) => {
   try {
@@ -242,12 +262,52 @@ const initializeDatabase = async () => {
       ],
       BillingMode: 'PAY_PER_REQUEST',
     };
+    
     await createTableIfNotExists('GroupMessages', groupMessagesTableParams);
 
+
+    // Bucket policy mẫu
+    const defaultBucketPolicy = {
+      Version: "2012-10-17",
+      Id: "Policy1740013275097",
+      Statement: [
+        {
+          Sid: "Stmt1740013273746",
+          Effect: "Allow",
+          Principal: "*",
+          Action: "s3:GetObject",
+          Resource: [
+            "arn:aws:s3:::BUCKET_NAME", // Sẽ được thay thế động
+            "arn:aws:s3:::BUCKET_NAME/*",
+          ],
+        },
+      ],
+    };
+
+    // Hàm tạo policy với bucket name cụ thể
+    const getBucketPolicy = (bucketName) => {
+      const policy = JSON.parse(JSON.stringify(defaultBucketPolicy)); // Sao chép policy
+      policy.Statement[0].Resource = [
+        `arn:aws:s3:::${bucketName}`,
+        `arn:aws:s3:::${bucketName}/*`,
+      ];
+      return policy;
+    };
     // Tạo S3 Buckets    
-    await createBucketIfNotExists(process.env.BUCKET_NAME_Chat_Send);
-    await createBucketIfNotExists(process.env.BUCKET_NAME_GroupChat_Send);
-    await createBucketIfNotExists(process.env.BUCKET_AVATA_PROFILE);
+
+    // Tạo S3 Buckets với bucket policy
+    await createBucketIfNotExists(
+      process.env.BUCKET_NAME_Chat_Send,
+      getBucketPolicy(process.env.BUCKET_NAME_Chat_Send)
+    );
+    await createBucketIfNotExists(
+      process.env.BUCKET_NAME_GroupChat_Send,
+      getBucketPolicy(process.env.BUCKET_NAME_GroupChat_Send)
+    );
+    await createBucketIfNotExists(
+      process.env.BUCKET_AVATA_PROFILE,
+      getBucketPolicy(process.env.BUCKET_AVATA_PROFILE)
+    );
 
     console.log('Database and S3 buckets initialized successfully');
   } catch (error) {
