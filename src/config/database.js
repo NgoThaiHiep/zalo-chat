@@ -1,14 +1,14 @@
 const { DynamoDBClient, CreateTableCommand, DescribeTableCommand } = require('@aws-sdk/client-dynamodb');
-const { S3Client, CreateBucketCommand, HeadBucketCommand, PutBucketPolicyCommand } = require('@aws-sdk/client-s3');
-const {dynamoDB, sns } = require("../config/aws.config");
+const { S3Client, CreateBucketCommand, HeadBucketCommand, PutBucketPolicyCommand, PutPublicAccessBlockCommand } = require('@aws-sdk/client-s3');
+const { dynamoDB, sns } = require("../config/aws.config");
 require('dotenv').config();
 
 // Khởi tạo DynamoDB client
 const client = new DynamoDBClient({
-    region: process.env.AWS_REGION || "ap-southeast-1",
-    credentials: {
-        accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+  region: process.env.AWS_REGION || "ap-southeast-1",
+  credentials: {
+    accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
   },
 });
 
@@ -16,17 +16,41 @@ const client = new DynamoDBClient({
 const s3Client = new S3Client({
   region: process.env.AWS_REGION || "ap-southeast-1",
   credentials: {
-      accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-      secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+    accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
   },
 });
 
+// Hàm tắt Block Public Access
+const disableBlockPublicAccess = async (bucketName) => {
+  try {
+    const publicAccessBlockParams = {
+      Bucket: bucketName,
+      PublicAccessBlockConfiguration: {
+        BlockPublicAcls: false,
+        IgnorePublicAcls: false,
+        BlockPublicPolicy: false,
+        RestrictPublicBuckets: false,
+      },
+    };
+    await s3Client.send(new PutPublicAccessBlockCommand(publicAccessBlockParams));
+    console.log(`Block Public Access disabled for bucket ${bucketName}`);
+  } catch (error) {
+    console.error(`Error disabling Block Public Access for ${bucketName}:`, error);
+    throw error;
+  }
+};
 
-// Hàm kiểm tra và tạo S3 bucket nếu chưa tồn tại, sau đó thêm bucket policy
+// Hàm kiểm tra và tạo S3 bucket nếu chưa tồn tại, sau đó thêm bucket policy và tắt Block Public Access
 const createBucketIfNotExists = async (bucketName, bucketPolicy) => {
   try {
     await s3Client.send(new HeadBucketCommand({ Bucket: bucketName }));
     console.log(`Bucket ${bucketName} already exists`);
+    // Nếu bucket đã tồn tại, vẫn tắt Block Public Access và áp dụng policy
+    await disableBlockPublicAccess(bucketName);
+    if (bucketPolicy) {
+      await applyBucketPolicy(bucketName, bucketPolicy);
+    }
   } catch (error) {
     if (error.name === 'NotFound' || error.$metadata?.httpStatusCode === 404) {
       try {
@@ -37,6 +61,9 @@ const createBucketIfNotExists = async (bucketName, bucketPolicy) => {
           },
         }));
         console.log(`Bucket ${bucketName} created successfully`);
+
+        // Tắt Block Public Access
+        await disableBlockPublicAccess(bucketName);
 
         // Áp dụng bucket policy sau khi tạo bucket
         if (bucketPolicy) {
@@ -67,6 +94,7 @@ const applyBucketPolicy = async (bucketName, policy) => {
     throw error;
   }
 };
+
 // Hàm kiểm tra và tạo bảng nếu chưa tồn tại
 const createTableIfNotExists = async (tableName, params) => {
   try {
@@ -103,7 +131,7 @@ const waitForTable = async (tableName) => {
   }
 };
 
-// Hàm khởi tạo tất cả các bảng
+// Hàm khởi tạo tất cả các bảng và bucket
 const initializeDatabase = async () => {
   try {
     // 1. Tạo bảng Users
@@ -262,9 +290,7 @@ const initializeDatabase = async () => {
       ],
       BillingMode: 'PAY_PER_REQUEST',
     };
-    
     await createTableIfNotExists('GroupMessages', groupMessagesTableParams);
-
 
     // Bucket policy mẫu
     const defaultBucketPolicy = {
@@ -293,9 +319,8 @@ const initializeDatabase = async () => {
       ];
       return policy;
     };
-    // Tạo S3 Buckets    
 
-    // Tạo S3 Buckets với bucket policy
+    // Tạo hoặc cập nhật S3 Buckets với bucket policy và tắt Block Public Access
     await createBucketIfNotExists(
       process.env.BUCKET_NAME_Chat_Send,
       getBucketPolicy(process.env.BUCKET_NAME_Chat_Send)
