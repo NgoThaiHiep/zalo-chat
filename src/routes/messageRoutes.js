@@ -10,7 +10,7 @@ const {
   deleteMessageController,
   restoreMessageController
 } = require('../controllers/messageController');
-const authMiddleware = require('../middlewares/authMiddleware');
+const {authMiddleware ,checkOwnership} = require('../middlewares/authMiddleware');
 
 const router = express.Router();
 

@@ -1,11 +1,12 @@
 const redisClient = require("../config/redis");
-const {dynamoDB, sns } = require("../config/aws.config");
+const {dynamoDB,s3, sns } = require("../config/aws.config");
 
 
 const normalizePhoneNumber = (phoneNumber) => {
   console.log(`Chuẩn hóa số điện thoại: ${phoneNumber} -> ${phoneNumber.replace(/^(\+84|0)/, '84')}`);
   return phoneNumber.replace(/^(\+84|0)/, '84');
 };
+
 
 // Gửi OTP
 const sendOTP = async (phoneNumber, purpose = 'register') => {

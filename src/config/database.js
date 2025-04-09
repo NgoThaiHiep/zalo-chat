@@ -1,4 +1,6 @@
 const { DynamoDBClient, CreateTableCommand, DescribeTableCommand } = require('@aws-sdk/client-dynamodb');
+const { S3Client, CreateBucketCommand, HeadBucketCommand } = require('@aws-sdk/client-s3');
+const {dynamoDB, sns } = require("../config/aws.config");
 require('dotenv').config();
 
 // Khởi tạo DynamoDB client
@@ -9,6 +11,41 @@ const client = new DynamoDBClient({
         secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
   },
 });
+
+// Khởi tạo S3 client
+const s3Client = new S3Client({
+  region: process.env.AWS_REGION || "ap-southeast-1",
+  credentials: {
+      accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+      secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+  },
+});
+
+// Hàm kiểm tra và tạo S3 bucket nếu chưa tồn tại
+const createBucketIfNotExists = async (bucketName) => {
+  try {
+      await s3Client.send(new HeadBucketCommand({ Bucket: bucketName }));
+      console.log(`Bucket ${bucketName} already exists`);
+  } catch (error) {
+      if (error.name === 'NotFound' || error.$metadata?.httpStatusCode === 404) {
+          try {
+              await s3Client.send(new CreateBucketCommand({
+                  Bucket: bucketName,
+                  CreateBucketConfiguration: {
+                      LocationConstraint: process.env.AWS_REGION || "ap-southeast-1"
+                  }
+              }));
+              console.log(`Bucket ${bucketName} created successfully`);
+          } catch (createError) {
+              console.error(`Error creating bucket ${bucketName}:`, createError);
+              throw createError;
+          }
+      } else {
+          console.error(`Error checking bucket ${bucketName}:`, error);
+          throw error;
+      }
+  }
+};
 
 // Hàm kiểm tra và tạo bảng nếu chưa tồn tại
 const createTableIfNotExists = async (tableName, params) => {
@@ -59,7 +96,7 @@ const initializeDatabase = async () => {
       KeySchema: [{ AttributeName: 'userId', KeyType: 'HASH' }],
       GlobalSecondaryIndexes: [
         {
-          IndexName: 'PhoneNumberIndex',
+          IndexName: 'phoneNumber-index',
           KeySchema: [{ AttributeName: 'phoneNumber', KeyType: 'HASH' }],
           Projection: { ProjectionType: 'ALL' },
         },
@@ -207,7 +244,12 @@ const initializeDatabase = async () => {
     };
     await createTableIfNotExists('GroupMessages', groupMessagesTableParams);
 
-    console.log('Database initialized successfully');
+    // Tạo S3 Buckets    
+    await createBucketIfNotExists(process.env.BUCKET_NAME_Chat_Send);
+    await createBucketIfNotExists(process.env.BUCKET_NAME_GroupChat_Send);
+    await createBucketIfNotExists(process.env.BUCKET_AVATA_PROFILE);
+
+    console.log('Database and S3 buckets initialized successfully');
   } catch (error) {
     console.error('Error initializing database:', error);
     throw error;

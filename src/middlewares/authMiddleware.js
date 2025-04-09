@@ -25,4 +25,13 @@ const authMiddleware = (req, res, next) => {
     }
 };
 
-module.exports = authMiddleware;
+const checkOwnership = (req, res, next) => {
+    const userIdFromToken = req.user.id;
+    const userIdFromRequest = req.body.userId || req.params.userId; // Nếu có userId trong body hoặc params
+
+    if (userIdFromRequest && userIdFromToken !== userIdFromRequest) {
+        return res.status(403).json({ success: false, message: "Bạn không có quyền cập nhật thông tin của người dùng khác!" });
+    }
+    next();
+};
+module.exports = {authMiddleware , checkOwnership }

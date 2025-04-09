@@ -1,5 +1,5 @@
 const express = require('express');
-const authMiddleware = require('../middlewares/authMiddleware');
+const {authMiddleware ,checkOwnership} = require('../middlewares/authMiddleware');
 const {
   createGroupController,
   joinGroupController,

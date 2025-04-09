@@ -3,6 +3,7 @@ const AuthService = require('../services/auth.service');
 const OtpService = require('../services/otp.services');
 const redisClient = require('../config/redis');
 
+
 const loginController = async (req, res) => {
   try {
     let { phoneNumber, password } = req.body;
@@ -47,16 +48,19 @@ const logoutController = async (req, res) => {
 
 const getProfileController = async (req, res) => {
   try {
-    const user = req.user;
-    if (!user) {
-      return res.status(404).json({ message: 'Không tìm thấy người dùng!' });
-    }
-    res.json({
-      success: true,
-      data: { id: user.id, name: user.name, phoneNumber: user.phoneNumber },
-    });
+      const userId = req.user.id; // Lấy từ JWT token qua authMiddleware
+      if (!userId) {
+          return res.status(404).json({ success: false, message: 'Không tìm thấy người dùng!' });
+      }
+
+      const userData = await AuthService.getProfile(userId);
+      res.json({
+          success: true,
+          data: userData
+      });
   } catch (error) {
-    res.status(500).json({ message: 'Lỗi server', error: error.message });
+      console.error("❌ Lỗi trong controller lấy profile:", error.message);
+      res.status(500).json({ success: false, message: 'Lỗi server', error: error.message });
   }
 };
 
@@ -101,8 +105,6 @@ const registerController = async (req, res) => {
     if (password.length < 10) {
       return res.status(400).json({ success: false, message: 'Mật khẩu phải dài ít nhất 10 ký tự!' });
     }
-
-
 
     // Kiểm tra mật khẩu có chứa số, ký tự đặc biệt, chữ hoa, chữ thường
     const hasNumber = /[0-9]/.test(password);
@@ -160,6 +162,25 @@ const resetPasswordController = async (req, res) => {
   }
 };
 
+
+
+const changePasswordController = async (req, res) => {
+  try {
+      const { oldPassword, newPassword } = req.body;
+      const userId = req.user.id; // Lấy từ JWT token qua middleware
+
+      if (!oldPassword || !newPassword) {
+          return res.status(400).json({ message: "Thiếu mật khẩu cũ hoặc mật khẩu mới!" });
+      }
+
+      const result = await AuthService.changeUserPassword(userId, oldPassword, newPassword);
+      return res.status(200).json({ success: true, message: result.message });
+  } catch (error) {
+      console.error("❌ Lỗi đổi mật khẩu:", error.message);
+      return res.status(400).json({ success: false, message: error.message });
+  }
+};
+
 const verifyOTPController = async (req, res) => {
   try {
     const { phoneNumber, otp } = req.body;
@@ -180,6 +201,29 @@ const verifyOTPController = async (req, res) => {
   }
 };
 
+
+const updateUserProfileController = async (req, res) => {
+  try {
+    console.log("🔍 req.body:", req.body);
+      console.log("🔍 req.files:", req.files);
+      const { dateOfBirth, gender, phoneNumber, name } = req.body;
+      const userId = req.user.id;
+      const file = req.files?.avatar ? req.files.avatar[0] : null;
+
+      if (file) {
+        console.log("🔍 File details:", file);
+      } else {
+          console.log("🔍 No file received");
+      }
+      const updates = { dateOfBirth, gender, phoneNumber, name };
+
+      const updatedProfile = await AuthService.updateUserProfile(userId, updates, file);
+      return res.status(200).json({ success: true, data: updatedProfile });
+  } catch (error) {
+      console.error("❌ Lỗi cập nhật profile:", error.message);
+      return res.status(400).json({ success: false, message: error.message });
+  }
+};
 module.exports = {
   loginController,
   logoutController,
@@ -188,4 +232,7 @@ module.exports = {
   registerController,
   resetPasswordController,
   verifyOTPController,
+  updateUserProfileController,
+  changePasswordController
+  // sendMessage: [upload.single('file'), sendMessage],
 };
