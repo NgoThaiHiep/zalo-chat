@@ -8,6 +8,39 @@ const createMessage = async (senderId, receiverId, messageData) => {
     throw new Error('senderId, receiverId hoặc messageData không hợp lệ!');
   }
 
+  // Kiểm tra xem sender có bị receiver chặn không
+  const blockCheckParams = {
+    TableName: 'BlockedUsers',
+    Key: { userId: receiverId, blockedUserId: senderId },
+  };
+  const blockCheckResult = await dynamoDB.get(blockCheckParams).promise();
+  if (blockCheckResult.Item) {
+    throw new Error('Bạn đã bị người này chặn, không thể gửi tin nhắn!');
+  }
+
+  // Kiểm tra xem receiver có chặn tin nhắn từ người lạ không
+  const receiverParams = {
+    TableName: 'Users',
+    Key: { userId: receiverId },
+  };
+  const receiverResult = await dynamoDB.get(receiverParams).promise();
+  if (!receiverResult.Item) {
+    throw new Error('Người nhận không tồn tại!');
+  }
+  const restrictStrangerMessages = receiverResult.Item.restrictStrangerMessages;
+
+  // Nếu sender và receiver là cùng một người, bỏ qua kiểm tra bạn bè
+  if (senderId !== receiverId && restrictStrangerMessages) {
+    const friendCheckParams = {
+      TableName: 'Friends',
+      Key: { userId: receiverId, friendId: senderId },
+    };
+    const friendCheckResult = await dynamoDB.get(friendCheckParams).promise();
+    if (!friendCheckResult.Item) {
+      throw new Error('Người này không nhận tin nhắn từ người lạ!');
+    }
+  }
+
   const newMessage = {
     messageId: uuidv4(),
     senderId,
@@ -16,21 +49,23 @@ const createMessage = async (senderId, receiverId, messageData) => {
     timestamp: new Date().toISOString(),
   };
 
-  console.log('Creating message with data:', newMessage); // Debug
+  console.log('Creating message with data:', newMessage);
 
   const savedMessage = await sendMessageCore(newMessage, 'Messages', process.env.BUCKET_NAME_Chat_Send);
 
-  // Thêm job vào queue nếu là tin nhắn thoại có transcribe
   if (savedMessage.type === 'voice' && savedMessage.metadata?.transcribe) {
-    await transcribeQueue.add({
-      messageId: savedMessage.messageId,
-      senderId,
-      receiverId,
-      tableName: 'Messages',
-    }, {
-      attempts: 5,
-      backoff: 5000,
-    });
+    await transcribeQueue.add(
+      {
+        messageId: savedMessage.messageId,
+        senderId,
+        receiverId,
+        tableName: 'Messages',
+      },
+      {
+        attempts: 5,
+        backoff: 5000,
+      }
+    );
   }
 
   io().to(receiverId).emit('receiveMessage', savedMessage);
@@ -38,7 +73,7 @@ const createMessage = async (senderId, receiverId, messageData) => {
   return savedMessage;
 };
 
-// Các hàm khác giữ nguyên
+
 const getMessagesBetweenUsers = async (user1, user2) => {
   const params1 = {
     TableName: 'Messages',
@@ -66,18 +101,31 @@ const getMessagesBetweenUsers = async (user1, user2) => {
 };
 
 const getConversationUsers = async (currentUserId) => {
-  const params = {
+  const params1 = {
     TableName: 'Messages',
-    FilterExpression: 'senderId = :userId OR receiverId = :userId',
+    IndexName: 'SenderReceiverIndex',
+    KeyConditionExpression: 'senderId = :userId',
+    ExpressionAttributeValues: { ':userId': currentUserId },
+  };
+  const params2 = {
+    TableName: 'Messages',
+    IndexName: 'ReceiverSenderIndex',
+    KeyConditionExpression: 'receiverId = :userId',
     ExpressionAttributeValues: { ':userId': currentUserId },
   };
 
-  const result = await dynamoDB.scan(params).promise();
-  const userIds = new Set();
-  result.Items.forEach((msg) => {
-    if (msg.senderId && msg.senderId !== currentUserId) userIds.add(msg.senderId);
-    if (msg.receiverId && msg.receiverId !== currentUserId) userIds.add(msg.receiverId);
-  });
+  const [result1, result2] = await Promise.all([
+    dynamoDB.query(params1).promise(),
+    dynamoDB.query(params2).promise(),
+  ]);
+
+  // Không lọc currentUserId để giữ chính mình trong danh sách
+  const userIds = new Set([
+    ...result1.Items.map(msg => msg.receiverId),
+    ...result2.Items.map(msg => msg.senderId),
+  ]); // Bỏ filter(id => id !== currentUserId)
+
+  console.log('User IDs found:', [...userIds]);
 
   const users = await Promise.all(
     [...userIds].map(async (userId) => {
@@ -90,6 +138,23 @@ const getConversationUsers = async (currentUserId) => {
 };
 
 const forwardMessage = async (senderId, messageId, targetReceiverId) => {
+  
+  const blockCheck = await dynamoDB.get({
+    TableName: 'BlockedUsers',
+    Key: { userId: targetReceiverId, blockedUserId: senderId },
+  }).promise();
+  if (blockCheck.Item) throw new Error('Bạn đã bị người này chặn!');
+  
+  const receiver = await dynamoDB.get({ TableName: 'Users', Key: { userId: targetReceiverId } }).promise();
+  if (!receiver.Item) throw new Error('Người nhận không tồn tại!');
+  if (receiver.Item.restrictStrangerMessages && senderId !== targetReceiverId) {
+    const friendCheck = await dynamoDB.get({
+      TableName: 'Friends',
+      Key: { userId: targetReceiverId, friendId: senderId },
+    }).promise();
+    if (!friendCheck.Item) throw new Error('Người này không nhận tin nhắn từ người lạ!');
+  }
+  
   const originalMessage = await dynamoDB.get({
     TableName: 'Messages',
     Key: { messageId },
@@ -98,21 +163,21 @@ const forwardMessage = async (senderId, messageId, targetReceiverId) => {
   if (!originalMessage.Item) throw new Error('Tin nhắn gốc không tồn tại!');
   if (originalMessage.Item.senderId !== senderId) throw new Error('Bạn không có quyền chuyển tiếp tin nhắn này!');
 
-  const newMessage = {
-    messageId: uuidv4(),
-    senderId,
-    receiverId: targetReceiverId,
-    type: originalMessage.Item.type,
-    content: originalMessage.Item.content,
-    mediaUrl: originalMessage.Item.mediaUrl,
-    fileName: originalMessage.Item.fileName,
-    mimeType: originalMessage.Item.mimeType,
-    metadata: { ...originalMessage.Item.metadata, forwardedFrom: messageId },
-    isAnonymous: false,
-    isSecret: false,
-    quality: originalMessage.Item.quality,
-    timestamp: new Date().toISOString(),
-  };
+    const newMessage = {
+      messageId: uuidv4(),
+      senderId,
+      receiverId: targetReceiverId,
+      type: originalMessage.Item.type,
+      content: originalMessage.Item.content,
+      mediaUrl: originalMessage.Item.mediaUrl,
+      fileName: originalMessage.Item.fileName,
+      mimeType: originalMessage.Item.mimeType,
+      metadata: { ...originalMessage.Item.metadata, forwardedFrom: messageId },
+      isAnonymous: false,
+      isSecret: false,
+      quality: originalMessage.Item.quality,
+      timestamp: new Date().toISOString(),
+    };
 
   const savedMessage = await sendMessageCore(newMessage, 'Messages', process.env.BUCKET_NAME_Chat_Send);
   io().to(targetReceiverId).emit('receiveMessage', savedMessage);

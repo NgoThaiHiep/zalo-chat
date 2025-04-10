@@ -2,14 +2,20 @@ const express = require('express');
 const multer = require('multer');
 const router = express.Router();
 
-const { loginController, logoutController, getProfileController } = require('../controllers/authController');
 const { 
-    sendOTPController, 
+    loginController,
+    logoutController,
+    getProfileController,
+    sendOTPController,
     registerController,
-    resetPasswordController, 
+    resetPasswordController,
     verifyOTPController,
     updateUserProfileController,
-    changePasswordController 
+    changePasswordController,
+    updateOnlineStatusController,
+    updatePrivacySettingsController,
+    updateRestrictStrangerMessagesController,
+
 } = require('../controllers/authController'); // Gộp OTP vào authController
 const checkBlacklist = require('../middlewares/checkBlacklist');
 const {authMiddleware ,checkOwnership} = require('../middlewares/authMiddleware');
@@ -53,4 +59,8 @@ router.patch(
   );
 
 
+router.post('/online-status', authMiddleware, updateOnlineStatusController); // Bật/tắt trạng thái
+router.post('/privacy-settings', authMiddleware, updatePrivacySettingsController); // Cài đặt ẩn trạng thái
+
+router.post('/restrict-stranger-messages', authMiddleware, updateRestrictStrangerMessagesController);
 module.exports = router;

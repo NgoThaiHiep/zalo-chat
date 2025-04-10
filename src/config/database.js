@@ -178,8 +178,10 @@ const initializeDatabase = async () => {
           KeySchema: [
             { AttributeName: 'senderId', KeyType: 'HASH' },
             { AttributeName: 'messageId', KeyType: 'RANGE' },
+            
           ],
           Projection: { ProjectionType: 'ALL' },
+          BillingMode: 'PAY_PER_REQUEST',
         },
         {
           IndexName: 'SenderReceiverIndex',
@@ -188,8 +190,19 @@ const initializeDatabase = async () => {
             { AttributeName: 'receiverId', KeyType: 'RANGE' },
           ],
           Projection: { ProjectionType: 'ALL' },
+          BillingMode: 'PAY_PER_REQUEST',
+        },
+        {
+          IndexName: 'ReceiverSenderIndex',
+          KeySchema: [
+            { AttributeName: 'receiverId', KeyType: 'HASH' },
+            { AttributeName: 'senderId', KeyType: 'RANGE' },
+          ],
+          Projection: { ProjectionType: 'ALL' },
+          BillingMode: 'PAY_PER_REQUEST',
         },
       ],
+      
       BillingMode: 'PAY_PER_REQUEST',
     };
     await createTableIfNotExists('Messages', messagesTableParams);
@@ -291,7 +304,58 @@ const initializeDatabase = async () => {
       BillingMode: 'PAY_PER_REQUEST',
     };
     await createTableIfNotExists('GroupMessages', groupMessagesTableParams);
+    //7. tạo bảng FriendRequests
+    const friendRequestsTableParams = {
+      TableName: 'FriendRequests',
+        AttributeDefinitions: [
+          { AttributeName: 'userId', AttributeType: 'S' },
+          { AttributeName: 'requestId', AttributeType: 'S' },
+          { AttributeName: 'senderId', AttributeType: 'S' }, // Thêm cho GSI
+        ],
+        KeySchema: [
+          { AttributeName: 'userId', KeyType: 'HASH' },
+          { AttributeName: 'requestId', KeyType: 'RANGE' },
+        ],
+        GlobalSecondaryIndexes: [
+          {
+            IndexName: 'SenderIdIndex',
+            KeySchema: [{ AttributeName: 'senderId', KeyType: 'HASH' }],
+            Projection: { ProjectionType: 'ALL' },
+            BillingMode: 'PAY_PER_REQUEST',
+          },
+        ],
+        BillingMode: 'PAY_PER_REQUEST',
+      };
+    await createTableIfNotExists('FriendRequests',friendRequestsTableParams);
 
+    // 8. Tạo bảng Friends
+    const friendsTableParams = {
+      TableName: 'Friends',
+      AttributeDefinitions: [
+        { AttributeName: 'userId', AttributeType: 'S' },
+        { AttributeName: 'friendId', AttributeType: 'S' },
+      ],
+      KeySchema: [
+        { AttributeName: 'userId', KeyType: 'HASH' },
+        { AttributeName: 'friendId', KeyType: 'RANGE' },
+      ],
+      BillingMode: 'PAY_PER_REQUEST',
+    };
+    await createTableIfNotExists('Friends', friendsTableParams);
+    //9. tạo bảng BlockedUsers
+    const blockedUsersTableParams = {
+      TableName: 'BlockedUsers',
+      AttributeDefinitions: [
+        { AttributeName: 'userId', AttributeType: 'S' },
+        { AttributeName: 'blockedUserId', AttributeType: 'S' },
+      ],
+      KeySchema: [
+        { AttributeName: 'userId', KeyType: 'HASH' },
+        { AttributeName: 'blockedUserId', KeyType: 'RANGE' },
+      ],
+      BillingMode: 'PAY_PER_REQUEST',
+    };
+    await createTableIfNotExists('BlockedUsers', blockedUsersTableParams);
     // Bucket policy mẫu
     const defaultBucketPolicy = {
       Version: "2012-10-17",

@@ -51,9 +51,9 @@ const verifyOTP = async (phoneNumber, otp) => {
     console.log(`⏳ Đã tăng thời gian sống của OTP cho ${normalizedPhone} lên 10 phút`);
     return normalizedPhone;
   };
-const deleteOTP = async (phoneNumber) => {
-    const normalizedPhone = normalizePhoneNumber(phoneNumber);
-    await redisClient.del(`otp:${normalizedPhone}`);
+  const deleteOTP = async (phoneNumber) => {
+      const normalizedPhone = normalizePhoneNumber(phoneNumber);
+      await redisClient.del(`otp:${normalizedPhone}`);
   };
 
 const getUserByPhoneNumber = async (phoneNumber) => {
@@ -77,4 +77,4 @@ const getUserByPhoneNumber = async (phoneNumber) => {
 };
 
 
-module.exports = { sendOTP, verifyOTP,deleteOTP,getUserByPhoneNumber };
+module.exports = { sendOTP, verifyOTP,deleteOTP,getUserByPhoneNumber ,normalizePhoneNumber};

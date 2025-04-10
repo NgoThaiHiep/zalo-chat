@@ -25,6 +25,9 @@ const createUser = async (phoneNumber, password, name, otp) => {
       password: hashedPassword,
       name,
       createdAt: new Date().toISOString(),
+      privacySettings: { showOnline: 'friends_only' }, // Mặc định chỉ bạn bè thấy trạng thái online
+      onlineStatus: 'offline', // Trạng thái mặc định khi tạo
+      restrictStrangerMessages: false,// Mặc định nhận tin nhắn từ người lạ
     };
   
     await dynamoDB.put({ TableName: 'Users', Item: user }).promise();
@@ -34,6 +37,40 @@ const createUser = async (phoneNumber, password, name, otp) => {
   
     return user;
   };
+// API để bật/tắt nhận tin nhắn từ người lạ
+const updateRestrictStrangerMessages = async (userId, restrict) => {
+  const params = {
+    TableName: 'Users',
+    Key: { userId },
+    UpdateExpression: 'SET restrictStrangerMessages = :restrict',
+    ExpressionAttributeValues: { ':restrict': restrict },
+  };
+  await dynamoDB.update(params).promise();
+  return { message: `Giới hạn tin nhắn của người lạ được đặt thành ${restrict}` };
+};
+  // Hàm để bật/tắt trạng thái online
+const updateOnlineStatus = async (userId, status) => {
+  const params = {
+    TableName: 'Users',
+    Key: { userId },
+    UpdateExpression: 'SET onlineStatus = :status',
+    ExpressionAttributeValues: { ':status': status ? 'online' : 'offline' },
+  };
+  await dynamoDB.update(params).promise();
+  return { message: `Trạng thái người dùng đã được cập nhật thành ${status ? 'online' : 'offline'}` };
+};
+
+// Hàm để thay đổi cài đặt ẩn trạng thái
+const updatePrivacySettings = async (userId, showOnline) => {
+  const params = {
+    TableName: 'Users',
+    Key: { userId },
+    UpdateExpression: 'SET privacySettings.showOnline = :showOnline',
+    ExpressionAttributeValues: { ':showOnline': showOnline }, // 'friends_only' hoặc 'everyone'
+  };
+  await dynamoDB.update(params).promise();
+  return { message: 'Privacy settings updated' };
+};
 
 const loginUser = async (phoneNumber, password) => {
     const normalizedPhone = normalizePhoneNumber(phoneNumber);
@@ -276,4 +313,4 @@ const getProfile = async (userId) => {
         throw new Error(error.message || 'Lỗi khi lấy thông tin profile!');
     }
 };
-module.exports = { createUser, loginUser, updateUserPassword,updateUserProfile ,changeUserPassword,getProfile};
+module.exports = { createUser, loginUser, updateUserPassword,updateUserProfile ,changeUserPassword,getProfile,updateOnlineStatus,updatePrivacySettings,updateRestrictStrangerMessages};

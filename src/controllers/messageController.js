@@ -96,11 +96,14 @@ const forwardMessageController = async (req, res) => {
   try {
     const senderId = req.user.id;
     const { messageId, targetReceiverId } = req.body;
-
+    if (!messageId || !targetReceiverId) {
+      return res.status(400).json({ success: false, message: 'messageId hoặc targetReceiverId là bắt buộc!' });
+    }
     const result = await MessageService.forwardMessage(senderId, messageId, targetReceiverId);
     res.status(200).json({ success: true, message: 'Chuyển tiếp thành công!', data: result });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    const statusCode = error.message.includes('không tồn tại') ? 404 : error.message.includes('quyền') ? 403 : 500;
+    res.status(statusCode).json({ success: false, message: error.message });
   }
 };
 
