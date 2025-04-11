@@ -1,16 +1,50 @@
 // Chứa các hàm liên quan đến đăng nhập và đăng ký
-const { s3,dynamoDB } = require('../config/aws.config');
+const { s3, dynamoDB } = require('../config/aws.config');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { v4: uuidv4 } = require('uuid');
-const { verifyOTP, deleteOTP,getUserByPhoneNumber } = require('./otp.services');
+const { verifyOTP, deleteOTP, getUserByPhoneNumber } = require('./otp.services');
+const { io } = require('../socket');
 require('dotenv').config();
+const {normalizePhoneNumber} = require('./utils')
 
-const normalizePhoneNumber = (phoneNumber) => {
-    console.log(`Chuẩn hóa số điện thoại: ${phoneNumber} -> ${phoneNumber.replace(/^(\+84|0)/, '84')}`);
-    return phoneNumber.replace(/^(\+84|0)/, '84');
-  };
 
+// Kiểm tra người dùng online/offline
+const isUserOnline = (userId) => {
+  const sockets = io().sockets.sockets;
+  return Array.from(sockets.values()).some(socket => socket.userId === userId);
+};
+
+
+// Lấy trạng thái hoạt động của người dùng
+const getUserActivityStatus = async (userId, requesterId) => {
+  const user = await dynamoDB.get({ TableName: 'Users', Key: { userId } }).promise();
+  if (!user.Item) return { status: 'unknown', lastActive: null };
+
+  const { privacySettings = {}, lastActive } = user.Item;
+  const showOnline = privacySettings.showOnline || 'none';
+
+  const isFriend = requesterId && await dynamoDB.get({
+    TableName: 'Friends',
+    Key: { userId, friendId: requesterId },
+  }).promise().then(result => !!result.Item);
+
+  if (showOnline === 'none' || (showOnline === 'friends_only' && !isFriend)) {
+    return { status: 'hidden', lastActive: null };
+  }
+
+  const online = isUserOnline(userId);
+  if (online) {
+    return { status: 'online', lastActive: new Date().toISOString(), display: 'Vừa mới truy cập' };
+  } else {
+    const timeDiffMinutes = lastActive ? (new Date() - new Date(lastActive)) / (1000 * 60) : null;
+    return {
+      status: 'offline',
+      lastActive,
+      display: timeDiffMinutes ? `Hoạt động ${Math.round(timeDiffMinutes)} phút trước` : 'Không xác định'
+    };
+  }
+};
 
 const createUser = async (phoneNumber, password, name, otp) => {
     // Kiểm tra OTP trước khi tạo user
@@ -26,8 +60,8 @@ const createUser = async (phoneNumber, password, name, otp) => {
       name,
       createdAt: new Date().toISOString(),
       privacySettings: { showOnline: 'friends_only' }, // Mặc định chỉ bạn bè thấy trạng thái online
-      onlineStatus: 'offline', // Trạng thái mặc định khi tạo
       restrictStrangerMessages: false,// Mặc định nhận tin nhắn từ người lạ
+      showReadReceipts: true, // Mặc định bật "đã xem"
     };
   
     await dynamoDB.put({ TableName: 'Users', Item: user }).promise();
@@ -37,7 +71,17 @@ const createUser = async (phoneNumber, password, name, otp) => {
   
     return user;
   };
-// API để bật/tắt nhận tin nhắn từ người lạ
+  //Hàm để bật tắt trạng thái đã xem
+const updateReadReceiptsSetting = async (userId, showReadReceipts) => {
+    await dynamoDB.update({
+      TableName: 'Users',
+      Key: { userId },
+      UpdateExpression: 'SET showReadReceipts = :value',
+      ExpressionAttributeValues: { ':value': showReadReceipts },
+    }).promise();
+    return { message: `Trạng thái hiển thị 'đã xem' đã được ${showReadReceipts ? 'bật' : 'tắt'}` };
+};
+// hàm để bật/tắt nhận tin nhắn từ người lạ
 const updateRestrictStrangerMessages = async (userId, restrict) => {
   const params = {
     TableName: 'Users',
@@ -49,27 +93,80 @@ const updateRestrictStrangerMessages = async (userId, restrict) => {
   return { message: `Giới hạn tin nhắn của người lạ được đặt thành ${restrict}` };
 };
   // Hàm để bật/tắt trạng thái online
-const updateOnlineStatus = async (userId, status) => {
-  const params = {
-    TableName: 'Users',
-    Key: { userId },
-    UpdateExpression: 'SET onlineStatus = :status',
-    ExpressionAttributeValues: { ':status': status ? 'online' : 'offline' },
+  const updateOnlineStatus = async (userId, status) => {
+    const params = {
+      TableName: 'Users',
+      Key: { userId },
+      UpdateExpression: 'SET onlineStatus = :status, lastActive = :now',
+      ExpressionAttributeValues: {
+        ':status': status ? 'online' : 'offline',
+        ':now': new Date().toISOString(),
+      },
+    };
+    await dynamoDB.update(params).promise();
+  
+    const user = await dynamoDB.get({ TableName: 'Users', Key: { userId } }).promise();
+    if (user.Item) {
+      const { privacySettings } = user.Item;
+      const showOnline = privacySettings.showOnline || 'none';
+      if (showOnline === 'friends_only') {
+        const friends = await dynamoDB.query({
+          TableName: 'Friends',
+          KeyConditionExpression: 'userId = :userId',
+          ExpressionAttributeValues: { ':userId': userId },
+        }).promise();
+        // Sử dụng for...of để chờ await
+        for (const friend of friends.Items) {
+          io().to(friend.friendId).emit('userActivity', {
+            userId,
+            ...(await getUserActivityStatus(userId, friend.friendId)),
+          });
+        }
+      } else if (showOnline === 'everyone') {
+        io().emit('userActivity', {
+          userId,
+          ...(await getUserActivityStatus(userId, null)),
+        });
+      }
+    }
+    return { message: `Trạng thái người dùng đã được cập nhật thành ${status ? 'online' : 'offline'}` };
   };
-  await dynamoDB.update(params).promise();
-  return { message: `Trạng thái người dùng đã được cập nhật thành ${status ? 'online' : 'offline'}` };
-};
-
-// Hàm để thay đổi cài đặt ẩn trạng thái
+  
+// Hàm để thay đổi cài đặt ẩn trạng thái hoạt động
 const updatePrivacySettings = async (userId, showOnline) => {
+  if (!['everyone', 'friends_only', 'none'].includes(showOnline)) {
+    throw new Error('Giá trị showOnline không hợp lệ! Chấp nhận: everyone, friends_only, none');
+  }
   const params = {
     TableName: 'Users',
     Key: { userId },
     UpdateExpression: 'SET privacySettings.showOnline = :showOnline',
-    ExpressionAttributeValues: { ':showOnline': showOnline }, // 'friends_only' hoặc 'everyone'
+    ExpressionAttributeValues: { ':showOnline': showOnline },
   };
   await dynamoDB.update(params).promise();
-  return { message: 'Privacy settings updated' };
+
+  io().to(userId).emit('privacySettingsUpdated', { showOnline });
+  const status = isUserOnline(userId) ? 'online' : 'offline';
+  if (showOnline === 'friends_only') {
+    const friends = await dynamoDB.query({
+      TableName: 'Friends',
+      KeyConditionExpression: 'userId = :userId',
+      ExpressionAttributeValues: { ':userId': userId },
+    }).promise();
+    // Sử dụng for...of để chờ await
+    for (const friend of friends.Items) {
+      io().to(friend.friendId).emit('userActivity', {
+        userId,
+        ...(await getUserActivityStatus(userId, friend.friendId)),
+      });
+    }
+  } else if (showOnline === 'everyone') {
+    io().emit('userActivity', {
+      userId,
+      ...(await getUserActivityStatus(userId, null)),
+    });
+  }
+  return { success: true, message: 'Cài đặt bảo mật đã được cập nhật!' };
 };
 
 const loginUser = async (phoneNumber, password) => {
@@ -294,7 +391,7 @@ const changeUserPassword = async (userId, oldPassword, newPassword) => {
 };
 
 // Thêm hàm getProfileService
-const getProfile = async (userId) => {
+const getOwnProfile = async (userId) => {
     try {
         const result = await dynamoDB.get({
             TableName: 'Users',
@@ -313,4 +410,17 @@ const getProfile = async (userId) => {
         throw new Error(error.message || 'Lỗi khi lấy thông tin profile!');
     }
 };
-module.exports = { createUser, loginUser, updateUserPassword,updateUserProfile ,changeUserPassword,getProfile,updateOnlineStatus,updatePrivacySettings,updateRestrictStrangerMessages};
+module.exports = { 
+  createUser, 
+  loginUser, 
+  updateUserPassword,
+  updateUserProfile ,
+  changeUserPassword,
+  getOwnProfile,
+  updateOnlineStatus,
+  updatePrivacySettings,
+  updateRestrictStrangerMessages,
+  updateReadReceiptsSetting,
+  isUserOnline,
+  getUserActivityStatus,
+};

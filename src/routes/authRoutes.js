@@ -15,6 +15,8 @@ const {
     updateOnlineStatusController,
     updatePrivacySettingsController,
     updateRestrictStrangerMessagesController,
+    updateReadReceiptsSettingController,
+
 
 } = require('../controllers/authController'); // Gộp OTP vào authController
 const checkBlacklist = require('../middlewares/checkBlacklist');
@@ -60,7 +62,11 @@ router.patch(
 
 
 router.post('/online-status', authMiddleware, updateOnlineStatusController); // Bật/tắt trạng thái
-router.post('/privacy-settings', authMiddleware, updatePrivacySettingsController); // Cài đặt ẩn trạng thái
+router.post('/privacy-settings', authMiddleware, updatePrivacySettingsController); // Cài đặt ẩn trạng thái hoạt động bạn bè hoặc mọi người
 
 router.post('/restrict-stranger-messages', authMiddleware, updateRestrictStrangerMessagesController);
+
+router.post('/update-read-receipts', authMiddleware, updateReadReceiptsSettingController);
+
+
 module.exports = router;

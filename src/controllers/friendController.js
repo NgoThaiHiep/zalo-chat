@@ -8,19 +8,8 @@ const {getUserByPhoneNumber}=  require('../services/otp.services')
           const result = await FriendService.sendFriendRequest(senderId, receiverId);
           res.status(200).json(result);
         } catch (error) {
-          if (error.message === 'Bạn đã là bạn bè với người này') {
-            return res.status(400).json({ message: 'Bạn đã là bạn bè với người này' });
-          }
-          if (error.message === 'Yêu cầu kết bạn đang chờ xử lý') {
-            return res.status(400).json({ message: 'Yêu cầu kết bạn đang chờ xử lý' });
-          }
-          if (error.message === 'Yêu cầu đã được chấp nhận trước đó') {
-            return res.status(400).json({ message: 'Yêu cầu đã được chấp nhận trước đó' });
-          }
-          if (error.message === 'Yêu cầu kết bạn đã tồn tại') {
-            return res.status(400).json({ message: 'Yêu cầu kết bạn đã tồn tại' });
-          }
-          res.status(500).json({ message: 'Error sending friend request', error: error.message });
+       
+          res.status(500).json({  error: error.message });
         }
       }
  

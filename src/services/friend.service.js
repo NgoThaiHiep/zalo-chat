@@ -1,6 +1,11 @@
 const { dynamoDB } = require('../config/aws.config');
-
+const {checkBlockStatus} = require('./message.service')
     const sendFriendRequest =  async (senderId, receiverId) => {
+    if (senderId === receiverId) {
+        throw new Error('Bạn không thể gửi yêu cầu kết bạn cho chính mình!');
+    }
+    // 0. Kiểm tra trạng thái block
+   await checkBlockStatus(senderId, receiverId)
     // 1. Kiểm tra xem đã là bạn bè chưa
     const friendCheckParams = {
         TableName: 'Friends',
@@ -248,12 +253,12 @@ const { dynamoDB } = require('../config/aws.config');
     }
     //  Gợi ý kết bạn
     const  getFriendSuggestions = async(userId) =>{
-            const friends = await this.getFriends(userId);
+            const friends = await getFriends(userId);
             const friendIds = friends.map(f => f.friendId);
             let suggestions = [];
         
             for (const friendId of friendIds) {
-            const mutualFriends = await this.getFriends(friendId);
+            const mutualFriends = await getFriends(friendId);
             suggestions = suggestions.concat(
                 mutualFriends.filter(f => f.friendId !== userId && !friendIds.includes(f.friendId))
             );
@@ -276,7 +281,7 @@ const { dynamoDB } = require('../config/aws.config');
     }).promise();
     if (sentRequest.Items.length > 0) return { status: 'pending_sent' };
 
-    const receivedRequest = await this.getReceivedFriendRequests(currentUserId);
+    const receivedRequest = await getReceivedFriendRequests(currentUserId);
     if (receivedRequest.some(req => req.senderId === targetUserId)) return { status: 'pending_received' };
 
     const blockedCheck = await dynamoDB.get({ TableName: 'BlockedUsers', Key: { userId: currentUserId, blockedUserId: targetUserId } }).promise();
@@ -286,7 +291,7 @@ const { dynamoDB } = require('../config/aws.config');
     }
 
     // Hàm kiểm tra xem có phải bạn bè không
-    const isFriend = async (userId, targetUserId) => {
+    const isFriendCheck = async (userId, targetUserId) => {
         const result = await dynamoDB.get({
             TableName: 'Friends',
             Key: { userId, friendId: targetUserId },
@@ -303,7 +308,7 @@ const { dynamoDB } = require('../config/aws.config');
     if (!user.Item) throw new Error('User not found');
 
     const profile = user.Item;
-    const isFriend = await this.isFriend(currentUserId, targetUserId);
+    const isFriend = await isFriendCheck(currentUserId, targetUserId);
 
     // Ẩn trạng thái online nếu không phải bạn bè và cài đặt là 'friends_only'
     if (profile.privacySettings?.showOnline === 'friends_only' && !isFriend) {
@@ -321,6 +326,7 @@ const { dynamoDB } = require('../config/aws.config');
     }
     //Thêm vào yêu thích
     const markFavorite =async (userId, friendId) =>{
+        
         await dynamoDB.update({
           TableName: 'Friends',
           Key: { userId, friendId },
@@ -353,11 +359,11 @@ const { dynamoDB } = require('../config/aws.config');
     }
     //Nhóm bạn chung
     const getMutualFriends =async (userId, targetUserId) => {
-        const userFriends = (await this.getFriends(userId)).map(f => f.friendId);
-        const targetFriends = (await this.getFriends(targetUserId)).map(f => f.friendId);
+        const userFriends = (await getFriends(userId)).map(f => f.friendId);
+        const targetFriends = (await getFriends(targetUserId)).map(f => f.friendId);
         const mutualFriends = userFriends.filter(f => targetFriends.includes(f));
         return mutualFriends;
-      }
+    }
 module.exports = {
         sendFriendRequest,
         acceptFriendRequest,

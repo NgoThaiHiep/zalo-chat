@@ -160,8 +160,9 @@ const initializeDatabase = async () => {
         { AttributeName: 'messageId', AttributeType: 'S' }, // Partition Key
         { AttributeName: 'groupId', AttributeType: 'S' }, // GSI GroupMessagesIndex
         { AttributeName: 'timestamp', AttributeType: 'S' }, // GSI GroupMessagesIndex Sort Key
-        { AttributeName: 'senderId', AttributeType: 'S' }, // GSI senderId-messageId-index & SenderReceiverIndex
+        { AttributeName: 'senderId', AttributeType: 'S' }, // GSI senderId-messageId-index & SenderReceiverIndex & ReceiverStatusIndex
         { AttributeName: 'receiverId', AttributeType: 'S' }, // GSI SenderReceiverIndex
+        { AttributeName: 'status', AttributeType: 'S'}, //GSI ReceiverStatusIndex
       ],
       KeySchema: [{ AttributeName: 'messageId', KeyType: 'HASH' }],
       GlobalSecondaryIndexes: [
@@ -201,6 +202,16 @@ const initializeDatabase = async () => {
           Projection: { ProjectionType: 'ALL' },
           BillingMode: 'PAY_PER_REQUEST',
         },
+        {
+          IndexName: 'ReceiverStatusIndex',
+          KeySchema: [
+            { AttributeName: 'receiverId', KeyType: 'HASH' },  // Partition Key
+            { AttributeName: 'status', KeyType: 'RANGE' },     // Sort Key
+          ],
+          Projection: { ProjectionType: 'ALL' },
+          BillingMode: 'PAY_PER_REQUEST',
+        },
+        
       ],
       
       BillingMode: 'PAY_PER_REQUEST',
@@ -356,6 +367,22 @@ const initializeDatabase = async () => {
       BillingMode: 'PAY_PER_REQUEST',
     };
     await createTableIfNotExists('BlockedUsers', blockedUsersTableParams);
+
+    //10.Tạo bảng Conversations
+    const conversationsTableParams = {
+      TableName: 'Conversations',
+      AttributeDefinitions: [
+        { AttributeName: 'userId', AttributeType: 'S' },
+        { AttributeName: 'targetUserId', AttributeType: 'S' },
+      ],
+      KeySchema: [
+        { AttributeName: 'userId', KeyType: 'HASH' },
+        { AttributeName: 'targetUserId', KeyType: 'RANGE' },
+      ],
+      BillingMode: 'PAY_PER_REQUEST',
+    };
+    await createTableIfNotExists('Conversations', conversationsTableParams);
+    
     // Bucket policy mẫu
     const defaultBucketPolicy = {
       Version: "2012-10-17",

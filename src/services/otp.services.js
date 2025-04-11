@@ -1,11 +1,7 @@
-const redisClient = require("../config/redis");
+const {redisClient, redisSubscriber} = require("../config/redis");
 const {dynamoDB,s3, sns } = require("../config/aws.config");
+const {normalizePhoneNumber} = require('./utils')
 
-
-const normalizePhoneNumber = (phoneNumber) => {
-  console.log(`Chuẩn hóa số điện thoại: ${phoneNumber} -> ${phoneNumber.replace(/^(\+84|0)/, '84')}`);
-  return phoneNumber.replace(/^(\+84|0)/, '84');
-};
 
 
 // Gửi OTP
@@ -20,7 +16,7 @@ const sendOTP = async (phoneNumber, purpose = 'register') => {
     }
     await deleteOTP(phoneNumber);
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
-    await redisClient.setEx(`otp:${normalizedPhone}`, 180, otp);
+    await redisClient.set(`otp:${normalizedPhone}`, otp, 'EX', 180);
     console.log(`📩 OTP gửi đến ${normalizedPhone}: ${otp}`);
     try {
     await sns.publish({

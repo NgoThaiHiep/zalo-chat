@@ -10,6 +10,7 @@ const friendRoutes = require('./routes/friendRoutes')
 const app = express();
 const upload = multer({ storage: multer.memoryStorage() });
 // Middleware
+
 app.use(cors({ 
         origin: 
         ['http://localhost:3001', 
@@ -17,7 +18,7 @@ app.use(cors({
           'http://192.168.1.2:8081'], 
         credentials: true }));
 app.use(express.json());
-app.use(upload.any()); // Xử lý multipart/form-data
+
 
 // Định nghĩa routes
 app.use('/api/auth', authRoutes);

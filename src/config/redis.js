@@ -1,30 +1,34 @@
-const redis = require("redis");
+const Redis = require('ioredis');
 
-// ✅ Tạo Redis client
-const redisClient = redis.createClient({
-    socket: {
-        host: "127.0.0.1", // Địa chỉ Redis server (Localhost)
-        port: 6379         // Cổng mặc định của Redis
-    }
+const redisClient = new Redis({
+  host: 'localhost',
+  port: 6379,
 });
 
-// ✅ Bắt sự kiện kết nối
-redisClient.on("connect", () => {
-    console.log("🔗 Kết nối Redis thành công!");
+const redisSubscriber = new Redis({
+  host: 'localhost',
+  port: 6379,
 });
 
-//  Xử lý lỗi Redis
-redisClient.on("error", (err) => {
-    console.error(" Lỗi kết nối Redis:", err);
+redisClient.on('connect', async () => {
+  console.log('🔗 Kết nối Redis thành công (redisClient)!');
+  const config = await redisClient.config('GET', 'notify-keyspace-events');
+  console.log('Current notify-keyspace-events:', config[1]);
 });
 
-//  Kết nối Redis
-(async () => {
-    try {
-        await redisClient.connect();
-    } catch (err) {
-        console.error(" Lỗi khi kết nối Redis:", err);
-    }
-})();
+redisSubscriber.on('connect', () => {
+  console.log('🔗 Kết nối Redis thành công (redisSubscriber)!');
+});
 
-module.exports = redisClient;
+redisClient.on('error', (err) => {
+  console.error('Lỗi kết nối Redis (redisClient):', err);
+});
+
+redisSubscriber.on('error', (err) => {
+  console.error('Lỗi kết nối Redis (redisSubscriber):', err);
+});
+
+console.log('redisClient initialized:', redisClient);
+console.log('setEx available after init:', typeof redisClient.set === 'function');
+
+module.exports = { redisClient, redisSubscriber };

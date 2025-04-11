@@ -1,4 +1,4 @@
-const redisClient = require("../config/redis");
+const {redisClient,redisSubscriber} = require("../config/redis");
 
 const checkBlacklist = async (req, res, next) => {
     const token = req.header("Authorization")?.replace("Bearer ", "");
