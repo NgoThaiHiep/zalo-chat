@@ -1,4 +1,4 @@
-const { DynamoDBClient, CreateTableCommand, DescribeTableCommand } = require('@aws-sdk/client-dynamodb');
+const { DynamoDBClient, CreateTableCommand, DescribeTableCommand, UpdateTableCommand, UpdateTimeToLiveCommand, DescribeTimeToLiveCommand } = require('@aws-sdk/client-dynamodb');
 const { S3Client, CreateBucketCommand, HeadBucketCommand, PutBucketPolicyCommand, PutPublicAccessBlockCommand } = require('@aws-sdk/client-s3');
 const { dynamoDB, sns } = require("../config/aws.config");
 require('dotenv').config();
@@ -41,12 +41,11 @@ const disableBlockPublicAccess = async (bucketName) => {
   }
 };
 
-// Hàm kiểm tra và tạo S3 bucket nếu chưa tồn tại, sau đó thêm bucket policy và tắt Block Public Access
+// Hàm kiểm tra và tạo S3 bucket nếu chưa tồn tại
 const createBucketIfNotExists = async (bucketName, bucketPolicy) => {
   try {
     await s3Client.send(new HeadBucketCommand({ Bucket: bucketName }));
     console.log(`Bucket ${bucketName} already exists`);
-    // Nếu bucket đã tồn tại, vẫn tắt Block Public Access và áp dụng policy
     await disableBlockPublicAccess(bucketName);
     if (bucketPolicy) {
       await applyBucketPolicy(bucketName, bucketPolicy);
@@ -61,11 +60,7 @@ const createBucketIfNotExists = async (bucketName, bucketPolicy) => {
           },
         }));
         console.log(`Bucket ${bucketName} created successfully`);
-
-        // Tắt Block Public Access
         await disableBlockPublicAccess(bucketName);
-
-        // Áp dụng bucket policy sau khi tạo bucket
         if (bucketPolicy) {
           await applyBucketPolicy(bucketName, bucketPolicy);
         }
@@ -85,12 +80,59 @@ const applyBucketPolicy = async (bucketName, policy) => {
   try {
     const policyCommand = new PutBucketPolicyCommand({
       Bucket: bucketName,
-      Policy: JSON.stringify(policy), // Chuyển policy thành chuỗi JSON
+      Policy: JSON.stringify(policy),
     });
     await s3Client.send(policyCommand);
     console.log(`Bucket policy applied successfully to ${bucketName}`);
   } catch (error) {
     console.error(`Error applying bucket policy to ${bucketName}:`, error);
+    throw error;
+  }
+};
+
+// Hàm cập nhật GSI tự động
+const updateTableWithNewGSI = async (tableName, desiredParams) => {
+  try {
+    const describeTable = await client.send(new DescribeTableCommand({ TableName: tableName }));
+    const currentGSIs = describeTable.Table.GlobalSecondaryIndexes || [];
+    const desiredGSIs = desiredParams.GlobalSecondaryIndexes || [];
+
+    // Tìm các GSI mới cần thêm
+    const newGSIs = desiredGSIs.filter((desiredGSI) => {
+      return !currentGSIs.some((currentGSI) => currentGSI.IndexName === desiredGSI.IndexName);
+    });
+
+    if (newGSIs.length === 0) {
+      console.log(`No new GSIs to update for table ${tableName}`);
+      return;
+    }
+
+    // Cập nhật bảng với GSI mới (chỉ được thêm một GSI mỗi lần)
+    for (const newGSI of newGSIs) {
+      console.log(`Adding new GSI ${newGSI.IndexName} to table ${tableName}`);
+      await client.send(
+        new UpdateTableCommand({
+          TableName: tableName,
+          AttributeDefinitions: desiredParams.AttributeDefinitions,
+          GlobalSecondaryIndexUpdates: [
+            {
+              Create: {
+                IndexName: newGSI.IndexName,
+                KeySchema: newGSI.KeySchema,
+                Projection: newGSI.Projection,
+                ProvisionedThroughput: newGSI.ProvisionedThroughput || undefined,
+              },
+            },
+          ],
+        })
+      );
+      console.log(`Waiting for GSI ${newGSI.IndexName} to become ACTIVE...`);
+      await waitForTable(tableName);
+    }
+
+    console.log(`Table ${tableName} updated successfully with new GSIs`);
+  } catch (error) {
+    console.error(`Error updating table ${tableName}:`, error);
     throw error;
   }
 };
@@ -126,11 +168,71 @@ const waitForTable = async (tableName) => {
       tableReady = true;
     } else {
       console.log(`Waiting for table ${tableName} to become active...`);
-      await new Promise((resolve) => setTimeout(resolve, 2000)); // Đợi 2 giây
+      await new Promise((resolve) => setTimeout(resolve, 2000));
     }
   }
 };
 
+// Hàm kích hoạt TTL cho bảng
+const enableTTL = async (tableName, ttlAttributeName) => {
+  try {
+    // Kiểm tra trạng thái TTL hiện tại
+    const ttlStatus = await client.send(new DescribeTimeToLiveCommand({
+      TableName: tableName,
+    }));
+
+    if (ttlStatus.TimeToLiveDescription?.TimeToLiveStatus === 'ENABLED') {
+      console.log(`TTL already enabled for table ${tableName} with attribute ${ttlStatus.TimeToLiveDescription.AttributeName}`);
+      return;
+    }
+
+    // Nếu TTL chưa bật, kích hoạt
+    await client.send(new UpdateTimeToLiveCommand({
+      TableName: tableName,
+      TimeToLiveSpecification: {
+        Enabled: true,
+        AttributeName: ttlAttributeName,
+      },
+    }));
+    console.log(`TTL enabled for table ${tableName} with attribute ${ttlAttributeName}`);
+  } catch (error) {
+    if (error.name === 'ValidationException' && error.message.includes('TimeToLive is already enabled')) {
+      console.log(`TTL already enabled for ${tableName}`);
+    } else {
+      console.error(`Error enabling TTL for ${tableName}:`, error);
+      throw error;
+    }
+  }
+};
+// Hàm bật DynamoDB Streams
+const enableDynamoDBStreams = async (tableName) => {
+  try {
+    const describeTable = await client.send(new DescribeTableCommand({ TableName: tableName }));
+    if (describeTable.Table.StreamSpecification?.StreamEnabled) {
+      console.log(`DynamoDB Streams already enabled for table ${tableName}`);
+      return describeTable.Table.LatestStreamArn;
+    }
+
+    await client.send(new UpdateTableCommand({
+      TableName: tableName,
+      StreamSpecification: {
+        StreamEnabled: true,
+        StreamViewType: 'OLD_IMAGE', // Chỉ lấy dữ liệu bản ghi trước khi xóa
+      },
+    }));
+
+    console.log(`Enabling DynamoDB Streams for table ${tableName}...`);
+    await waitForTable(tableName);
+
+    const updatedTable = await client.send(new DescribeTableCommand({ TableName: tableName }));
+    const streamArn = updatedTable.Table.LatestStreamArn;
+    console.log(`DynamoDB Streams enabled for table ${tableName} with ARN: ${streamArn}`);
+    return streamArn;
+  } catch (error) {
+    console.error(`Error enabling DynamoDB Streams for ${tableName}:`, error);
+    throw error;
+  }
+};
 // Hàm khởi tạo tất cả các bảng và bucket
 const initializeDatabase = async () => {
   try {
@@ -138,8 +240,8 @@ const initializeDatabase = async () => {
     const usersTableParams = {
       TableName: 'Users',
       AttributeDefinitions: [
-        { AttributeName: 'userId', AttributeType: 'S' }, // Partition Key
-        { AttributeName: 'phoneNumber', AttributeType: 'S' }, // GSI Partition Key
+        { AttributeName: 'userId', AttributeType: 'S' },
+        { AttributeName: 'phoneNumber', AttributeType: 'S' },
       ],
       KeySchema: [{ AttributeName: 'userId', KeyType: 'HASH' }],
       GlobalSecondaryIndexes: [
@@ -157,14 +259,18 @@ const initializeDatabase = async () => {
     const messagesTableParams = {
       TableName: 'Messages',
       AttributeDefinitions: [
-        { AttributeName: 'messageId', AttributeType: 'S' }, // Partition Key
-        { AttributeName: 'groupId', AttributeType: 'S' }, // GSI GroupMessagesIndex
-        { AttributeName: 'timestamp', AttributeType: 'S' }, // GSI GroupMessagesIndex Sort Key
-        { AttributeName: 'senderId', AttributeType: 'S' }, // GSI senderId-messageId-index & SenderReceiverIndex & ReceiverStatusIndex
-        { AttributeName: 'receiverId', AttributeType: 'S' }, // GSI SenderReceiverIndex
-        { AttributeName: 'status', AttributeType: 'S'}, //GSI ReceiverStatusIndex
+        { AttributeName: 'messageId', AttributeType: 'S' },
+        { AttributeName: 'groupId', AttributeType: 'S' },
+        { AttributeName: 'timestamp', AttributeType: 'S' },
+        { AttributeName: 'senderId', AttributeType: 'S' },
+        { AttributeName: 'receiverId', AttributeType: 'S' },
+        { AttributeName: 'status', AttributeType: 'S' },
+        { AttributeName: 'ownerId', AttributeType: 'S' },
       ],
-      KeySchema: [{ AttributeName: 'messageId', KeyType: 'HASH' }],
+      KeySchema: [
+        { AttributeName: 'messageId', KeyType: 'HASH' },
+        { AttributeName: 'ownerId', KeyType: 'RANGE' },
+      ],
       GlobalSecondaryIndexes: [
         {
           IndexName: 'GroupMessagesIndex',
@@ -179,7 +285,6 @@ const initializeDatabase = async () => {
           KeySchema: [
             { AttributeName: 'senderId', KeyType: 'HASH' },
             { AttributeName: 'messageId', KeyType: 'RANGE' },
-            
           ],
           Projection: { ProjectionType: 'ALL' },
           BillingMode: 'PAY_PER_REQUEST',
@@ -205,25 +310,30 @@ const initializeDatabase = async () => {
         {
           IndexName: 'ReceiverStatusIndex',
           KeySchema: [
-            { AttributeName: 'receiverId', KeyType: 'HASH' },  // Partition Key
-            { AttributeName: 'status', KeyType: 'RANGE' },     // Sort Key
+            { AttributeName: 'receiverId', KeyType: 'HASH' },
+            { AttributeName: 'status', KeyType: 'RANGE' },
           ],
           Projection: { ProjectionType: 'ALL' },
           BillingMode: 'PAY_PER_REQUEST',
         },
-        
       ],
-      
       BillingMode: 'PAY_PER_REQUEST',
+      StreamSpecification: {
+        StreamEnabled: true,
+        StreamViewType: 'OLD_IMAGE', // Bật Streams ngay khi tạo bảng
+      },
     };
     await createTableIfNotExists('Messages', messagesTableParams);
+    await updateTableWithNewGSI('Messages', messagesTableParams);
+  
+
 
     // 3. Tạo bảng Groups
     const groupsTableParams = {
       TableName: 'Groups',
       AttributeDefinitions: [
-        { AttributeName: 'groupId', AttributeType: 'S' }, // Partition Key & GSI GroupIndex
-        { AttributeName: 'createdBy', AttributeType: 'S' }, // GSI CreatedByIndex
+        { AttributeName: 'groupId', AttributeType: 'S' },
+        { AttributeName: 'createdBy', AttributeType: 'S' },
       ],
       KeySchema: [{ AttributeName: 'groupId', KeyType: 'HASH' }],
       GlobalSecondaryIndexes: [
@@ -244,13 +354,14 @@ const initializeDatabase = async () => {
       BillingMode: 'PAY_PER_REQUEST',
     };
     await createTableIfNotExists('Groups', groupsTableParams);
+    await updateTableWithNewGSI('Groups', groupsTableParams);
 
     // 4. Tạo bảng UserDeletedMessages
     const userDeletedMessagesTableParams = {
       TableName: 'UserDeletedMessages',
       AttributeDefinitions: [
-        { AttributeName: 'userId', AttributeType: 'S' }, // Partition Key
-        { AttributeName: 'messageId', AttributeType: 'S' }, // Sort Key
+        { AttributeName: 'userId', AttributeType: 'S' },
+        { AttributeName: 'messageId', AttributeType: 'S' },
       ],
       KeySchema: [
         { AttributeName: 'userId', KeyType: 'HASH' },
@@ -264,8 +375,8 @@ const initializeDatabase = async () => {
     const groupMembersTableParams = {
       TableName: 'GroupMembers',
       AttributeDefinitions: [
-        { AttributeName: 'groupId', AttributeType: 'S' }, // Partition Key
-        { AttributeName: 'userId', AttributeType: 'S' }, // Sort Key & GSI userId-index
+        { AttributeName: 'groupId', AttributeType: 'S' },
+        { AttributeName: 'userId', AttributeType: 'S' },
       ],
       KeySchema: [
         { AttributeName: 'groupId', KeyType: 'HASH' },
@@ -281,14 +392,15 @@ const initializeDatabase = async () => {
       BillingMode: 'PAY_PER_REQUEST',
     };
     await createTableIfNotExists('GroupMembers', groupMembersTableParams);
+    await updateTableWithNewGSI('GroupMembers', groupMembersTableParams);
 
     // 6. Tạo bảng GroupMessages
     const groupMessagesTableParams = {
       TableName: 'GroupMessages',
       AttributeDefinitions: [
-        { AttributeName: 'groupId', AttributeType: 'S' }, // Partition Key & GSI
-        { AttributeName: 'timestamp', AttributeType: 'S' }, // Sort Key & GSI GroupMessagesIndex
-        { AttributeName: 'messageId', AttributeType: 'S' }, // GSI groupId-messageId-index
+        { AttributeName: 'groupId', AttributeType: 'S' },
+        { AttributeName: 'timestamp', AttributeType: 'S' },
+        { AttributeName: 'messageId', AttributeType: 'S' },
       ],
       KeySchema: [
         { AttributeName: 'groupId', KeyType: 'HASH' },
@@ -315,29 +427,33 @@ const initializeDatabase = async () => {
       BillingMode: 'PAY_PER_REQUEST',
     };
     await createTableIfNotExists('GroupMessages', groupMessagesTableParams);
-    //7. tạo bảng FriendRequests
+    await updateTableWithNewGSI('GroupMessages', groupMessagesTableParams);
+    await enableTTL('GroupMessages', 'ttl');
+
+    // 7. Tạo bảng FriendRequests
     const friendRequestsTableParams = {
       TableName: 'FriendRequests',
-        AttributeDefinitions: [
-          { AttributeName: 'userId', AttributeType: 'S' },
-          { AttributeName: 'requestId', AttributeType: 'S' },
-          { AttributeName: 'senderId', AttributeType: 'S' }, // Thêm cho GSI
-        ],
-        KeySchema: [
-          { AttributeName: 'userId', KeyType: 'HASH' },
-          { AttributeName: 'requestId', KeyType: 'RANGE' },
-        ],
-        GlobalSecondaryIndexes: [
-          {
-            IndexName: 'SenderIdIndex',
-            KeySchema: [{ AttributeName: 'senderId', KeyType: 'HASH' }],
-            Projection: { ProjectionType: 'ALL' },
-            BillingMode: 'PAY_PER_REQUEST',
-          },
-        ],
-        BillingMode: 'PAY_PER_REQUEST',
-      };
-    await createTableIfNotExists('FriendRequests',friendRequestsTableParams);
+      AttributeDefinitions: [
+        { AttributeName: 'userId', AttributeType: 'S' },
+        { AttributeName: 'requestId', AttributeType: 'S' },
+        { AttributeName: 'senderId', AttributeType: 'S' },
+      ],
+      KeySchema: [
+        { AttributeName: 'userId', KeyType: 'HASH' },
+        { AttributeName: 'requestId', KeyType: 'RANGE' },
+      ],
+      GlobalSecondaryIndexes: [
+        {
+          IndexName: 'SenderIdIndex',
+          KeySchema: [{ AttributeName: 'senderId', KeyType: 'HASH' }],
+          Projection: { ProjectionType: 'ALL' },
+          BillingMode: 'PAY_PER_REQUEST',
+        },
+      ],
+      BillingMode: 'PAY_PER_REQUEST',
+    };
+    await createTableIfNotExists('FriendRequests', friendRequestsTableParams);
+    await updateTableWithNewGSI('FriendRequests', friendRequestsTableParams);
 
     // 8. Tạo bảng Friends
     const friendsTableParams = {
@@ -353,7 +469,9 @@ const initializeDatabase = async () => {
       BillingMode: 'PAY_PER_REQUEST',
     };
     await createTableIfNotExists('Friends', friendsTableParams);
-    //9. tạo bảng BlockedUsers
+    await updateTableWithNewGSI('Friends', friendsTableParams);
+
+    // 9. Tạo bảng BlockedUsers
     const blockedUsersTableParams = {
       TableName: 'BlockedUsers',
       AttributeDefinitions: [
@@ -367,8 +485,9 @@ const initializeDatabase = async () => {
       BillingMode: 'PAY_PER_REQUEST',
     };
     await createTableIfNotExists('BlockedUsers', blockedUsersTableParams);
+    await updateTableWithNewGSI('BlockedUsers', blockedUsersTableParams);
 
-    //10.Tạo bảng Conversations
+    // 10. Tạo bảng Conversations
     const conversationsTableParams = {
       TableName: 'Conversations',
       AttributeDefinitions: [
@@ -382,7 +501,8 @@ const initializeDatabase = async () => {
       BillingMode: 'PAY_PER_REQUEST',
     };
     await createTableIfNotExists('Conversations', conversationsTableParams);
-    
+    await updateTableWithNewGSI('Conversations', conversationsTableParams);
+
     // Bucket policy mẫu
     const defaultBucketPolicy = {
       Version: "2012-10-17",
@@ -394,7 +514,7 @@ const initializeDatabase = async () => {
           Principal: "*",
           Action: "s3:GetObject",
           Resource: [
-            "arn:aws:s3:::BUCKET_NAME", // Sẽ được thay thế động
+            "arn:aws:s3:::BUCKET_NAME",
             "arn:aws:s3:::BUCKET_NAME/*",
           ],
         },
@@ -403,7 +523,7 @@ const initializeDatabase = async () => {
 
     // Hàm tạo policy với bucket name cụ thể
     const getBucketPolicy = (bucketName) => {
-      const policy = JSON.parse(JSON.stringify(defaultBucketPolicy)); // Sao chép policy
+      const policy = JSON.parse(JSON.stringify(defaultBucketPolicy));
       policy.Statement[0].Resource = [
         `arn:aws:s3:::${bucketName}`,
         `arn:aws:s3:::${bucketName}/*`,
@@ -411,7 +531,7 @@ const initializeDatabase = async () => {
       return policy;
     };
 
-    // Tạo hoặc cập nhật S3 Buckets với bucket policy và tắt Block Public Access
+    // Tạo hoặc cập nhật S3 Buckets
     await createBucketIfNotExists(
       process.env.BUCKET_NAME_Chat_Send,
       getBucketPolicy(process.env.BUCKET_NAME_Chat_Send)
@@ -424,7 +544,8 @@ const initializeDatabase = async () => {
       process.env.BUCKET_AVATA_PROFILE,
       getBucketPolicy(process.env.BUCKET_AVATA_PROFILE)
     );
-
+    // Lưu stream ARN để dùng sau (có thể lưu vào biến môi trường hoặc file config)
+   
     console.log('Database and S3 buckets initialized successfully');
   } catch (error) {
     console.error('Error initializing database:', error);

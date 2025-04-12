@@ -8,7 +8,7 @@ const upload = multer({
     const allowedMimeTypes = [
       'image/jpeg', 'image/png', 'image/heic', 'image/gif',
       'video/mp4',
-      'audio/mpeg', 'audio/wav','audio/mp4',
+      'audio/mpeg', 'audio/wav', 'audio/mp4',
       'application/pdf', 'application/zip', 'application/x-rar-compressed', 'application/vnd.rar', 'text/plain'
     ];
     if (allowedMimeTypes.includes(file.mimetype)) {
@@ -18,9 +18,10 @@ const upload = multer({
     }
   },
 });
+
 const setAutoDeleteSettingController = async (req, res) => {
   try {
-    const  userId  = req.user.id; // Giả sử userId lấy từ middleware xác thực
+    const userId = req.user.id;
     const { targetUserId, autoDeleteAfter } = req.body;
 
     if (!targetUserId || !autoDeleteAfter) {
@@ -36,7 +37,7 @@ const setAutoDeleteSettingController = async (req, res) => {
 
 const getAutoDeleteSettingController = async (req, res) => {
   try {
-    const  userId  = req.user.id;
+    const userId = req.user.id;
     const { targetUserId } = req.params;
 
     if (!targetUserId) {
@@ -91,19 +92,26 @@ const sendMessage = async (req, res) => {
   }
 };
 
-const getMessages = async (req, res) => {
+const getMessagesBetweenController = async (req, res) => {
   try {
     const { userId } = req.params;
     const currentUserId = req.user.id;
 
     if (!userId) {
-      return res.status(400).json({ message: 'userId là bắt buộc!' });
+      return res.status(400).json({ success: false, message: 'userId là bắt buộc!' });
     }
 
+    console.log('Đang lấy tin nhắn cho:', { currentUserId, userId });
+
     const messages = await MessageService.getMessagesBetweenUsers(currentUserId, userId);
+    if (!messages.success) {
+      return res.status(500).json({ success: false, message: messages.error });
+    }
+
     res.json(messages);
   } catch (error) {
-    res.status(500).json({ message: 'Lỗi server', error: error.message });
+    console.error('Lỗi trong getMessagesBetweenController:', error);
+    res.status(500).json({ success: false, message: 'Lỗi server', error: error.message });
   }
 };
 
@@ -119,16 +127,19 @@ const getConversationUsers = async (req, res) => {
 
 const forwardMessageController = async (req, res) => {
   try {
-    const senderId = req.user.id;
     const { messageId, targetReceiverId } = req.body;
+    const senderId = req.user.id;
+    console.log('Forward message request:', { senderId, messageId, targetReceiverId });
+
     if (!messageId || !targetReceiverId) {
-      return res.status(400).json({ success: false, message: 'messageId hoặc targetReceiverId là bắt buộc!' });
+      return res.status(400).json({ success: false, message: 'Thiếu messageId hoặc targetReceiverId' });
     }
+
     const result = await MessageService.forwardMessage(senderId, messageId, targetReceiverId);
-    res.status(200).json({ success: true, message: 'Chuyển tiếp thành công!', data: result });
+    return res.status(200).json({ success: true, data: result });
   } catch (error) {
-    const statusCode = error.message.includes('không tồn tại') ? 404 : error.message.includes('quyền') ? 403 : 500;
-    res.status(statusCode).json({ success: false, message: error.message });
+    console.error('Error in forwardMessageController:', error);
+    return res.status(500).json({ success: false, message: error.message });
   }
 };
 
@@ -283,12 +294,12 @@ const setConversationNicknameController = async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 };
+
 const checkBlockStatusController = async (req, res) => {
   try {
-    const senderId = req.user.id; // Lấy senderId từ token
-    const { receiverId } = req.body; // Lấy receiverId từ query params (hoặc req.body nếu bạn muốn)
+    const senderId = req.user.id;
+    const { receiverId } = req.body;
 
-    // Kiểm tra đầu vào
     if (!receiverId) {
       return res.status(400).json({
         success: false,
@@ -296,22 +307,19 @@ const checkBlockStatusController = async (req, res) => {
       });
     }
 
-    // Gọi AuthService.checkBlockStatus để kiểm tra trạng thái chặn
     await MessageService.checkBlockStatus(senderId, receiverId);
 
-    // Nếu không có lỗi nào được ném ra, tức là không bị chặn
     res.status(200).json({
       success: true,
       message: 'Không có trạng thái chặn giữa hai người dùng.',
       data: {
         senderId,
         receiverId,
-        isSenderBlocked: false, // Receiver không chặn sender
-        isReceiverBlocked: false, // Sender không chặn receiver
+        isSenderBlocked: false,
+        isReceiverBlocked: false,
       },
     });
   } catch (error) {
-    // Xử lý lỗi từ checkBlockStatus
     const statusCode = error.message.includes('không thể gửi tin nhắn') ? 403 : 500;
     res.status(statusCode).json({
       success: false,
@@ -319,9 +327,10 @@ const checkBlockStatusController = async (req, res) => {
     });
   }
 };
+
 module.exports = {
   sendMessage: [upload.single('file'), sendMessage],
-  getMessages,
+  getMessagesBetweenController,
   getConversationUsers,
   forwardMessageController,
   recallMessageController,

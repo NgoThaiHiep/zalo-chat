@@ -3,7 +3,6 @@ const app = require('./app');
 const { initializeDatabase } = require('./config/database');
 const { initializeSocket } = require('./socket');
 const { initializeChatSocket } = require('./sockets/chat.socket');
-require('./services/messageExpiration.service');
 
 const server = http.createServer(app);
 const io = initializeSocket(server);

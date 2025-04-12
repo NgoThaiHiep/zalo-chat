@@ -1,7 +1,7 @@
 const express = require('express');
 const { 
   sendMessage, 
-  getMessages, 
+  getMessagesBetweenController, 
   getConversationUsers,
   forwardMessageController,
   recallMessageController,
@@ -24,7 +24,7 @@ const {authMiddleware ,checkOwnership} = require('../middlewares/authMiddleware'
 const router = express.Router();
 
 router.post('/send', authMiddleware, sendMessage);
-router.get('/user/:userId', authMiddleware, getMessages);
+router.get('/user/:userId', authMiddleware, getMessagesBetweenController);
 router.get('/conversations', authMiddleware, getConversationUsers);
 router.post('/forward', authMiddleware, forwardMessageController);
 router.patch('/messages/:messageId/recall', authMiddleware, recallMessageController);
@@ -42,3 +42,4 @@ router.get('/check-block-status', authMiddleware, checkBlockStatusController);
 router.post('/set-auto-delete', authMiddleware, setAutoDeleteSettingController);
 router.get('/get-auto-delete/:targetUserId', authMiddleware, getAutoDeleteSettingController);
 module.exports = router;
+

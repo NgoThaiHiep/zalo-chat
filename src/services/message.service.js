@@ -2,10 +2,10 @@ const { dynamoDB, s3 } = require('../config/aws.config');
 const { v4: uuidv4 } = require('uuid');
 const { sendMessageCore } = require('./messageCore');
 const { io, transcribeQueue } = require('../socket');
-const {redisClient, redisSubscriber} = require('../config/redis');
+const { redisClient, redisSubscriber } = require('../config/redis');
 const bcrypt = require('bcrypt');
-const {  isUserOnline, getUserActivityStatus } = require('./auth.service');
-require('dotenv').config()
+const { isUserOnline, getUserActivityStatus } = require('./auth.service');
+require('dotenv').config();
 
 // Hàm lấy cài đặt tự động xóa cho cuộc hội thoại
 const getAutoDeleteSetting = async (userId, targetUserId) => {
@@ -18,9 +18,9 @@ const getAutoDeleteSetting = async (userId, targetUserId) => {
 
 // Hàm đặt cài đặt tự động xóa cho cuộc hội thoại
 const setAutoDeleteSetting = async (userId, targetUserId, autoDeleteAfter) => {
-  const validOptions = ['10s','1d', '3d', '7d', 'never'];
+  const validOptions = ['10s', '60s', '1d', '3d', '7d', 'never'];
   if (!validOptions.includes(autoDeleteAfter)) {
-    throw new Error('Giá trị autoDeleteAfter không hợp lệ! Chọn "1d", "3d", "7d", hoặc "never".');
+    throw new Error('Giá trị autoDeleteAfter không hợp lệ! Chọn "10s", "60s", "1d", "3d", "7d", hoặc "never".');
   }
   await dynamoDB.put({
     TableName: 'Conversations',
@@ -35,75 +35,132 @@ const setAutoDeleteSetting = async (userId, targetUserId, autoDeleteAfter) => {
   return { message: `Cài đặt tự động xóa tin nhắn cho ${targetUserId} đã được đặt thành ${autoDeleteAfter}` };
 };
 
+// Hàm tạo tin nhắn
 const createMessage = async (senderId, receiverId, messageData) => {
   if (!senderId || !receiverId || !messageData || !messageData.type) {
     throw new Error('senderId, receiverId hoặc messageData không hợp lệ!');
   }
 
   await canSendMessageToUser(senderId, receiverId);
-  
-  // Lấy cài đặt tự động xóa từ bảng Conversations
-  const autoDeleteAfter = await getAutoDeleteSetting(senderId, receiverId);
-  const daysToSeconds = { '10s' : 10 ,'1d': 24 * 60 * 60, '3d': 3 * 24 * 60 * 60, '7d': 7 * 24 * 60 * 60 };
-  let expiresAt = null;
-  
-  if (autoDeleteAfter !== 'never' && !daysToSeconds[autoDeleteAfter]) {
-    console.warn(`Cài đặt autoDeleteAfter không hợp lệ: ${autoDeleteAfter}`);
-  }
 
-   // Nếu autoDeleteAfter không phải 'never', tính expiresAt
-  if (autoDeleteAfter !== 'never' && daysToSeconds[autoDeleteAfter]) {
-    expiresAt = new Date(Date.now() + daysToSeconds[autoDeleteAfter] * 1000).toISOString();
-  }
-  const newMessage = {
-    messageId: uuidv4(),
+  const senderAutoDelete = await getAutoDeleteSetting(senderId, receiverId);
+  const receiverAutoDelete = await getAutoDeleteSetting(receiverId, senderId);
+  const daysToSeconds = { '10s': 10, '60s': 60, '1d': 24 * 60 * 60, '3d': 3 * 24 * 60 * 60, '7d': 7 * 24 * 60 * 60 };
+
+  const now = Date.now();
+  const senderExpiresAt = senderAutoDelete !== 'never' && daysToSeconds[senderAutoDelete]
+    ? new Date(now + daysToSeconds[senderAutoDelete] * 1000).toISOString()
+    : null;
+  const receiverExpiresAt = receiverAutoDelete !== 'never' && daysToSeconds[receiverAutoDelete]
+    ? new Date(now + daysToSeconds[receiverAutoDelete] * 1000).toISOString()
+    : null;
+
+  const messageId = uuidv4();
+  const baseMessage = {
+    messageId,
     senderId,
     receiverId,
     ...messageData,
     replyToMessageId: messageData.replyToMessageId || null,
     status: 'sending',
     timestamp: new Date().toISOString(),
-    expiresAt,
   };
 
-  console.log('Creating message with data:', newMessage);
-  io().to(senderId).emit('messageStatus', { messageId: newMessage.messageId, status: 'sending' });
+  const senderMessage = {
+    ...baseMessage,
+    ownerId: senderId,
+    expiresAt: senderExpiresAt,
+  };
+
+  const receiverMessage = {
+    ...baseMessage,
+    ownerId: receiverId,
+    expiresAt: receiverExpiresAt,
+  };
+
+  console.log('Creating sender message:', senderMessage);
+  console.log('Creating receiver message:', receiverMessage);
+  io().to(senderId).emit('messageStatus', { messageId, status: 'sending' });
+
+  let senderResult = null;
+  let receiverResult = null;
+  let senderS3Key = null;
+  let receiverS3Key = null;
 
   try {
-    const savedMessage = await sendMessageCore(newMessage, 'Messages', process.env.BUCKET_NAME_Chat_Send);
+    const results = await Promise.allSettled([
+      sendMessageCore(senderMessage, 'Messages', process.env.BUCKET_NAME_Chat_Send).then(result => {
+        senderS3Key = result.mediaUrl && result.mediaUrl.startsWith(`s3://${process.env.BUCKET_NAME_Chat_Send}/`)
+          ? result.mediaUrl.split('/').slice(3).join('/')
+          : null;
+        return result;
+      }),
+      sendMessageCore(receiverMessage, 'Messages', process.env.BUCKET_NAME_Chat_Send).then(result => {
+        receiverS3Key = result.mediaUrl && result.mediaUrl.startsWith('s3://')
+          ? result.mediaUrl.split('/').slice(3).join('/')
+          : null;
+        return result;
+      }),
+    ]);
+
+    senderResult = results[0].status === 'fulfilled' ? results[0].value : null;
+    receiverResult = results[1].status === 'fulfilled' ? results[1].value : null;
+
+    if (!senderResult && !receiverResult) {
+      await Promise.allSettled([
+        senderS3Key && s3.deleteObject({ Bucket: process.env.BUCKET_NAME_Chat_Send, Key: senderS3Key }).promise(),
+        receiverS3Key && s3.deleteObject({ Bucket: process.env.BUCKET_NAME_Chat_Send, Key: receiverS3Key }).promise(),
+      ]);
+      throw new Error('Cả hai bản ghi tin nhắn đều thất bại!');
+    }
+
     const receiverOnline = isUserOnline(receiverId);
     const initialStatus = receiverOnline ? 'delivered' : 'sent';
 
-    await dynamoDB.update({
-      TableName: 'Messages',
-      Key: { messageId: savedMessage.messageId },
-      UpdateExpression: 'SET #status = :status',
-      ExpressionAttributeNames: { '#status': 'status' },
-      ExpressionAttributeValues: { ':status': initialStatus },
-    }).promise();
-    savedMessage.status = initialStatus;
-// Thêm đoạn debug để kiểm tra TTL
-console.log('AutoDeleteAfter:', autoDeleteAfter);
-console.log('ExpiresAt:', expiresAt);
-    if (expiresAt && daysToSeconds[autoDeleteAfter]) {
-      const ttl = daysToSeconds[autoDeleteAfter];
-      console.log('Setting Redis TTL for message:', savedMessage.messageId, 'TTL:', ttl);
-      await redisClient.set(
-        `temp_message:${savedMessage.messageId}:${senderId}:${receiverId}`,
-       'expired',
-          'EX',
-          ttl
-      );
-      const redisTtl = await redisClient.ttl(`temp_message:${savedMessage.messageId}`);
-      console.log('Redis TTL set to:', redisTtl);
+    console.log('Updating status for message:', { messageId, senderId, receiverId, initialStatus });
+
+    const updateResults = await Promise.allSettled([
+      senderResult &&
+        dynamoDB.update({
+          TableName: 'Messages',
+          Key: { messageId, ownerId: senderId },
+          UpdateExpression: 'SET #status = :status',
+          ExpressionAttributeNames: { '#status': 'status' },
+          ExpressionAttributeValues: { ':status': initialStatus },
+        }).promise().catch(err => {
+          console.error('Error updating sender message status:', err);
+          throw err;
+        }),
+      receiverResult &&
+        dynamoDB.update({
+          TableName: 'Messages',
+          Key: { messageId, ownerId: receiverId },
+          UpdateExpression: 'SET #status = :status',
+          ExpressionAttributeNames: { '#status': 'status' },
+          ExpressionAttributeValues: { ':status': initialStatus },
+        }).promise().catch(err => {
+          console.error('Error updating receiver message status:', err);
+          throw err;
+        }),
+    ]);
+
+    const failedUpdates = updateResults.filter(result => result.status === 'rejected');
+    if (failedUpdates.length > 0) {
+      await Promise.allSettled([
+        senderS3Key && s3.deleteObject({ Bucket: process.env.BUCKET_NAME_Chat_Send, Key: senderS3Key }).promise(),
+        receiverS3Key && s3.deleteObject({ Bucket: process.env.BUCKET_NAME_Chat_Send, Key: receiverS3Key }).promise(),
+      ]);
+      console.error('Update status failed:', failedUpdates.map(result => result.reason));
+      throw new Error('Cập nhật trạng thái tin nhắn thất bại!');
     }
-    else {
-      console.log('No TTL set: autoDeleteAfter is', autoDeleteAfter);
-    }
-    if (savedMessage.type === 'voice' && savedMessage.metadata?.transcribe) {
+
+    console.log('Sender expiresAt:', senderExpiresAt || 'Not set (never)');
+    console.log('Receiver expiresAt:', receiverExpiresAt || 'Not set (never)');
+
+    if (messageData.type === 'voice' && messageData.metadata?.transcribe && receiverResult) {
       await transcribeQueue().add(
         {
-          messageId: savedMessage.messageId,
+          messageId,
           senderId,
           receiverId,
           tableName: 'Messages',
@@ -113,28 +170,44 @@ console.log('ExpiresAt:', expiresAt);
       );
     }
 
-    if (receiverOnline) {
-      io().to(receiverId).emit('receiveMessage', savedMessage);
+    if (receiverOnline && receiverResult) {
+      io().to(receiverId).emit('receiveMessage', { ...receiverMessage, status: initialStatus });
     }
-    io().to(senderId).emit('messageStatus', { messageId: savedMessage.messageId, status: initialStatus });
-    return savedMessage;
-    } catch (error) {
+    if (senderResult) {
+      io().to(senderId).emit('messageStatus', { messageId, status: initialStatus });
+    }
+
+    return { ...baseMessage, status: initialStatus };
+  } catch (error) {
     console.error('Error in createMessage:', error);
-    await dynamoDB.update({
-      
-      TableName: 'Messages',
-      Key: { messageId: newMessage.messageId },
-      UpdateExpression: 'SET #status = :failed',
-      ExpressionAttributeNames: { '#status': 'status' },
-      ExpressionAttributeValues: { ':failed': 'failed' },
-    }).promise();
-    io().to(senderId).emit('messageStatus', { messageId: newMessage.messageId, status: 'failed' });
+    await Promise.allSettled([
+      senderS3Key && s3.deleteObject({ Bucket: process.env.BUCKET_NAME_Chat_Send, Key: senderS3Key }).promise(),
+      receiverS3Key && s3.deleteObject({ Bucket: process.env.BUCKET_NAME_Chat_Send, Key: receiverS3Key }).promise(),
+    ]);
+    await Promise.all([
+      senderResult &&
+        dynamoDB.update({
+          TableName: 'Messages',
+          Key: { messageId, ownerId: senderId },
+          UpdateExpression: 'SET #status = :failed',
+          ExpressionAttributeNames: { '#status': 'status' },
+          ExpressionAttributeValues: { ':failed': 'failed' },
+        }).promise().catch(err => console.error('Error updating sender failed status:', err)),
+      receiverResult &&
+        dynamoDB.update({
+          TableName: 'Messages',
+          Key: { messageId, ownerId: receiverId },
+          UpdateExpression: 'SET #status = :failed',
+          ExpressionAttributeNames: { '#status': 'status' },
+          ExpressionAttributeValues: { ':failed': 'failed' },
+        }).promise().catch(err => console.error('Error updating receiver failed status:', err)),
+    ]);
+    io().to(senderId).emit('messageStatus', { messageId, status: 'failed' });
     throw new Error('Gửi tin nhắn thất bại!');
   }
 };
 
-
-
+// Hàm mute hội thoại
 const muteConversation = async (userId, mutedUserId, duration) => {
   const muteUntil = duration === 'forever' ? null : new Date(Date.now() + duration * 60 * 60 * 1000);
   await dynamoDB.put({
@@ -144,19 +217,34 @@ const muteConversation = async (userId, mutedUserId, duration) => {
   return { success: true, message: 'Đã chặn thông báo!' };
 };
 
+// Hàm thử lại tin nhắn
 const retryMessage = async (senderId, messageId) => {
-  const message = await dynamoDB.get({ TableName: 'Messages', Key: { messageId } }).promise();
+  console.log('Retrying message:', { messageId, senderId });
+
+  // Sửa để dùng khóa đúng
+  const message = await dynamoDB.get({
+    TableName: 'Messages',
+    Key: { messageId, ownerId: senderId },
+  }).promise().catch(err => {
+    console.error('Error getting message in retryMessage:', err);
+    throw err;
+  });
+
   if (!message.Item) throw new Error('Tin nhắn không tồn tại!');
   if (message.Item.senderId !== senderId) throw new Error('Bạn không có quyền gửi lại tin nhắn này!');
   if (message.Item.status !== 'failed') throw new Error('Tin nhắn không ở trạng thái thất bại!');
 
   await dynamoDB.update({
     TableName: 'Messages',
-    Key: { messageId },
+    Key: { messageId, ownerId: senderId },
     UpdateExpression: 'SET #status = :sending',
     ExpressionAttributeNames: { '#status': 'status' },
     ExpressionAttributeValues: { ':sending': 'sending' },
-  }).promise();
+  }).promise().catch(err => {
+    console.error('Error updating status to sending:', err);
+    throw err;
+  });
+
   io().to(senderId).emit('messageStatus', { messageId, status: 'sending' });
 
   try {
@@ -166,11 +254,15 @@ const retryMessage = async (senderId, messageId) => {
 
     await dynamoDB.update({
       TableName: 'Messages',
-      Key: { messageId },
+      Key: { messageId, ownerId: senderId },
       UpdateExpression: 'SET #status = :status',
       ExpressionAttributeNames: { '#status': 'status' },
       ExpressionAttributeValues: { ':status': newStatus },
-    }).promise();
+    }).promise().catch(err => {
+      console.error('Error updating status to delivered/sent:', err);
+      throw err;
+    });
+
     savedMessage.status = newStatus;
 
     if (receiverOnline) {
@@ -179,21 +271,31 @@ const retryMessage = async (senderId, messageId) => {
     io().to(senderId).emit('messageStatus', { messageId, status: newStatus });
     return savedMessage;
   } catch (error) {
-     console.error('Error in createMessage:', error);
+    console.error('Error in retryMessage:', error);
     await dynamoDB.update({
       TableName: 'Messages',
-      Key: { messageId },
+      Key: { messageId, ownerId: senderId },
       UpdateExpression: 'SET #status = :failed',
       ExpressionAttributeNames: { '#status': 'status' },
       ExpressionAttributeValues: { ':failed': 'failed' },
-    }).promise();
+    }).promise().catch(err => console.error('Error updating status to failed:', err));
     io().to(senderId).emit('messageStatus', { messageId, status: 'failed' });
     throw new Error('Gửi lại tin nhắn thất bại!');
   }
 };
 
+// Hàm đánh dấu tin nhắn đã xem
 const markMessageAsSeen = async (userId, messageId) => {
-  const message = await dynamoDB.get({ TableName: 'Messages', Key: { messageId } }).promise();
+  console.log('Marking message as seen:', { messageId, userId });
+
+  const message = await dynamoDB.get({
+    TableName: 'Messages',
+    Key: { messageId, ownerId: userId },
+  }).promise().catch(err => {
+    console.error('Error getting message in markMessageAsSeen:', err);
+    throw err;
+  });
+
   if (!message.Item || message.Item.receiverId !== userId) {
     throw new Error('Không có quyền đánh dấu tin nhắn này!');
   }
@@ -210,19 +312,25 @@ const markMessageAsSeen = async (userId, messageId) => {
     newStatus = 'seen';
     await dynamoDB.update({
       TableName: 'Messages',
-      Key: { messageId },
+      Key: { messageId, ownerId: userId },
       UpdateExpression: 'SET #status = :seen',
       ExpressionAttributeNames: { '#status': 'status' },
       ExpressionAttributeValues: { ':seen': 'seen' },
-    }).promise();
+    }).promise().catch(err => {
+      console.error('Error updating status to seen:', err);
+      throw err;
+    });
   } else if (message.Item.status === 'sent') {
     await dynamoDB.update({
       TableName: 'Messages',
-      Key: { messageId },
+      Key: { messageId, ownerId: userId },
       UpdateExpression: 'SET #status = :delivered',
       ExpressionAttributeNames: { '#status': 'status' },
       ExpressionAttributeValues: { ':delivered': 'delivered' },
-    }).promise();
+    }).promise().catch(err => {
+      console.error('Error updating status to delivered:', err);
+      throw err;
+    });
   }
 
   io().to(message.Item.senderId).emit('messageStatus', { messageId, status: newStatus });
@@ -230,32 +338,96 @@ const markMessageAsSeen = async (userId, messageId) => {
   return { message: `Tin nhắn ở trạng thái ${newStatus}` };
 };
 
+
+// Hàm lấy tin nhắn giữa hai người dùng
 const getMessagesBetweenUsers = async (user1, user2) => {
-  const params1 = {
-    TableName: 'Messages',
-    IndexName: 'SenderReceiverIndex',
-    KeyConditionExpression: 'senderId = :user1 AND receiverId = :user2',
-    ExpressionAttributeValues: { ':user1': user1, ':user2': user2 },
-  };
+  try {
+    // Lấy thời gian hiện tại dạng ISO
+    const now = new Date().toISOString();
+    console.log('Đang lấy tin nhắn giữa:', { user1, user2, now });
 
-  const params2 = {
-    TableName: 'Messages',
-    IndexName: 'SenderReceiverIndex',
-    KeyConditionExpression: 'senderId = :user2 AND receiverId = :user1',
-    ExpressionAttributeValues: { ':user1': user1, ':user2': user2 },
-  };
+    // Định nghĩa các tham số truy vấn DynamoDB
+    const params1Sender = {
+      TableName: 'Messages',
+      IndexName: 'SenderReceiverIndex',
+      KeyConditionExpression: 'senderId = :user1 AND receiverId = :user2',
+      ExpressionAttributeValues: {
+        ':user1': user1,
+        ':user2': user2,
+      },
+      Limit: 100,
+      ScanIndexForward: false,
+    };
 
-  const [result1, result2] = await Promise.all([
-    dynamoDB.query(params1).promise(),
-    dynamoDB.query(params2).promise(),
-  ]);
+    const params1Receiver = {
+      TableName: 'Messages',
+      IndexName: 'ReceiverSenderIndex',
+      KeyConditionExpression: 'receiverId = :user1 AND senderId = :user2',
+      ExpressionAttributeValues: {
+        ':user1': user1,
+        ':user2': user2,
+      },
+      Limit: 100,
+      ScanIndexForward: false,
+    };
 
-  const allMessages = [...result1.Items, ...result2.Items].sort(
-    (a, b) => new Date(a.timestamp) - new Date(b.timestamp)
-  );
-  return { success: true, messages: allMessages };
+    // Thực hiện các truy vấn đồng thời
+    const [result1Sender, result1Receiver] = await Promise.all([
+      dynamoDB.query(params1Sender).promise().catch(err => {
+        console.error('Lỗi truy vấn params1Sender:', err);
+        return { Items: [] };
+      }),
+      dynamoDB.query(params1Receiver).promise().catch(err => {
+        console.error('Lỗi truy vấn params1Receiver:', err);
+        return { Items: [] };
+      }),
+    ]);
+
+    // Ghi log số lượng và nội dung tin nhắn từ mỗi truy vấn
+    console.log('Kết quả truy vấn:', {
+      sender1Count: (result1Sender.Items || []).length,
+      receiver1Count: (result1Receiver.Items || []).length,
+    });
+    console.log('Tin nhắn từ params1Sender:', result1Sender.Items || []);
+    console.log('Tin nhắn từ params1Receiver:', result1Receiver.Items || []);
+
+    // Kết hợp tất cả tin nhắn
+    const allMessages = [
+      ...(result1Sender.Items || []),
+      ...(result1Receiver.Items || []),
+    ];
+
+    console.log('Tổng số tin nhắn trước khi lọc:', allMessages.length);
+    console.log('Danh sách tin nhắn trước khi lọc:', allMessages);
+
+    // Lọc tin nhắn theo expiresAt và ownerId
+    const filteredMessages = allMessages.filter(msg => {
+      const isValidExpiresAt = !msg.expiresAt || msg.expiresAt > now;
+      const isOwner = msg.ownerId === user1;
+      return isOwner && isValidExpiresAt;
+    });
+
+    console.log('Tổng số tin nhắn sau khi lọc:', filteredMessages.length);
+    console.log('Danh sách tin nhắn sau khi lọc:', filteredMessages);
+
+    // Loại bỏ tin nhắn trùng lặp và sắp xếp theo thời gian
+    const uniqueMessages = Array.from(
+      new Map(filteredMessages.map((msg) => [`${msg.messageId}:${msg.ownerId}`, msg])).values()
+    ).sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+
+    console.log('Tổng số tin nhắn duy nhất:', uniqueMessages.length);
+    console.log('Danh sách tin nhắn cuối cùng:', uniqueMessages);
+
+    // Trả về kết quả
+    return { success: true, messages: uniqueMessages };
+  } catch (error) {
+    console.error('Lỗi khi lấy tin nhắn giữa hai người dùng:', error);
+    return { success: false, error: error.message || 'Không thể lấy tin nhắn' };
+  }
 };
 
+
+// Hàm cập nhật trạng thái tin nhắn khi kết nối
 const updateMessageStatusOnConnect = async (userId) => {
   const params = {
     TableName: 'Messages',
@@ -272,16 +444,19 @@ const updateMessageStatusOnConnect = async (userId) => {
   for (const message of messages) {
     await dynamoDB.update({
       TableName: 'Messages',
-      Key: { messageId: message.messageId },
+      Key: { messageId: message.messageId, ownerId: message.ownerId },
       UpdateExpression: 'SET #status = :delivered',
       ExpressionAttributeNames: { '#status': 'status' },
       ExpressionAttributeValues: { ':delivered': 'delivered' },
-    }).promise();
+    }).promise().catch(err => {
+      console.error('Error updating status in updateMessageStatusOnConnect:', err);
+    });
     io().to(message.senderId).emit('messageStatus', { messageId: message.messageId, status: 'delivered' });
     io().to(userId).emit('receiveMessage', { ...message, status: 'delivered' });
   }
 };
 
+// Hàm lấy danh sách người đã nhắn tin
 const getConversationUsers = async (currentUserId) => {
   const hiddenConversations = await getHiddenConversations(currentUserId);
   const hiddenUserIds = new Set(hiddenConversations.map(conv => conv.hiddenUserId));
@@ -321,42 +496,122 @@ const getConversationUsers = async (currentUserId) => {
       } : null;
     })
   );
-  return { success: true, users: usersWithNicknames.filter(user => !hiddenUserIds.has(user.id)) };
+  return { success: true, users: usersWithNicknames.filter(user => user && !hiddenUserIds.has(user.id)) };
 };
 
+// Hàm chuyển tiếp tin nhắn
 const forwardMessage = async (senderId, messageId, targetReceiverId) => {
-  await canSendMessageToUser(senderId, targetReceiverId);
+  console.log('Forwarding message:', { senderId, messageId, targetReceiverId });
 
-  const originalMessage = await dynamoDB.get({
-    TableName: 'Messages',
-    Key: { messageId },
-  }).promise();
+  await canSendMessageToUser(senderId, targetReceiverId, true);
 
-  if (!originalMessage.Item) throw new Error('Tin nhắn gốc không tồn tại!');
+  // Thử lấy tin nhắn gốc với ownerId là senderId
+  let originalMessage;
+  try {
+    originalMessage = await dynamoDB.get({
+      TableName: 'Messages',
+      Key: { messageId, ownerId: senderId },
+    }).promise();
+    console.log('Get message with senderId:', originalMessage);
+  } catch (err) {
+    console.error('Error getting message with senderId:', err);
+    throw err;
+  }
+
+  // Nếu không tìm thấy, thử với ownerId là receiverId của tin nhắn gốc
+  if (!originalMessage.Item) {
+    try {
+      const tempMessage = await dynamoDB.query({
+        TableName: 'Messages',
+        IndexName: 'ReceiverSenderIndex',
+        KeyConditionExpression: 'receiverId = :senderId AND messageId = :messageId',
+        ExpressionAttributeValues: {
+          ':senderId': senderId,
+          ':messageId': messageId,
+        },
+        Limit: 1,
+      }).promise();
+      console.log('Query message with receiverId:', tempMessage);
+
+      if (tempMessage.Items && tempMessage.Items.length > 0) {
+        originalMessage = { Item: tempMessage.Items[0] };
+      }
+    } catch (err) {
+      console.error('Error querying message with receiverId:', err);
+      throw err;
+    }
+  }
+
+  if (!originalMessage.Item) {
+    throw new Error('Tin nhắn gốc không tồn tại!');
+  }
+
   if (originalMessage.Item.senderId !== senderId && originalMessage.Item.receiverId !== senderId) {
     throw new Error('Bạn không có quyền chuyển tiếp tin nhắn này!');
   }
 
-  // Lấy cài đặt tự động xóa từ cuộc hội thoại giữa senderId và targetReceiverId
-  const autoDeleteAfter = await getAutoDeleteSetting(senderId, targetReceiverId);
-  const daysToSeconds = { '10s': 10, '1d': 24 * 60 * 60, '3d': 3 * 24 * 60 * 60, '7d': 7 * 24 * 60 * 60 };
-  let expiresAt = null;
+  const senderAutoDelete = await getAutoDeleteSetting(senderId, targetReceiverId);
+  const receiverAutoDelete = await getAutoDeleteSetting(targetReceiverId, senderId);
+  const daysToSeconds = { '10s': 10, '60s': 60, '1d': 24 * 60 * 60, '3d': 3 * 24 * 60 * 60, '7d': 7 * 24 * 60 * 60 };
 
-  if (autoDeleteAfter !== 'never' && !daysToSeconds[autoDeleteAfter]) {
-    console.warn(`Cài đặt autoDeleteAfter không hợp lệ: ${autoDeleteAfter}`);
+  const now = Date.now();
+  const senderExpiresAt = senderAutoDelete !== 'never' && daysToSeconds[senderAutoDelete]
+    ? new Date(now + daysToSeconds[senderAutoDelete] * 1000).toISOString()
+    : null;
+  const receiverExpiresAt = receiverAutoDelete !== 'never' && daysToSeconds[receiverAutoDelete]
+    ? new Date(now + daysToSeconds[receiverAutoDelete] * 1000).toISOString()
+    : null;
+
+  const newMessageId = uuidv4();
+  let newMediaUrl = originalMessage.Item.mediaUrl;
+  let newS3Key = null;
+
+  if (newMediaUrl && newMediaUrl.startsWith('s3://')) {
+    const bucketName = process.env.BUCKET_NAME_Chat_Send;
+    const originalKey = newMediaUrl.split('/').slice(3).join('/');
+    const mimeType = originalMessage.Item.mimeType;
+    const mimeTypeMap = {
+      'image/jpeg': { folder: 'images', ext: 'jpg' },
+      'image/png': { folder: 'images', ext: 'png' },
+      'image/heic': { folder: 'images', ext: 'heic' },
+      'image/gif': { folder: 'gifs', ext: 'gif' },
+      'video/mp4': { folder: 'videos', ext: 'mp4' },
+      'audio/mpeg': { folder: 'voice', ext: 'mp3' },
+      'audio/wav': { folder: 'voice', ext: 'wav' },
+      'audio/mp4': { folder: 'voice', ext: 'm4a' },
+      'application/pdf': { folder: 'files', ext: 'pdf' },
+      'application/zip': { folder: 'files', ext: 'zip' },
+      'application/x-rar-compressed': { folder: 'files', ext: 'rar' },
+      'application/vnd.rar': { folder: 'files', ext: 'rar' },
+      'text/plain': { folder: 'files', ext: 'txt' },
+      'image/webp': { folder: 'images', ext: 'webp' },
+    };
+
+    const mimeInfo = mimeTypeMap[mimeType];
+    if (!mimeInfo) throw new Error(`MIME type ${mimeType} không được hỗ trợ!`);
+
+    newS3Key = `${mimeInfo.folder}/${newMessageId}.${mimeInfo.ext}`;
+    try {
+      await s3.copyObject({
+        Bucket: bucketName,
+        CopySource: `${bucketName}/${originalKey}`,
+        Key: newS3Key,
+        ContentType: mimeType,
+      }).promise();
+      newMediaUrl = `s3://${bucketName}/${newS3Key}`;
+    } catch (s3Error) {
+      console.error('Lỗi khi sao chép file S3:', s3Error);
+      throw new Error(`Lỗi khi sao chép file S3: ${s3Error.message}`);
+    }
   }
 
-  if (autoDeleteAfter !== 'never' && daysToSeconds[autoDeleteAfter]) {
-    expiresAt = new Date(Date.now() + daysToSeconds[autoDeleteAfter] * 1000).toISOString();
-  }
-
-  const newMessage = {
-    messageId: uuidv4(),
+  const baseMessage = {
+    messageId: newMessageId,
     senderId,
     receiverId: targetReceiverId,
     type: originalMessage.Item.type,
     content: originalMessage.Item.content,
-    mediaUrl: originalMessage.Item.mediaUrl,
+    mediaUrl: newMediaUrl,
     fileName: originalMessage.Item.fileName,
     mimeType: originalMessage.Item.mimeType,
     metadata: { ...originalMessage.Item.metadata, forwardedFrom: messageId },
@@ -364,36 +619,91 @@ const forwardMessage = async (senderId, messageId, targetReceiverId) => {
     isSecret: false,
     quality: originalMessage.Item.quality,
     timestamp: new Date().toISOString(),
-    expiresAt, // Thêm expiresAt
+    status: 'sending',
   };
 
-  console.log('Forwarding message with data:', newMessage);
+  const senderMessage = {
+    ...baseMessage,
+    ownerId: senderId,
+    expiresAt: senderExpiresAt,
+  };
 
-  const savedMessage = await sendMessageCore(newMessage, 'Messages', process.env.BUCKET_NAME_Chat_Send);
+  const receiverMessage = {
+    ...baseMessage,
+    ownerId: targetReceiverId,
+    expiresAt: receiverExpiresAt,
+  };
 
-  // Đặt TTL trong Redis nếu có expiresAt
-  if (expiresAt && daysToSeconds[autoDeleteAfter]) {
-    const ttl = daysToSeconds[autoDeleteAfter];
-    console.log('Setting Redis TTL for forwarded message:', savedMessage.messageId, 'TTL:', ttl);
-    await redisClient.set(
-      `temp_message:${savedMessage.messageId}:${senderId}:${targetReceiverId}`,
-      'expired',
-      'EX',
-      ttl
-    );
-    const redisTtl = await redisClient.ttl(`temp_message:${savedMessage.messageId}:${senderId}:${targetReceiverId}`);
-    console.log('Redis TTL set to:', redisTtl);
-  } else {
-    console.log('No TTL set for forwarded message: autoDeleteAfter is', autoDeleteAfter);
+  console.log('Forwarding sender message:', senderMessage);
+  console.log('Forwarding receiver message:', receiverMessage);
+
+  try {
+    await Promise.all([
+      sendMessageCore(senderMessage, 'Messages', process.env.BUCKET_NAME_Chat_Send),
+      sendMessageCore(receiverMessage, 'Messages', process.env.BUCKET_NAME_Chat_Send),
+    ]);
+
+    const receiverOnline = isUserOnline(targetReceiverId);
+    const initialStatus = receiverOnline ? 'delivered' : 'sent';
+
+    console.log('Updating status for forwarded message:', { newMessageId, senderId, targetReceiverId, initialStatus });
+
+    const updateResults = await Promise.allSettled([
+      dynamoDB.update({
+        TableName: 'Messages',
+        Key: { messageId: newMessageId, ownerId: senderId },
+        UpdateExpression: 'SET #status = :status',
+        ExpressionAttributeNames: { '#status': 'status' },
+        ExpressionAttributeValues: { ':status': initialStatus },
+      }).promise().catch(err => {
+        console.error('Error updating sender forwarded message status:', err);
+        throw err;
+      }),
+      dynamoDB.update({
+        TableName: 'Messages',
+        Key: { messageId: newMessageId, ownerId: targetReceiverId },
+        UpdateExpression: 'SET #status = :status',
+        ExpressionAttributeNames: { '#status': 'status' },
+        ExpressionAttributeValues: { ':status': initialStatus },
+      }).promise().catch(err => {
+        console.error('Error updating receiver forwarded message status:', err);
+        throw err;
+      }),
+    ]);
+
+    if (updateResults.some(result => result.status === 'rejected') && newS3Key) {
+      await s3.deleteObject({ Bucket: process.env.BUCKET_NAME_Chat_Send, Key: newS3Key }).promise();
+      console.error('Update status failed:', updateResults.filter(result => result.status === 'rejected').map(result => result.reason));
+      throw new Error('Cập nhật trạng thái tin nhắn thất bại!');
+    }
+
+    console.log('Sender expiresAt:', senderExpiresAt || 'Not set (never)');
+    console.log('Receiver expiresAt:', receiverExpiresAt || 'Not set (never)');
+
+    io().to(targetReceiverId).emit('receiveMessage', { ...receiverMessage, status: initialStatus });
+    io().to(senderId).emit('receiveMessage', { ...senderMessage, status: initialStatus });
+    return { ...baseMessage, status: initialStatus };
+  } catch (error) {
+    if (newS3Key) {
+      await s3.deleteObject({ Bucket: process.env.BUCKET_NAME_Chat_Send, Key: newS3Key }).promise();
+    }
+    console.error('Error in forwardMessage:', error);
+    throw error;
   }
-
-  io().to(targetReceiverId).emit('receiveMessage', savedMessage);
-  io().to(senderId).emit('receiveMessage', savedMessage);
-  return savedMessage;
 };
 
+// Hàm thu hồi tin nhắn
 const recallMessage = async (senderId, messageId) => {
-  const message = await dynamoDB.get({ TableName: 'Messages', Key: { messageId } }).promise();
+  console.log('Recalling message:', { messageId, senderId });
+
+  const message = await dynamoDB.get({
+    TableName: 'Messages',
+    Key: { messageId, ownerId: senderId },
+  }).promise().catch(err => {
+    console.error('Error getting message in recallMessage:', err);
+    throw err;
+  });
+
   if (!message.Item) throw new Error('Tin nhắn không tồn tại!');
   if (message.Item.senderId !== senderId) throw new Error('Bạn không có quyền thu hồi tin nhắn này!');
 
@@ -402,18 +712,52 @@ const recallMessage = async (senderId, messageId) => {
 
   await dynamoDB.update({
     TableName: 'Messages',
-    Key: { messageId },
+    Key: { messageId, ownerId: senderId },
     UpdateExpression: 'set isRecalled = :r',
     ExpressionAttributeValues: { ':r': true },
-  }).promise();
+  }).promise().catch(err => {
+    console.error('Error updating isRecalled:', err);
+    throw err;
+  });
 
   io().to(message.Item.receiverId).emit('messageRecalled', { messageId });
   io().to(senderId).emit('messageRecalled', { messageId });
   return { success: true, message: 'Tin nhắn đã được thu hồi!' };
 };
 
+// Hàm ghim tin nhắn
 const pinMessage = async (senderId, messageId) => {
-  const message = await dynamoDB.get({ TableName: 'Messages', Key: { messageId } }).promise();
+  console.log('Pinning message:', { messageId, senderId });
+
+  const message = await dynamoDB.get({
+    TableName: 'Messages',
+    Key: { messageId, ownerId: senderId },
+  }).promise().catch(err => {
+    console.error('Error getting message in pinMessage:', err);
+    throw err;
+  });
+
+  if (!message.Item) {
+    // Thử với ownerId là receiverId
+    const tempMessage = await dynamoDB.query({
+      TableName: 'Messages',
+      IndexName: 'ReceiverSenderIndex',
+      KeyConditionExpression: 'receiverId = :senderId AND messageId = :messageId',
+      ExpressionAttributeValues: {
+        ':senderId': senderId,
+        ':messageId': messageId,
+      },
+      Limit: 1,
+    }).promise().catch(err => {
+      console.error('Error querying message in pinMessage:', err);
+      throw err;
+    });
+
+    if (tempMessage.Items && tempMessage.Items.length > 0) {
+      message.Item = tempMessage.Items[0];
+    }
+  }
+
   if (!message.Item) throw new Error('Tin nhắn không tồn tại!');
   if (message.Item.senderId !== senderId && message.Item.receiverId !== senderId) {
     throw new Error('Bạn không có quyền ghim tin nhắn này!');
@@ -421,41 +765,84 @@ const pinMessage = async (senderId, messageId) => {
 
   await dynamoDB.update({
     TableName: 'Messages',
-    Key: { messageId },
+    Key: { messageId, ownerId: message.Item.ownerId },
     UpdateExpression: 'set isPinned = :p',
     ExpressionAttributeValues: { ':p': true },
-  }).promise();
+  }).promise().catch(err => {
+    console.error('Error updating isPinned:', err);
+    throw err;
+  });
 
   io().to(message.Item.receiverId).emit('messagePinned', { messageId });
   io().to(senderId).emit('messagePinned', { messageId });
   return { success: true, message: 'Tin nhắn đã được ghim!' };
 };
 
+// Hàm đặt nhắc nhở
 const setReminder = async (senderId, messageId, reminder) => {
-  const message = await dynamoDB.get({ TableName: 'Messages', Key: { messageId } }).promise();
+  console.log('Setting reminder for message:', { messageId, senderId });
+
+  const message = await dynamoDB.get({
+    TableName: 'Messages',
+    Key: { messageId, ownerId: senderId },
+  }).promise().catch(err => {
+    console.error('Error getting message in setReminder:', err);
+    throw err;
+  });
+
   if (!message.Item) throw new Error('Tin nhắn không tồn tại!');
   if (message.Item.senderId !== senderId) throw new Error('Bạn không có quyền đặt nhắc nhở cho tin nhắn này!');
 
   await dynamoDB.update({
     TableName: 'Messages',
-    Key: { messageId },
+    Key: { messageId, ownerId: senderId },
     UpdateExpression: 'set reminder = :r',
     ExpressionAttributeValues: { ':r': reminder },
-  }).promise();
+  }).promise().catch(err => {
+    console.error('Error updating reminder:', err);
+    throw err;
+  });
 
   return { success: true, message: 'Đã đặt nhắc nhở!' };
 };
 
+// Hàm xóa tin nhắn
 const deleteMessage = async (senderId, messageId, deleteType) => {
-  const message = await dynamoDB.get({ TableName: 'Messages', Key: { messageId } }).promise();
+  console.log('Deleting message:', { messageId, senderId, deleteType });
+
+  const message = await dynamoDB.get({
+    TableName: 'Messages',
+    Key: { messageId, ownerId: senderId },
+  }).promise().catch(err => {
+    console.error('Error getting message in deleteMessage:', err);
+    throw err;
+  });
+
   if (!message.Item) throw new Error('Tin nhắn không tồn tại!');
   if (message.Item.senderId !== senderId) throw new Error('Bạn không có quyền xóa tin nhắn này!');
 
   if (deleteType === 'everyone') {
-    await dynamoDB.delete({ TableName: 'Messages', Key: { messageId } }).promise();
+    await dynamoDB.delete({
+      TableName: 'Messages',
+      Key: { messageId, ownerId: senderId },
+    }).promise().catch(err => {
+      console.error('Error deleting message for everyone:', err);
+      throw err;
+    });
+
+    // Xóa bản ghi của receiver
+    await dynamoDB.delete({
+      TableName: 'Messages',
+      Key: { messageId, ownerId: message.Item.receiverId },
+    }).promise().catch(err => {
+      console.error('Error deleting receiver message:', err);
+    });
+
     if (message.Item.mediaUrl) {
       const key = message.Item.mediaUrl.split('/').slice(3).join('/');
-      await s3.deleteObject({ Bucket: process.env.BUCKET_NAME_Chat_Send, Key: key }).promise();
+      await s3.deleteObject({ Bucket: process.env.BUCKET_NAME_Chat_Send, Key: key }).promise().catch(err => {
+        console.error('Error deleting S3 object:', err);
+      });
     }
     io().to(message.Item.receiverId).emit('messageDeleted', { messageId });
     io().to(senderId).emit('messageDeleted', { messageId });
@@ -464,26 +851,43 @@ const deleteMessage = async (senderId, messageId, deleteType) => {
     await dynamoDB.put({
       TableName: 'UserDeletedMessages',
       Item: { userId: senderId, messageId, timestamp: new Date().toISOString() },
-    }).promise();
+    }).promise().catch(err => {
+      console.error('Error putting to UserDeletedMessages:', err);
+      throw err;
+    });
     io().to(senderId).emit('messageDeleted', { messageId });
     return { success: true, message: 'Tin nhắn đã được xóa chỉ với bạn!' };
   }
 };
 
+// Hàm khôi phục tin nhắn
 const restoreMessage = async (senderId, messageId) => {
-  const message = await dynamoDB.get({ TableName: 'Messages', Key: { messageId } }).promise();
+  console.log('Restoring message:', { messageId, senderId });
+
+  const message = await dynamoDB.get({
+    TableName: 'Messages',
+    Key: { messageId, ownerId: senderId },
+  }).promise().catch(err => {
+    console.error('Error getting message in restoreMessage:', err);
+    throw err;
+  });
+
   if (!message.Item) throw new Error('Tin nhắn không tồn tại hoặc đã bị xóa hoàn toàn!');
   if (message.Item.senderId !== senderId) throw new Error('Bạn không có quyền khôi phục tin nhắn này!');
 
   await dynamoDB.delete({
     TableName: 'UserDeletedMessages',
     Key: { userId: senderId, messageId },
-  }).promise();
+  }).promise().catch(err => {
+    console.error('Error deleting from UserDeletedMessages:', err);
+    throw err;
+  });
 
   io().to(senderId).emit('messageRestored', { messageId });
   return { success: true, message: 'Tin nhắn đã được khôi phục!' };
 };
 
+// Hàm ẩn hội thoại
 const hideConversation = async (userId, hiddenUserId, password) => {
   const hashedPassword = await bcrypt.hash(password, 10);
   const hiddenData = JSON.stringify({ hiddenUserId, password: hashedPassword });
@@ -491,6 +895,7 @@ const hideConversation = async (userId, hiddenUserId, password) => {
   return { success: true, message: 'Đã ẩn cuộc trò chuyện!' };
 };
 
+// Hàm bỏ ẩn hội thoại
 const unhideConversation = async (userId, hiddenUserId, password) => {
   const hiddenData = await redisClient.get(`hidden:${userId}:${hiddenUserId}`);
   if (!hiddenData) throw new Error('Cuộc trò chuyện không được ẩn!');
@@ -501,6 +906,7 @@ const unhideConversation = async (userId, hiddenUserId, password) => {
   return { success: true, message: 'Đã mở ẩn cuộc trò chuyện!' };
 };
 
+// Hàm lấy danh sách hội thoại ẩn
 const getHiddenConversations = async (userId) => {
   const keys = await redisClient.keys(`hidden:${userId}:*`);
   const hiddenConversations = await Promise.all(
@@ -513,15 +919,18 @@ const getHiddenConversations = async (userId) => {
   return hiddenConversations;
 };
 
+// Hàm đặt tên gợi nhớ
 const setConversationNickname = async (userId, targetUserId, nickname) => {
   await redisClient.set(`nickname:${userId}:${targetUserId}`, nickname);
   return { success: true, message: 'Đã đặt tên gợi nhớ!' };
 };
 
+// Hàm lấy tên gợi nhớ
 const getConversationNickname = async (userId, targetUserId) => {
   return await redisClient.get(`nickname:${userId}:${targetUserId}`);
 };
 
+// Hàm kiểm tra chặn
 const isBlocked = async (blockerId, blockedId) => {
   const result = await dynamoDB.get({
     TableName: 'BlockedUsers',
@@ -529,6 +938,7 @@ const isBlocked = async (blockerId, blockedId) => {
   }).promise();
   return !!result.Item;
 };
+
 const checkBlockStatus = async (senderId, receiverId) => {
   if (await isBlocked(receiverId, senderId)) {
     throw new Error('Bạn đã bị người này chặn');
@@ -537,17 +947,15 @@ const checkBlockStatus = async (senderId, receiverId) => {
     throw new Error('Bạn đã chặn người này');
   }
 };
-// Kiểm tra quyền gửi tin nhắn
+
+// Hàm kiểm tra quyền gửi tin nhắn
 const canSendMessageToUser = async (senderId, receiverId, isForward = false) => {
   console.log('Checking canSendMessageToUser:', { senderId, receiverId, isForward });
 
-  // 1. Gửi cho chính mình luôn được phép
   if (senderId === receiverId) return true;
 
-  // 2. Kiểm tra block
   await checkBlockStatus(senderId, receiverId);
 
-  // 3. Kiểm tra người nhận có tồn tại
   const receiverResult = await dynamoDB.get({
     TableName: 'Users',
     Key: { userId: receiverId },
@@ -558,11 +966,9 @@ const canSendMessageToUser = async (senderId, receiverId, isForward = false) => 
 
   const restrictStrangerMessages = receiver.restrictStrangerMessages;
 
-  // 4. Nếu KHÔNG giới hạn người lạ → chỉ cần kiểm tra nếu là forward
   if (!restrictStrangerMessages) {
     if (!isForward) return true;
 
-    // Kiểm tra lịch sử gửi tin nhắn (forward yêu cầu từng nói chuyện)
     const messageHistory = await dynamoDB.query({
       TableName: 'Messages',
       IndexName: 'SenderReceiverIndex',
@@ -579,7 +985,6 @@ const canSendMessageToUser = async (senderId, receiverId, isForward = false) => 
     throw new Error('Chưa từng nhắn tin với người này, không thể chuyển tiếp!');
   }
 
-  // 5. Nếu người nhận giới hạn người lạ → chỉ bạn bè mới được phép
   const friendResult = await dynamoDB.get({
     TableName: 'Friends',
     Key: { userId: receiverId, friendId: senderId },
@@ -613,5 +1018,4 @@ module.exports = {
   checkBlockStatus,
   setAutoDeleteSetting,
   getAutoDeleteSetting,
-  
 };

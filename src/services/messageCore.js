@@ -3,19 +3,17 @@ const { v4: uuidv4 } = require('uuid');
 const sharp = require('sharp');
 
 const sendMessageCore = async (message, tableName, bucketName) => {
-  const { 
+  const {
     type, content, file, fileName, mimeType, metadata, mediaUrl,
-    isAnonymous, isSecret, quality, replyToMessageId ,expiresAt
+    isAnonymous, isSecret, quality, replyToMessageId, expiresAt, senderId, receiverId, ownerId
   } = message;
 
   console.log('Core - type:', type);
   console.log('Core - content:', content);
 
-  // Danh sách loại tin nhắn hợp lệ
   const validTypes = ['text', 'image', 'file', 'video', 'voice', 'sticker', 'gif', 'location', 'contact', 'poll', 'event'];
   if (!validTypes.includes(type)) throw new Error('Loại tin nhắn không hợp lệ!');
 
-  // Kiểm tra input hợp lệ
   const validateInput = () => {
     switch (type) {
       case 'text':
@@ -61,12 +59,11 @@ const sendMessageCore = async (message, tableName, bucketName) => {
 
   validateInput();
 
-  // MIME type và cấu hình upload
   const mimeTypeMap = {
     'image/jpeg': { type: 'image', folder: 'images', ext: 'jpg', maxSize: 10 * 1024 * 1024 },
-    'image/png': { types: ['image', 'sticker'], folder: 'images', ext: 'png', maxSize: 10 * 1024 * 1024 },
+    'image/png': { type: ['image', 'sticker'], folder: 'images', ext: 'png', maxSize: 10 * 1024 * 1024 },
     'image/heic': { type: 'image', folder: 'images', ext: 'heic', maxSize: 10 * 1024 * 1024 },
-    'image/gif':{ type: ['gif', 'sticker'], folder: 'gifs', ext: 'gif', maxSize: 10 * 1024 * 1024 },
+    'image/gif': { type: ['gif', 'sticker'], folder: 'gifs', ext: 'gif', maxSize: 10 * 1024 * 1024 },
     'video/mp4': { type: 'video', folder: 'videos', ext: 'mp4', maxSize: 1024 * 1024 * 1024 },
     'audio/mpeg': { type: 'voice', folder: 'voice', ext: 'mp3', maxSize: 50 * 1024 * 1024 },
     'audio/wav': { type: 'voice', folder: 'voice', ext: 'wav', maxSize: 50 * 1024 * 1024 },
@@ -79,12 +76,14 @@ const sendMessageCore = async (message, tableName, bucketName) => {
     'image/webp': { type: ['image', 'sticker', 'gif'], folder: 'images', ext: 'webp', maxSize: 10 * 1024 * 1024 },
   };
 
-  let finalMediaUrl = mediaUrl; // Sử dụng mediaUrl từ tin nhắn gốc nếu có
+  let finalMediaUrl = mediaUrl;
   let s3Key = null;
-  if (['image', 'file', 'video', 'voice', 'sticker','gif'].includes(type) && !finalMediaUrl) {
+  if (['image', 'file', 'video', 'voice', 'sticker', 'gif'].includes(type) && !finalMediaUrl) {
     const mimeInfo = mimeTypeMap[mimeType];
     if (!mimeInfo) throw new Error(`MIME type ${mimeType} không được hỗ trợ!`);
-    if (!mimeInfo.type.includes(type)) throw new Error(`MIME type ${mimeType} không phù hợp với loại tin nhắn ${type}!`);
+    if (!Array.isArray(mimeInfo.type) ? mimeInfo.type !== type : !mimeInfo.type.includes(type)) {
+      throw new Error(`MIME type ${mimeType} không phù hợp với loại tin nhắn ${type}!`);
+    }
     if (file.length > mimeInfo.maxSize) {
       throw new Error(`File vượt quá dung lượng tối đa (${mimeInfo.maxSize / 1024 / 1024}MB)!`);
     }
@@ -104,21 +103,21 @@ const sendMessageCore = async (message, tableName, bucketName) => {
           ContentType: mimeType,
         })
         .promise();
-        finalMediaUrl = `s3://${bucketName}/${s3Key}`;
+      finalMediaUrl = `s3://${bucketName}/${s3Key}`;
     } catch (s3Error) {
       throw new Error(`Lỗi khi upload file lên S3: ${s3Error.message}`);
     }
   }
 
-  // Tạo object tin nhắn để lưu
   let messageToSave = {};
   const messageId = message.messageId || uuidv4();
 
   if (tableName === 'Messages') {
-      messageToSave = {
+    messageToSave = {
       messageId,
-      senderId: message.senderId,
-      receiverId: message.receiverId,
+      ownerId,
+      senderId,
+      receiverId,
       type,
       content: content || null,
       mediaUrl: finalMediaUrl,
@@ -133,7 +132,7 @@ const sendMessageCore = async (message, tableName, bucketName) => {
       isPinned: false,
       reminder: null,
       timestamp: new Date().toISOString(),
-      expiresAt
+      expiresAt,
     };
   } else if (tableName === 'GroupMessages') {
     messageToSave = {
@@ -154,13 +153,12 @@ const sendMessageCore = async (message, tableName, bucketName) => {
       isPinned: false,
       reminder: null,
       timestamp: new Date().toISOString(),
-      
+      expiresAt,
     };
   }
 
-  // Xử lý transcribe cho tin nhắn thoại
   if (type === 'voice' && metadata?.transcribe) {
-    const transcribeJobName = `voice-${messageToSave.messageId}`;
+    const transcribeJobName = `voice-${messageId}-${ownerId}`;
     try {
       await transcribe
         .startTranscriptionJob({
@@ -181,9 +179,8 @@ const sendMessageCore = async (message, tableName, bucketName) => {
     }
   }
 
-  // Lưu vào DynamoDB
   try {
-    console.log('Saving to DynamoDB:', messageToSave);
+    console.log('ExpiresAt before saving:', messageToSave.expiresAt);
     await dynamoDB.put({
       TableName: tableName,
       Item: messageToSave,
