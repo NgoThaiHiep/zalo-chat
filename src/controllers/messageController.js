@@ -146,9 +146,16 @@ const forwardMessageController = async (req, res) => {
 const recallMessageController = async (req, res) => {
   try {
     const { messageId } = req.params;
-    const senderId = req.user.id;
+    const userId = req.user.id; // Đổi tên cho rõ ràng
 
-    const result = await MessageService.recallMessage(senderId, messageId);
+    if (!messageId) {
+      return res.status(400).json({ success: false, message: 'messageId là bắt buộc!' });
+    }
+
+    console.log('Pin message request:', { userId, messageId });
+
+    const result = await MessageService.pinMessage(userId, messageId);
+   
     res.status(200).json(result);
   } catch (error) {
     res.status(403).json({ success: false, message: error.message });
@@ -167,6 +174,45 @@ const pinMessageController = async (req, res) => {
   }
 };
 
+
+
+const unpinMessageController = async (req, res) => {
+  try {
+    const { messageId } = req.params;
+    const userId = req.user.id;
+
+    if (!messageId) {
+      return res.status(400).json({ success: false, message: 'messageId là bắt buộc!' });
+    }
+
+    console.log('Unpin message request:', { userId, messageId });
+
+    const result = await MessageService.unpinMessage(userId, messageId);
+    res.status(200).json(result);
+  } catch (error) {
+    res.status(403).json({ success: false, message: error.message });
+  }
+};
+
+// Controller cho lấy tin nhắn ghim
+const getPinnedMessagesController = async (req, res) => {
+  try {
+    const { otherUserId } = req.params;
+    const userId = req.user.id;
+
+    if (!otherUserId) {
+      return res.status(400).json({ success: false, message: 'otherUserId là bắt buộc!' });
+    }
+
+    console.log('Get pinned messages request:', { userId, otherUserId });
+
+    const result = await MessageService.getPinnedMessages(userId, otherUserId);
+    res.status(200).json(result);
+  } catch (error) {
+    console.error('Error in getPinnedMessagesController:', error);
+    res.status(500).json({ success: false, message: error.message || 'Không thể lấy tin nhắn ghim' });
+  }
+};
 const setReminderController = async (req, res) => {
   try {
     const { messageId } = req.params;
@@ -183,10 +229,16 @@ const setReminderController = async (req, res) => {
 const deleteMessageController = async (req, res) => {
   try {
     const { messageId } = req.params;
-    const senderId = req.user.id;
-    const { deleteType } = req.body;
+    const userId = req.user.id; // Đổi từ senderId thành userId cho rõ ràng
+   
 
-    const result = await MessageService.deleteMessage(senderId, messageId, deleteType || 'everyone');
+    if (!messageId) {
+      return res.status(400).json({ success: false, message: 'messageId là bắt buộc!' });
+    }
+
+    console.log('Delete message request:', { userId, messageId});
+
+    const result = await MessageService.deleteMessage(userId, messageId);
     res.status(200).json(result);
   } catch (error) {
     res.status(403).json({ success: false, message: error.message });
@@ -335,6 +387,8 @@ module.exports = {
   forwardMessageController,
   recallMessageController,
   pinMessageController,
+  unpinMessageController,
+  getPinnedMessagesController,
   setReminderController,
   deleteMessageController,
   restoreMessageController,

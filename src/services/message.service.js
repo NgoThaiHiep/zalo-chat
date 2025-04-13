@@ -342,11 +342,25 @@ const markMessageAsSeen = async (userId, messageId) => {
 // Hàm lấy tin nhắn giữa hai người dùng
 const getMessagesBetweenUsers = async (user1, user2) => {
   try {
-    // Lấy thời gian hiện tại dạng ISO
     const now = new Date().toISOString();
     console.log('Đang lấy tin nhắn giữa:', { user1, user2, now });
 
-    // Định nghĩa các tham số truy vấn DynamoDB
+    // Lấy danh sách messageId bị xóa bởi user1
+    let deletedMessageIds = new Set();
+    try {
+      const deletedMessages = await dynamoDB.scan({
+        TableName: 'UserDeletedMessages',
+        FilterExpression: 'userId = :user1',
+        ExpressionAttributeValues: { ':user1': user1 },
+      }).promise();
+
+      deletedMessageIds = new Set((deletedMessages.Items || []).map(item => item.messageId));
+      console.log('Danh sách messageId bị xóa:', Array.from(deletedMessageIds));
+    } catch (err) {
+      console.error('Lỗi khi quét UserDeletedMessages:', err);
+    }
+
+    // Tham số truy vấn tin nhắn (2 chiều)
     const params1Sender = {
       TableName: 'Messages',
       IndexName: 'SenderReceiverIndex',
@@ -371,7 +385,7 @@ const getMessagesBetweenUsers = async (user1, user2) => {
       ScanIndexForward: false,
     };
 
-    // Thực hiện các truy vấn đồng thời
+    // Chạy song song 2 truy vấn
     const [result1Sender, result1Receiver] = await Promise.all([
       dynamoDB.query(params1Sender).promise().catch(err => {
         console.error('Lỗi truy vấn params1Sender:', err);
@@ -383,48 +397,43 @@ const getMessagesBetweenUsers = async (user1, user2) => {
       }),
     ]);
 
-    // Ghi log số lượng và nội dung tin nhắn từ mỗi truy vấn
     console.log('Kết quả truy vấn:', {
-      sender1Count: (result1Sender.Items || []).length,
-      receiver1Count: (result1Receiver.Items || []).length,
+      sender1Count: result1Sender.Items?.length || 0,
+      receiver1Count: result1Receiver.Items?.length || 0,
     });
-    console.log('Tin nhắn từ params1Sender:', result1Sender.Items || []);
-    console.log('Tin nhắn từ params1Receiver:', result1Receiver.Items || []);
 
-    // Kết hợp tất cả tin nhắn
+    // Gộp tất cả tin nhắn
     const allMessages = [
       ...(result1Sender.Items || []),
       ...(result1Receiver.Items || []),
     ];
 
     console.log('Tổng số tin nhắn trước khi lọc:', allMessages.length);
-    console.log('Danh sách tin nhắn trước khi lọc:', allMessages);
 
-    // Lọc tin nhắn theo expiresAt và ownerId
+    // ✅ Gộp filter: bỏ tin đã xoá, check expiresAt, check owner
     const filteredMessages = allMessages.filter(msg => {
+      const isNotDeleted = !deletedMessageIds.has(msg.messageId);
       const isValidExpiresAt = !msg.expiresAt || msg.expiresAt > now;
       const isOwner = msg.ownerId === user1;
-      return isOwner && isValidExpiresAt;
+      return isNotDeleted && isValidExpiresAt && isOwner;
     });
 
     console.log('Tổng số tin nhắn sau khi lọc:', filteredMessages.length);
-    console.log('Danh sách tin nhắn sau khi lọc:', filteredMessages);
 
-    // Loại bỏ tin nhắn trùng lặp và sắp xếp theo thời gian
+    // Bỏ trùng (messageId + ownerId), sort theo thời gian
     const uniqueMessages = Array.from(
-      new Map(filteredMessages.map((msg) => [`${msg.messageId}:${msg.ownerId}`, msg])).values()
+      new Map(filteredMessages.map(msg => [`${msg.messageId}:${msg.ownerId}`, msg])).values()
     ).sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
 
     console.log('Tổng số tin nhắn duy nhất:', uniqueMessages.length);
-    console.log('Danh sách tin nhắn cuối cùng:', uniqueMessages);
 
-    // Trả về kết quả
     return { success: true, messages: uniqueMessages };
   } catch (error) {
     console.error('Lỗi khi lấy tin nhắn giữa hai người dùng:', error);
     return { success: false, error: error.message || 'Không thể lấy tin nhắn' };
   }
 };
+
 
 
 // Hàm cập nhật trạng thái tin nhắn khi kết nối
@@ -692,10 +701,11 @@ const forwardMessage = async (senderId, messageId, targetReceiverId) => {
   }
 };
 
-// Hàm thu hồi tin nhắn
+// Hàm thu hồi tin nhắn với bạn và mọi người
 const recallMessage = async (senderId, messageId) => {
   console.log('Recalling message:', { messageId, senderId });
 
+  // Lấy bản ghi tin nhắn của người gửi
   const message = await dynamoDB.get({
     TableName: 'Messages',
     Key: { messageId, ownerId: senderId },
@@ -710,15 +720,35 @@ const recallMessage = async (senderId, messageId) => {
   const timeDiffHours = (new Date() - new Date(message.Item.timestamp)) / (1000 * 60 * 60);
   if (timeDiffHours > 24) throw new Error('Không thể thu hồi tin nhắn sau 24 giờ!');
 
-  await dynamoDB.update({
-    TableName: 'Messages',
-    Key: { messageId, ownerId: senderId },
-    UpdateExpression: 'set isRecalled = :r',
-    ExpressionAttributeValues: { ':r': true },
-  }).promise().catch(err => {
-    console.error('Error updating isRecalled:', err);
-    throw err;
-  });
+  // Cập nhật isRecalled cho cả hai bản ghi
+  await Promise.all([
+    dynamoDB.update({
+      TableName: 'Messages',
+      Key: { messageId, ownerId: senderId },
+      UpdateExpression: 'SET isRecalled = :r',
+      ExpressionAttributeValues: { ':r': true },
+    }).promise().catch(err => {
+      console.error('Error updating isRecalled for sender:', err);
+      throw err;
+    }),
+    dynamoDB.update({
+      TableName: 'Messages',
+      Key: { messageId, ownerId: message.Item.receiverId },
+      UpdateExpression: 'SET isRecalled = :r',
+      ExpressionAttributeValues: { ':r': true },
+    }).promise().catch(err => {
+      console.error('Error updating isRecalled for receiver:', err);
+      throw err;
+    }),
+  ]);
+
+  // Xóa media trên S3 nếu có
+  if (message.Item.mediaUrl) {
+    const key = message.Item.mediaUrl.split('/').slice(3).join('/');
+    await s3.deleteObject({ Bucket: process.env.BUCKET_NAME_Chat_Send, Key: key }).promise().catch(err => {
+      console.error('Error deleting S3 object:', err);
+    });
+  }
 
   io().to(message.Item.receiverId).emit('messageRecalled', { messageId });
   io().to(senderId).emit('messageRecalled', { messageId });
@@ -726,56 +756,289 @@ const recallMessage = async (senderId, messageId) => {
 };
 
 // Hàm ghim tin nhắn
-const pinMessage = async (senderId, messageId) => {
-  console.log('Pinning message:', { messageId, senderId });
+const pinMessage = async (userId, messageId) => {
+  console.log('Pinning message:', { messageId, userId });
 
-  const message = await dynamoDB.get({
-    TableName: 'Messages',
-    Key: { messageId, ownerId: senderId },
-  }).promise().catch(err => {
-    console.error('Error getting message in pinMessage:', err);
-    throw err;
-  });
+  let message;
 
-  if (!message.Item) {
-    // Thử với ownerId là receiverId
-    const tempMessage = await dynamoDB.query({
+  // 1. Thử get theo ownerId
+  try {
+    const result = await dynamoDB.get({
       TableName: 'Messages',
-      IndexName: 'ReceiverSenderIndex',
-      KeyConditionExpression: 'receiverId = :senderId AND messageId = :messageId',
-      ExpressionAttributeValues: {
-        ':senderId': senderId,
-        ':messageId': messageId,
-      },
-      Limit: 1,
-    }).promise().catch(err => {
-      console.error('Error querying message in pinMessage:', err);
-      throw err;
-    });
+      Key: { messageId, ownerId: userId },
+    }).promise();
+    message = result.Item;
+  } catch (err) {
+    console.error('Lỗi get message theo ownerId:', err);
+    throw err;
+  }
 
-    if (tempMessage.Items && tempMessage.Items.length > 0) {
-      message.Item = tempMessage.Items[0];
+  // 2. Nếu không có, thử query bằng index
+  if (!message) {
+    const searchIndexes = [
+      { IndexName: 'ReceiverSenderIndex', keyAttr: 'receiverId' },
+      { IndexName: 'SenderReceiverIndex', keyAttr: 'senderId' },
+    ];
+
+    for (const { IndexName, keyAttr } of searchIndexes) {
+      try {
+        const result = await dynamoDB.query({
+          TableName: 'Messages',
+          IndexName,
+          KeyConditionExpression: `${keyAttr} = :userId`,
+          FilterExpression: 'messageId = :messageId',
+          ExpressionAttributeValues: {
+            ':userId': userId,
+            ':messageId': messageId,
+          },
+          Limit: 1,
+        }).promise();
+
+        if (result.Items && result.Items.length > 0) {
+          message = result.Items[0];
+          break;
+        }
+      } catch (err) {
+        console.error(`Lỗi truy vấn ${IndexName}:`, err);
+        throw err;
+      }
     }
   }
 
-  if (!message.Item) throw new Error('Tin nhắn không tồn tại!');
-  if (message.Item.senderId !== senderId && message.Item.receiverId !== senderId) {
+  if (!message) throw new Error('Tin nhắn không tồn tại!');
+  if (message.senderId !== userId && message.receiverId !== userId) {
     throw new Error('Bạn không có quyền ghim tin nhắn này!');
   }
 
-  await dynamoDB.update({
-    TableName: 'Messages',
-    Key: { messageId, ownerId: message.Item.ownerId },
-    UpdateExpression: 'set isPinned = :p',
-    ExpressionAttributeValues: { ':p': true },
-  }).promise().catch(err => {
-    console.error('Error updating isPinned:', err);
-    throw err;
-  });
+  if (message.isPinned) {
+    throw new Error('Tin nhắn đã được ghim!');
+  }
 
-  io().to(message.Item.receiverId).emit('messagePinned', { messageId });
-  io().to(senderId).emit('messagePinned', { messageId });
+  if (message.isRecalled) {
+    throw new Error('Tin nhắn đã bị thu hồi, không thể ghim!');
+  }
+
+  // 3. Kiểm tra số lượng tin nhắn ghim trong hội thoại
+  const otherUserId = message.senderId === userId ? message.receiverId : message.senderId;
+
+  const pinnedCheckParamsSender = {
+    TableName: 'Messages',
+    IndexName: 'SenderReceiverIndex',
+    KeyConditionExpression: 'senderId = :user1 AND receiverId = :user2',
+    FilterExpression: 'isPinned = :true',
+    ExpressionAttributeValues: {
+      ':user1': userId,
+      ':user2': otherUserId,
+      ':true': true,
+    },
+  };
+
+  const pinnedCheckParamsReceiver = {
+    TableName: 'Messages',
+    IndexName: 'ReceiverSenderIndex',
+    KeyConditionExpression: 'receiverId = :user1 AND senderId = :user2',
+    FilterExpression: 'isPinned = :true',
+    ExpressionAttributeValues: {
+      ':user1': userId,
+      ':user2': otherUserId,
+      ':true': true,
+    },
+  };
+
+  try {
+    const [senderResult, receiverResult] = await Promise.all([
+      dynamoDB.query(pinnedCheckParamsSender).promise(),
+      dynamoDB.query(pinnedCheckParamsReceiver).promise(),
+    ]);
+
+    const totalPinned = (senderResult.Items || []).length + (receiverResult.Items || []).length;
+
+    console.log('Số tin nhắn ghim hiện tại:', totalPinned);
+
+    if (totalPinned >= 3) {
+      throw new Error('Hội thoại chỉ có thể ghim tối đa 3 tin nhắn!');
+    }
+  } catch (err) {
+    console.error('Lỗi khi kiểm tra số lượng tin ghim:', err);
+    throw err;
+  }
+
+  // 4. Cập nhật isPinned chỉ cho bản ghi của userId
+  try {
+    await dynamoDB.update({
+      TableName: 'Messages',
+      Key: { messageId, ownerId: userId },
+      UpdateExpression: 'SET isPinned = :p',
+      ExpressionAttributeValues: { ':p': true },
+      ConditionExpression: 'attribute_exists(messageId)',
+    }).promise();
+  } catch (err) {
+    console.error(`Lỗi update isPinned cho ${userId}:`, err);
+    throw err;
+  }
+
+  // 5. Emit sự kiện cho cả hai người dùng
+  io().to(userId).emit('messagePinned', { messageId });
+  io().to(otherUserId).emit('messagePinned', { messageId });
+
   return { success: true, message: 'Tin nhắn đã được ghim!' };
+};
+
+const getPinnedMessages = async (user1, user2) => {
+  try {
+    console.log('Đang lấy tin nhắn ghim giữa:', { user1, user2 });
+
+    // 1. Truy vấn DynamoDB cho cả hai chiều (sender/receiver)
+    const baseQueryParams = {
+      TableName: 'Messages',
+      FilterExpression: 'isPinned = :p AND isRecalled = :false',
+      ExpressionAttributeValues: {
+        ':user1': user1,
+        ':user2': user2,
+        ':p': true,
+        ':false': false,
+      },
+      Limit: 100,
+      ScanIndexForward: false,
+    };
+
+    const paramsSenderReceiver = {
+      ...baseQueryParams,
+      IndexName: 'SenderReceiverIndex',
+      KeyConditionExpression: 'senderId = :user1 AND receiverId = :user2',
+    };
+
+    const paramsReceiverSender = {
+      ...baseQueryParams,
+      IndexName: 'ReceiverSenderIndex',
+      KeyConditionExpression: 'receiverId = :user1 AND senderId = :user2',
+    };
+
+    // 2. Truy vấn đồng thời cả hai chiều
+    const [resultSenderReceiver, resultReceiverSender] = await Promise.all([
+      dynamoDB.query(paramsSenderReceiver).promise().catch(err => {
+        console.error('Lỗi truy vấn paramsSenderReceiver:', err);
+        return { Items: [] };  // Cần xác định rõ khi nào trả về lỗi
+      }),
+      dynamoDB.query(paramsReceiverSender).promise().catch(err => {
+        console.error('Lỗi truy vấn paramsReceiverSender:', err);
+        return { Items: [] };  // Cần xác định rõ khi nào trả về lỗi
+      }),
+    ]);
+
+    console.log('Kết quả truy vấn ghim:', {
+      senderReceiverCount: resultSenderReceiver.Items?.length || 0,
+      receiverSenderCount: resultReceiverSender.Items?.length || 0,
+    });
+
+    // 3. Gộp tin nhắn từ hai chiều
+    const allPinnedMessages = [
+      ...(resultSenderReceiver.Items || []),
+      ...(resultReceiverSender.Items || []),
+    ];
+
+    console.log('Tổng số tin nhắn ghim trước khi lọc:', allPinnedMessages.length);
+
+    // 4. Bỏ qua việc lọc các tin nhắn đã bị xóa
+    // Tin nhắn bị xóa vẫn sẽ hiển thị khi ghim
+    const filteredMessages = allPinnedMessages;
+
+    console.log('Tổng số tin nhắn ghim sau khi lọc (bỏ qua xóa):', filteredMessages.length);
+
+    // 5. Loại bỏ trùng lặp và sắp xếp theo thời gian
+    const uniqueMessages = Array.from(
+      new Map(filteredMessages.map(msg => [`${msg.messageId}:${msg.ownerId}`, msg])).values()
+    ).sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+
+    console.log('Tổng số tin nhắn ghim duy nhất:', uniqueMessages.length);
+
+    // 6. Trả về kết quả
+    return { success: true, messages: uniqueMessages };
+  } catch (error) {
+    console.error('Lỗi khi lấy tin nhắn ghim:', error);
+    return { success: false, error: error.message || 'Không thể lấy tin nhắn ghim' };
+  }
+};
+
+
+const unpinMessage = async (userId, messageId) => {
+  console.log('Unpinning message:', { messageId, userId });
+
+  let message;
+
+  // 1. Thử get theo ownerId
+  try {
+    const result = await dynamoDB.get({
+      TableName: 'Messages',
+      Key: { messageId, ownerId: userId },
+    }).promise();
+    message = result.Item;
+  } catch (err) {
+    console.error('Lỗi get message theo ownerId:', err);
+    throw err;
+  }
+
+  // 2. Nếu không có, thử query bằng index
+  if (!message) {
+    const searchIndexes = [
+      { IndexName: 'ReceiverSenderIndex', keyAttr: 'receiverId' },
+      { IndexName: 'SenderReceiverIndex', keyAttr: 'senderId' },
+    ];
+
+    for (const { IndexName, keyAttr } of searchIndexes) {
+      try {
+        const result = await dynamoDB.query({
+          TableName: 'Messages',
+          IndexName,
+          KeyConditionExpression: `${keyAttr} = :userId`,
+          FilterExpression: 'messageId = :messageId',
+          ExpressionAttributeValues: {
+            ':userId': userId,
+            ':messageId': messageId,
+          },
+          Limit: 1,
+        }).promise();
+
+        if (result.Items && result.Items.length > 0) {
+          message = result.Items[0];
+          break;
+        }
+      } catch (err) {
+        console.error(`Lỗi truy vấn ${IndexName}:`, err);
+        throw err;
+      }
+    }
+  }
+
+  if (!message) throw new Error('Tin nhắn không tồn tại!');
+  if (message.senderId !== userId && message.receiverId !== userId) {
+    throw new Error('Bạn không có quyền bỏ ghim tin nhắn này!');
+  }
+
+  if (!message.isPinned) {
+    throw new Error('Tin nhắn chưa được ghim!');
+  }
+
+  // 3. Cập nhật isPinned chỉ cho bản ghi của userId
+  try {
+    await dynamoDB.update({
+      TableName: 'Messages',
+      Key: { messageId, ownerId: userId },
+      UpdateExpression: 'SET isPinned = :p',
+      ExpressionAttributeValues: { ':p': false },
+      ConditionExpression: 'attribute_exists(messageId)',
+    }).promise();
+  } catch (err) {
+    console.error(`Lỗi update isPinned cho ${userId}:`, err);
+    throw err;
+  }
+
+  // 4. Emit sự kiện cho cả hai người dùng
+  const otherUserId = message.senderId === userId ? message.receiverId : message.senderId;
+  io().to(userId).emit('messageUnpinned', { messageId });
+  io().to(otherUserId).emit('messageUnpinned', { messageId });
+
+  return { success: true, message: 'Tin nhắn đã được bỏ ghim!' };
 };
 
 // Hàm đặt nhắc nhở
@@ -806,58 +1069,35 @@ const setReminder = async (senderId, messageId, reminder) => {
   return { success: true, message: 'Đã đặt nhắc nhở!' };
 };
 
-// Hàm xóa tin nhắn
-const deleteMessage = async (senderId, messageId, deleteType) => {
-  console.log('Deleting message:', { messageId, senderId, deleteType });
+// Hàm xóa tin nhắn chỉ với bạn
+const deleteMessage = async (userId, messageId) => {
+  console.log('Deleting message:', { messageId, userId});
 
+  // Lấy bản ghi tin nhắn
   const message = await dynamoDB.get({
     TableName: 'Messages',
-    Key: { messageId, ownerId: senderId },
+    Key: { messageId, ownerId: userId },
   }).promise().catch(err => {
     console.error('Error getting message in deleteMessage:', err);
     throw err;
   });
 
   if (!message.Item) throw new Error('Tin nhắn không tồn tại!');
-  if (message.Item.senderId !== senderId) throw new Error('Bạn không có quyền xóa tin nhắn này!');
-
-  if (deleteType === 'everyone') {
-    await dynamoDB.delete({
-      TableName: 'Messages',
-      Key: { messageId, ownerId: senderId },
-    }).promise().catch(err => {
-      console.error('Error deleting message for everyone:', err);
-      throw err;
-    });
-
-    // Xóa bản ghi của receiver
-    await dynamoDB.delete({
-      TableName: 'Messages',
-      Key: { messageId, ownerId: message.Item.receiverId },
-    }).promise().catch(err => {
-      console.error('Error deleting receiver message:', err);
-    });
-
-    if (message.Item.mediaUrl) {
-      const key = message.Item.mediaUrl.split('/').slice(3).join('/');
-      await s3.deleteObject({ Bucket: process.env.BUCKET_NAME_Chat_Send, Key: key }).promise().catch(err => {
-        console.error('Error deleting S3 object:', err);
-      });
-    }
-    io().to(message.Item.receiverId).emit('messageDeleted', { messageId });
-    io().to(senderId).emit('messageDeleted', { messageId });
-    return { success: true, message: 'Tin nhắn đã được xóa hoàn toàn!' };
-  } else {
-    await dynamoDB.put({
-      TableName: 'UserDeletedMessages',
-      Item: { userId: senderId, messageId, timestamp: new Date().toISOString() },
-    }).promise().catch(err => {
-      console.error('Error putting to UserDeletedMessages:', err);
-      throw err;
-    });
-    io().to(senderId).emit('messageDeleted', { messageId });
-    return { success: true, message: 'Tin nhắn đã được xóa chỉ với bạn!' };
+ 
+  // Kiểm tra xem userId là senderId hoặc receiverId
+  if (message.Item.senderId !== userId && message.Item.receiverId !== userId) {
+    throw new Error('Bạn không thuộc hội thoại này!');
   }
+      await dynamoDB.put({
+        TableName: 'UserDeletedMessages',
+        Item: { userId, messageId, timestamp: new Date().toISOString() },
+      }).promise().catch(err => {
+        console.error('Error putting to UserDeletedMessages:', err);
+        throw err;
+      });
+      io().to(userId).emit('messageDeleted', { messageId });
+    return { success: true, message: 'Tin nhắn đã được xóa chỉ với bạn!' };
+  
 };
 
 // Hàm khôi phục tin nhắn
@@ -1002,6 +1242,8 @@ module.exports = {
   forwardMessage,
   recallMessage,
   pinMessage,
+  unpinMessage,
+  getPinnedMessages,
   setReminder,
   deleteMessage,
   restoreMessage,

@@ -367,10 +367,19 @@ const initializeDatabase = async () => {
         { AttributeName: 'userId', KeyType: 'HASH' },
         { AttributeName: 'messageId', KeyType: 'RANGE' },
       ],
+      GlobalSecondaryIndexes: [
+        {
+          IndexName : "UserIdIndex",
+          KeySchema: [{ AttributeName: 'userId', KeyType: 'HASH' }],
+          Projection: { ProjectionType: 'ALL' },
+        
+        },
+      ],
       BillingMode: 'PAY_PER_REQUEST',
+      
     };
     await createTableIfNotExists('UserDeletedMessages', userDeletedMessagesTableParams);
-
+    await updateTableWithNewGSI('UserDeletedMessages', userDeletedMessagesTableParams);
     // 5. Tạo bảng GroupMembers
     const groupMembersTableParams = {
       TableName: 'GroupMembers',
