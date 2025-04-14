@@ -857,7 +857,7 @@ const pinMessage = async (userId, messageId) => {
 
     console.log('Số tin nhắn ghim hiện tại:', totalPinned);
 
-    if (totalPinned >= 3) {
+    if (totalPinned >= 6) {
       throw new Error('Hội thoại chỉ có thể ghim tối đa 3 tin nhắn!');
     }
   } catch (err) {
@@ -865,40 +865,99 @@ const pinMessage = async (userId, messageId) => {
     throw err;
   }
 
-  // 4. Cập nhật isPinned chỉ cho bản ghi của userId
-  try {
-    await dynamoDB.update({
+  // 4. Cập nhật isPinned và pinnedBy cho cả hai bản ghi
+  const updatePinned = (targetUserId) => {
+    return dynamoDB.update({
       TableName: 'Messages',
-      Key: { messageId, ownerId: userId },
-      UpdateExpression: 'SET isPinned = :p',
-      ExpressionAttributeValues: { ':p': true },
+      Key: { messageId, ownerId: targetUserId },
+      UpdateExpression: 'SET isPinned = :p, pinnedBy = :userId',
+      ExpressionAttributeValues: { ':p': true, ':userId': userId },
       ConditionExpression: 'attribute_exists(messageId)',
-    }).promise();
-  } catch (err) {
-    console.error(`Lỗi update isPinned cho ${userId}:`, err);
-    throw err;
-  }
+    }).promise().catch(err => {
+      console.error(`Lỗi update isPinned cho ${targetUserId}:`, err);
+      // Không ném lỗi nếu bản ghi không tồn tại
+    });
+  };
 
-  // 5. Emit sự kiện cho cả hai người dùng
+  await Promise.all([
+    updatePinned(userId),
+    updatePinned(otherUserId),
+  ]);
+
+  // 5. Emit sự kiện
   io().to(userId).emit('messagePinned', { messageId });
   io().to(otherUserId).emit('messagePinned', { messageId });
 
-  return { success: true, message: 'Tin nhắn đã được ghim!' };
+  return { success: true, message: `Tin nhắn đã được ghim! Bởi ${userId}` };
 };
 
-const getPinnedMessages = async (user1, user2) => {
-  try {
-    console.log('Đang lấy tin nhắn ghim giữa:', { user1, user2 });
 
-    // 1. Truy vấn DynamoDB cho cả hai chiều (sender/receiver)
+const unpinMessage = async (userId, messageId) => {
+  console.log('Unpinning message:', { userId, messageId });
+
+  try {
+    // 1. Truy vấn tất cả các bản ghi có messageId
+    const scanParams = {
+      TableName: 'Messages',
+      FilterExpression: 'messageId = :mid AND isPinned = :true',
+      ExpressionAttributeValues: {
+        ':mid': messageId,
+        ':true': true,
+      },
+    };
+
+    const scanResult = await dynamoDB.scan(scanParams).promise();
+    const matchedItems = scanResult.Items || [];
+
+    if (matchedItems.length === 0) {
+      return { success: false, message: 'Không tìm thấy bản ghi nào đang được ghim.' };
+    }
+
+    const updatePromises = matchedItems.map(item => {
+      const updateParams = {
+        TableName: 'Messages',
+        Key: { messageId: item.messageId, ownerId: item.ownerId },
+        UpdateExpression: 'SET isPinned = :false REMOVE pinnedBy',
+        ExpressionAttributeValues: { ':false': false },
+        ConditionExpression: 'attribute_exists(messageId)',
+      };
+      return dynamoDB.update(updateParams).promise();
+    });
+
+    // 2. Thực hiện cập nhật
+    await Promise.all(updatePromises);
+
+    // 3. Emit socket cho cả hai người
+    const firstItem = matchedItems[0];
+    const otherUserId = (firstItem.senderId === userId)
+      ? firstItem.receiverId
+      : firstItem.senderId;
+
+    io().to(userId).emit('messageUnpinned', { messageId });
+    io().to(otherUserId).emit('messageUnpinned', { messageId });
+
+    return { success: true, message: `${userId} Đã bỏ ghim tin nhắn (cho tất cả bản ghi liên quan).` };
+  } catch (err) {
+    console.error('Lỗi khi bỏ ghim tin nhắn:', err);
+    return { success: false, error: err.message || 'Không thể bỏ ghim tin nhắn' };
+  }
+};
+
+
+
+const getPinnedMessages = async (userId, otherUserId) => {
+  try {
+    console.log('Lấy tin nhắn ghim của:', { userId, otherUserId });
+
     const baseQueryParams = {
       TableName: 'Messages',
-      FilterExpression: 'isPinned = :p AND isRecalled = :false',
+      FilterExpression: 'isPinned = :p AND isRecalled = :false AND ownerId = :userId',
       ExpressionAttributeValues: {
-        ':user1': user1,
-        ':user2': user2,
         ':p': true,
         ':false': false,
+        ':user1': userId,
+        ':user2': otherUserId,
+        ':userId': userId,
       },
       Limit: 100,
       ScanIndexForward: false,
@@ -916,132 +975,33 @@ const getPinnedMessages = async (user1, user2) => {
       KeyConditionExpression: 'receiverId = :user1 AND senderId = :user2',
     };
 
-    // 2. Truy vấn đồng thời cả hai chiều
-    const [resultSenderReceiver, resultReceiverSender] = await Promise.all([
+    const [result1, result2] = await Promise.all([
       dynamoDB.query(paramsSenderReceiver).promise().catch(err => {
-        console.error('Lỗi truy vấn paramsSenderReceiver:', err);
-        return { Items: [] };  // Cần xác định rõ khi nào trả về lỗi
+        console.error('Lỗi truy vấn SR:', err);
+        return { Items: [] };
       }),
       dynamoDB.query(paramsReceiverSender).promise().catch(err => {
-        console.error('Lỗi truy vấn paramsReceiverSender:', err);
-        return { Items: [] };  // Cần xác định rõ khi nào trả về lỗi
+        console.error('Lỗi truy vấn RS:', err);
+        return { Items: [] };
       }),
     ]);
 
-    console.log('Kết quả truy vấn ghim:', {
-      senderReceiverCount: resultSenderReceiver.Items?.length || 0,
-      receiverSenderCount: resultReceiverSender.Items?.length || 0,
-    });
+    const all = [...(result1.Items || []), ...(result2.Items || [])];
 
-    // 3. Gộp tin nhắn từ hai chiều
-    const allPinnedMessages = [
-      ...(resultSenderReceiver.Items || []),
-      ...(resultReceiverSender.Items || []),
-    ];
+    // Lọc và sắp xếp theo timestamp giảm dần, lấy 3 bản ghi gần nhất
+    const pinnedMessages = all
+      .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
+      .slice(0, 3);
 
-    console.log('Tổng số tin nhắn ghim trước khi lọc:', allPinnedMessages.length);
-
-    // 4. Bỏ qua việc lọc các tin nhắn đã bị xóa
-    // Tin nhắn bị xóa vẫn sẽ hiển thị khi ghim
-    const filteredMessages = allPinnedMessages;
-
-    console.log('Tổng số tin nhắn ghim sau khi lọc (bỏ qua xóa):', filteredMessages.length);
-
-    // 5. Loại bỏ trùng lặp và sắp xếp theo thời gian
-    const uniqueMessages = Array.from(
-      new Map(filteredMessages.map(msg => [`${msg.messageId}:${msg.ownerId}`, msg])).values()
-    ).sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
-
-    console.log('Tổng số tin nhắn ghim duy nhất:', uniqueMessages.length);
-
-    // 6. Trả về kết quả
-    return { success: true, messages: uniqueMessages };
-  } catch (error) {
-    console.error('Lỗi khi lấy tin nhắn ghim:', error);
-    return { success: false, error: error.message || 'Không thể lấy tin nhắn ghim' };
+    return { success: true, messages: pinnedMessages };
+  } catch (err) {
+    console.error('Lỗi khi lấy tin nhắn ghim:', err);
+    return { success: false, error: err.message || 'Không thể lấy tin nhắn ghim' };
   }
 };
 
 
-const unpinMessage = async (userId, messageId) => {
-  console.log('Unpinning message:', { messageId, userId });
 
-  let message;
-
-  // 1. Thử get theo ownerId
-  try {
-    const result = await dynamoDB.get({
-      TableName: 'Messages',
-      Key: { messageId, ownerId: userId },
-    }).promise();
-    message = result.Item;
-  } catch (err) {
-    console.error('Lỗi get message theo ownerId:', err);
-    throw err;
-  }
-
-  // 2. Nếu không có, thử query bằng index
-  if (!message) {
-    const searchIndexes = [
-      { IndexName: 'ReceiverSenderIndex', keyAttr: 'receiverId' },
-      { IndexName: 'SenderReceiverIndex', keyAttr: 'senderId' },
-    ];
-
-    for (const { IndexName, keyAttr } of searchIndexes) {
-      try {
-        const result = await dynamoDB.query({
-          TableName: 'Messages',
-          IndexName,
-          KeyConditionExpression: `${keyAttr} = :userId`,
-          FilterExpression: 'messageId = :messageId',
-          ExpressionAttributeValues: {
-            ':userId': userId,
-            ':messageId': messageId,
-          },
-          Limit: 1,
-        }).promise();
-
-        if (result.Items && result.Items.length > 0) {
-          message = result.Items[0];
-          break;
-        }
-      } catch (err) {
-        console.error(`Lỗi truy vấn ${IndexName}:`, err);
-        throw err;
-      }
-    }
-  }
-
-  if (!message) throw new Error('Tin nhắn không tồn tại!');
-  if (message.senderId !== userId && message.receiverId !== userId) {
-    throw new Error('Bạn không có quyền bỏ ghim tin nhắn này!');
-  }
-
-  if (!message.isPinned) {
-    throw new Error('Tin nhắn chưa được ghim!');
-  }
-
-  // 3. Cập nhật isPinned chỉ cho bản ghi của userId
-  try {
-    await dynamoDB.update({
-      TableName: 'Messages',
-      Key: { messageId, ownerId: userId },
-      UpdateExpression: 'SET isPinned = :p',
-      ExpressionAttributeValues: { ':p': false },
-      ConditionExpression: 'attribute_exists(messageId)',
-    }).promise();
-  } catch (err) {
-    console.error(`Lỗi update isPinned cho ${userId}:`, err);
-    throw err;
-  }
-
-  // 4. Emit sự kiện cho cả hai người dùng
-  const otherUserId = message.senderId === userId ? message.receiverId : message.senderId;
-  io().to(userId).emit('messageUnpinned', { messageId });
-  io().to(otherUserId).emit('messageUnpinned', { messageId });
-
-  return { success: true, message: 'Tin nhắn đã được bỏ ghim!' };
-};
 
 // Hàm đặt nhắc nhở
 const setReminder = async (userId, messageId, reminder, scope = 'both', reminderContent, repeat = 'none', daysOfWeek) => {
