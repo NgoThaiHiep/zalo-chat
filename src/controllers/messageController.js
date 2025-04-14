@@ -51,7 +51,7 @@ const getAutoDeleteSettingController = async (req, res) => {
   }
 };
 
-const sendMessage = async (req, res) => {
+const sendMessageController = async (req, res) => {
   try {
     const senderId = req.user.id;
     const { receiverId, type, content, metadata, isAnonymous = 'false', isSecret = 'false', quality = 'original', expiresAfter } = req.body;
@@ -87,7 +87,9 @@ const sendMessage = async (req, res) => {
       data: newMessage,
     });
   } catch (error) {
-    const statusCode = error.message.includes('là bắt buộc') ? 400 : error.message.includes('không tồn tại') ? 404 : 500;
+    console.error('Error in sendMessage:', error);
+    const statusCode = error.message.includes('là bắt buộc') ? 400 : 
+                       error.message.includes('không tồn tại') ? 404 : 500;
     res.status(statusCode).json({ success: false, message: error.message });
   }
 };
@@ -139,7 +141,11 @@ const forwardMessageController = async (req, res) => {
     return res.status(200).json({ success: true, data: result });
   } catch (error) {
     console.error('Error in forwardMessageController:', error);
-    return res.status(500).json({ success: false, message: error.message });
+    const statusCode = error.message.includes('là bắt buộc') || 
+                      error.message.includes('Thiếu') ? 400 : 
+                      error.message.includes('không tồn tại') || 
+                      error.message.includes('quyền') ? 403 : 500;
+    return res.status(statusCode).json({ success: false, message: error.message });
   }
 };
 
@@ -154,7 +160,7 @@ const recallMessageController = async (req, res) => {
 
     console.log('Pin message request:', { userId, messageId });
 
-    const result = await MessageService.pinMessage(userId, messageId);
+    const result = await MessageService.recallMessage(userId, messageId);
    
     res.status(200).json(result);
   } catch (error) {
@@ -173,8 +179,6 @@ const pinMessageController = async (req, res) => {
     res.status(403).json({ success: false, message: error.message });
   }
 };
-
-
 
 const unpinMessageController = async (req, res) => {
   try {
@@ -213,18 +217,112 @@ const getPinnedMessagesController = async (req, res) => {
     res.status(500).json({ success: false, message: error.message || 'Không thể lấy tin nhắn ghim' });
   }
 };
+
 const setReminderController = async (req, res) => {
   try {
     const { messageId } = req.params;
-    const senderId = req.user.id;
-    const { reminder } = req.body;
+    const { reminder, scope, reminderContent, repeat, daysOfWeek } = req.body;
+    const userId = req.user.id;
 
-    const result = await MessageService.setReminder(senderId, messageId, reminder);
+    if (!messageId || !reminder) {
+      return res.status(400).json({ success: false, message: 'messageId và reminder là bắt buộc!' });
+    }
+
+    const result = await MessageService.setReminder(userId, messageId, reminder, scope, reminderContent, repeat, daysOfWeek);
     res.status(200).json(result);
   } catch (error) {
-    res.status(403).json({ success: false, message: error.message });
+    console.error('Error in setReminderController:', error);
+    const status = error.message.includes('không tồn tại') ? 404 :
+                   error.message.includes('quyền') ? 403 :
+                   error.message.includes('thu hồi') || 
+                   error.message.includes('tương lai') || 
+                   error.message.includes('phạm vi') || 
+                   error.message.includes('lặp lại') || 
+                   error.message.includes('daysOfWeek') ? 400 : 500;
+    res.status(status).json({ success: false, message: error.message });
   }
 };
+
+const unsetReminderController = async (req, res) => {
+  try {
+    const { messageId } = req.params;
+    const userId = req.user.id;
+
+    if (!messageId) {
+      return res.status(400).json({ success: false, message: 'messageId là bắt buộc!' });
+    }
+
+    const result = await MessageService.unsetReminder(userId, messageId);
+    res.status(200).json(result);
+  } catch (error) {
+    console.error('Error in unsetReminderController:', error);
+    const status = error.message.includes('không tồn tại') ? 404 :
+                   error.message.includes('quyền') || 
+                   error.message.includes('chưa có nhắc nhở') ? 400 : 500;
+    res.status(status).json({ success: false, message: error.message });
+  }
+};
+
+const getRemindersBetweenUsersController = async (req, res) => {
+  try {
+    const { otherUserId } = req.params;
+    const userId = req.user.id;
+
+    if (!otherUserId) {
+      return res.status(400).json({ success: false, message: 'otherUserId là bắt buộc!' });
+    }
+
+    const result = await MessageService.getRemindersBetweenUsers(userId, otherUserId);
+    res.status(200).json(result);
+  } catch (error) {
+    console.error('Error in getRemindersBetweenUsersController:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+const getReminderHistoryController = async (req, res) => {
+  try {
+    const { otherUserId } = req.params;
+    const userId = req.user.id;
+
+    if (!otherUserId) {
+      return res.status(400).json({ success: false, message: 'otherUserId là bắt buộc!' });
+    }
+
+    const result = await MessageService.getReminderHistory(userId, otherUserId);
+    res.status(200).json(result);
+  } catch (error) {
+    console.error('Error in getReminderHistoryController:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+const editReminderController = async (req, res) => {
+  try {
+    const { messageId } = req.params;
+    const { reminder, scope, reminderContent, repeat, daysOfWeek } = req.body;
+    const userId = req.user.id;
+
+    if (!messageId || !reminder) {
+      return res.status(400).json({ success: false, message: 'messageId và reminder là bắt buộc!' });
+    }
+
+    const result = await MessageService.editReminder(userId, messageId, reminder, scope, reminderContent, repeat, daysOfWeek);
+    res.status(200).json(result);
+  } catch (error) {
+    console.error('Error in editReminderController:', error);
+    const status = error.message.includes('không tồn tại') ? 404 :
+                   error.message.includes('quyền') ? 403 :
+                   error.message.includes('thu hồi') || 
+                   error.message.includes('tương lai') || 
+                   error.message.includes('phạm vi') || 
+                   error.message.includes('lặp lại') || 
+                   error.message.includes('daysOfWeek') || 
+                   error.message.includes('chưa có nhắc nhở') ? 400 : 500;
+    res.status(status).json({ success: false, message: error.message });
+  }
+};
+
 
 const deleteMessageController = async (req, res) => {
   try {
@@ -381,15 +479,22 @@ const checkBlockStatusController = async (req, res) => {
 };
 
 module.exports = {
-  sendMessage: [upload.single('file'), sendMessage],
+  sendMessageController: [upload.single('file'), sendMessageController],
   getMessagesBetweenController,
   getConversationUsers,
   forwardMessageController,
   recallMessageController,
+
   pinMessageController,
   unpinMessageController,
   getPinnedMessagesController,
+
   setReminderController,
+  unsetReminderController,
+  getRemindersBetweenUsersController,
+  getReminderHistoryController,
+  editReminderController,
+  
   deleteMessageController,
   restoreMessageController,
   retryMessageController,

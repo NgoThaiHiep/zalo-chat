@@ -130,7 +130,6 @@ const sendMessageCore = async (message, tableName, bucketName) => {
       replyToMessageId: replyToMessageId || null,
       isRecalled: false,
       isPinned: false,
-      reminder: null,
       timestamp: new Date().toISOString(),
       expiresAt,
     };
@@ -151,7 +150,6 @@ const sendMessageCore = async (message, tableName, bucketName) => {
       replyToMessageId: replyToMessageId || null,
       isRecalled: false,
       isPinned: false,
-      reminder: null,
       timestamp: new Date().toISOString(),
       expiresAt,
     };

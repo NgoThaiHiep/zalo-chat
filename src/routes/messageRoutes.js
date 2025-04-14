@@ -1,6 +1,6 @@
 const express = require('express');
 const { 
-  sendMessage, 
+  sendMessageController, 
   getMessagesBetweenController, 
   getConversationUsers,
   forwardMessageController,
@@ -8,7 +8,13 @@ const {
   pinMessageController,
   unpinMessageController,
   getPinnedMessagesController,
+
   setReminderController,
+  unsetReminderController,
+  getRemindersBetweenUsersController,
+  getReminderHistoryController,
+  editReminderController,
+  
   deleteMessageController,
   restoreMessageController,
   retryMessageController,
@@ -25,19 +31,24 @@ const {authMiddleware ,checkOwnership} = require('../middlewares/authMiddleware'
 
 const router = express.Router();
 
-router.post('/send', authMiddleware, sendMessage);
+router.post('/send', authMiddleware, sendMessageController);
 router.get('/user/:userId', authMiddleware, getMessagesBetweenController);
 router.get('/conversations', authMiddleware, getConversationUsers);
 router.post('/forward', authMiddleware, forwardMessageController);
-router.patch('recall/:messageId/', authMiddleware, recallMessageController);
+router.patch('/recall/:messageId', authMiddleware, recallMessageController);
 
 router.patch('/pin/:messageId', authMiddleware, pinMessageController);
 router.patch('/unpin/:messageId', authMiddleware, unpinMessageController);
 router.get('/pinned/:otherUserId', authMiddleware, getPinnedMessagesController);
 
 router.patch('/remind/:messageId', authMiddleware, setReminderController);
+router.delete('/reminder/:messageId', authMiddleware, unsetReminderController);
+router.patch('/reminder/:messageId', authMiddleware, editReminderController);
+router.get('/reminders/:otherUserId', authMiddleware, getRemindersBetweenUsersController);
+router.get('/reminder-history/:otherUserId', authMiddleware, getReminderHistoryController);
+
 router.delete('/:messageId', authMiddleware, deleteMessageController);
-router.patch(':messageId/restore', authMiddleware, restoreMessageController);
+router.patch('/:messageId/restore', authMiddleware, restoreMessageController);
 router.post('/retry', retryMessageController);
 router.patch('/seen/:messageId', markMessageAsSeenController);
 router.post('/mute', authMiddleware, muteConversationController);

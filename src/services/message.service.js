@@ -526,7 +526,9 @@ const forwardMessage = async (senderId, messageId, targetReceiverId) => {
     console.error('Error getting message with senderId:', err);
     throw err;
   }
-
+  if(originalMessage.Item.isRecalled){
+    throw new Error('Tin nhắn đã bị thu hồi, không thể chyển tiếp!');
+  }
   // Nếu không tìm thấy, thử với ownerId là receiverId của tin nhắn gốc
   if (!originalMessage.Item) {
     try {
@@ -701,7 +703,7 @@ const forwardMessage = async (senderId, messageId, targetReceiverId) => {
   }
 };
 
-// Hàm thu hồi tin nhắn với bạn và mọi người
+// Hàm thu hồi tin nhắn với mọi người
 const recallMessage = async (senderId, messageId) => {
   console.log('Recalling message:', { messageId, senderId });
 
@@ -1042,32 +1044,503 @@ const unpinMessage = async (userId, messageId) => {
 };
 
 // Hàm đặt nhắc nhở
-const setReminder = async (senderId, messageId, reminder) => {
-  console.log('Setting reminder for message:', { messageId, senderId });
+const setReminder = async (userId, messageId, reminder, scope = 'both', reminderContent, repeat = 'none', daysOfWeek) => {
+  console.log('Setting reminder for message:', { messageId, userId, reminder, scope, reminderContent, repeat, daysOfWeek });
 
+  // Kiểm tra thời gian nhắc nhở hợp lệ
+  const now = new Date().toISOString();
+  if (reminder && reminder <= now) {
+    throw new Error('Thời gian nhắc nhở phải ở tương lai!');
+  }
+
+  // Kiểm tra scope hợp lệ
+  if (!['onlyMe', 'both'].includes(scope)) {
+    throw new Error('Phạm vi nhắc nhở phải là "onlyMe" hoặc "both"!');
+  }
+
+  // Kiểm tra repeat hợp lệ
+  const validRepeatTypes = ['none', 'daily', 'weekly', 'multipleDaysWeekly', 'monthly', 'yearly'];
+  if (!validRepeatTypes.includes(repeat)) {
+    throw new Error('Loại lặp lại không hợp lệ! Chấp nhận: none, daily, weekly, multipleDaysWeekly, monthly, yearly');
+  }
+
+  // Kiểm tra daysOfWeek nếu repeat là multipleDaysWeekly
+  if (repeat === 'multipleDaysWeekly') {
+    if (!Array.isArray(daysOfWeek) || daysOfWeek.length === 0) {
+      throw new Error('daysOfWeek phải là một mảng không rỗng khi lặp lại nhiều ngày trong tuần!');
+    }
+    if (!daysOfWeek.every(day => Number.isInteger(day) && day >= 1 && day <= 7)) {
+      throw new Error('daysOfWeek phải chứa các số nguyên từ 1 đến 7!');
+    }
+  } else if (daysOfWeek) {
+    throw new Error('daysOfWeek chỉ được cung cấp khi repeat là multipleDaysWeekly!');
+  }
+
+  // Lấy tin nhắn
   const message = await dynamoDB.get({
     TableName: 'Messages',
-    Key: { messageId, ownerId: senderId },
+    Key: { messageId, ownerId: userId },
   }).promise().catch(err => {
     console.error('Error getting message in setReminder:', err);
     throw err;
   });
 
   if (!message.Item) throw new Error('Tin nhắn không tồn tại!');
-  if (message.Item.senderId !== senderId) throw new Error('Bạn không có quyền đặt nhắc nhở cho tin nhắn này!');
+  if (message.Item.isRecalled) {
+    throw new Error('Tin nhắn đã bị thu hồi, không thể đặt nhắc nhở!');
+  }
 
+  // Xác định senderId và receiverId
+  const senderId = message.Item.senderId;
+  const receiverId = message.Item.receiverId;
+
+  // Kiểm tra quyền
+  if (userId !== senderId && userId !== receiverId) {
+    throw new Error('Bạn không có quyền đặt nhắc nhở cho tin nhắn này!');
+  }
+
+  // Xác định otherUserId
+  const otherUserId = userId === senderId ? receiverId : senderId;
+
+  // Xác định nội dung nhắc nhở
+  const finalReminderContent = reminderContent || 
+                              (message.Item.type === 'text' && message.Item.content ? 
+                               message.Item.content : 
+                               `Nhắc nhở cho tin nhắn ${messageId}`);
+
+  // Chuẩn bị update expression
+  let updateExpression = 'SET reminder = :r, reminderScope = :s, reminderContent = :rc, repeatType = :rt';
+  let expressionAttributeValues = {
+    ':r': reminder,
+    ':s': scope,
+    ':rc': finalReminderContent,
+    ':rt': repeat,
+  };
+
+  // Xử lý daysOfWeek nếu có
+  if (repeat === 'multipleDaysWeekly' && daysOfWeek) {
+    updateExpression += ', daysOfWeek = :dow';
+    expressionAttributeValues[':dow'] = daysOfWeek;
+  } else {
+    updateExpression += ' REMOVE daysOfWeek'; // Xóa daysOfWeek nếu không áp dụng
+  }
+
+  // Cập nhật nhắc nhở chỉ cho userId
   await dynamoDB.update({
     TableName: 'Messages',
-    Key: { messageId, ownerId: senderId },
-    UpdateExpression: 'set reminder = :r',
-    ExpressionAttributeValues: { ':r': reminder },
+    Key: { messageId, ownerId: userId },
+    UpdateExpression: updateExpression,
+    ExpressionAttributeValues: expressionAttributeValues,
   }).promise().catch(err => {
-    console.error('Error updating reminder:', err);
+    console.error(`Error updating reminder for ${userId}:`, err);
     throw err;
   });
 
+  // Phát sự kiện Socket.IO
+  const reminderData = { 
+    messageId, 
+    reminder, 
+    scope, 
+    reminderContent: finalReminderContent, 
+    repeatType: repeat, 
+    daysOfWeek: repeat === 'multipleDaysWeekly' ? daysOfWeek : undefined, 
+    setBy: userId 
+  };
+  io().to(userId).emit('reminderSet', reminderData);
+  if (scope === 'both') {
+    io().to(otherUserId).emit('reminderSet', reminderData);
+  }
+
   return { success: true, message: 'Đã đặt nhắc nhở!' };
 };
+
+const unsetReminder = async (userId, messageId) => {
+  console.log('Unsetting reminder for message:', { messageId, userId });
+
+  // Lấy tin nhắn
+  const message = await dynamoDB.get({
+    TableName: 'Messages',
+    Key: { messageId, ownerId: userId },
+  }).promise().catch(err => {
+    console.error('Error getting message in unsetReminder:', err);
+    throw err;
+  });
+
+  if (!message.Item) throw new Error('Tin nhắn không tồn tại!');
+  if (!message.Item.reminder) {
+    throw new Error('Tin nhắn này chưa có nhắc nhở để xóa!');
+  }
+
+  // Xác định senderId và receiverId
+  const senderId = message.Item.senderId;
+  const receiverId = message.Item.receiverId;
+
+  // Kiểm tra quyền
+  if (userId !== senderId && userId !== receiverId) {
+    throw new Error('Bạn không có quyền xóa nhắc nhở cho tin nhắn này!');
+  }
+
+  // Xác định otherUserId
+  const otherUserId = userId === senderId ? receiverId : senderId;
+  const scope = message.Item.reminderScope || 'both';
+
+  // Xóa nhắc nhở
+  await dynamoDB.update({
+    TableName: 'Messages',
+    Key: { messageId, ownerId: userId },
+    UpdateExpression: 'REMOVE reminder, reminderScope, reminderContent, repeatType, daysOfWeek',
+  }).promise().catch(err => {
+    console.error(`Error unsetting reminder for ${userId}:`, err);
+    throw err;
+  });
+
+  // Phát sự kiện Socket.IO
+  io().to(userId).emit('reminderUnset', { messageId, unsetBy: userId });
+  if (scope === 'both') {
+    io().to(otherUserId).emit('reminderUnset', { messageId, unsetBy: userId });
+  }
+
+  return { success: true, message: 'Đã xóa nhắc nhở!' };
+};
+
+const getRemindersBetweenUsers = async (userId, otherUserId) => {
+  console.log('Getting reminders between users:', { userId, otherUserId });
+
+  const now = new Date().toISOString();
+
+  // Lấy nhắc nhở của userId
+  const userReminders = await dynamoDB.query({
+    TableName: 'Messages',
+    IndexName: 'OwnerReminderIndex',
+    KeyConditionExpression: 'ownerId = :userId AND reminder >= :now',
+    ExpressionAttributeValues: {
+      ':userId': userId,
+      ':now': now,
+    },
+  }).promise().catch(err => {
+    console.error('Error querying reminders for userId:', err);
+    throw err;
+  });
+
+  // Lấy nhắc nhở của otherUserId với scope = both
+  const otherUserReminders = await dynamoDB.query({
+    TableName: 'Messages',
+    IndexName: 'OwnerReminderIndex',
+    KeyConditionExpression: 'ownerId = :otherUserId AND reminder >= :now',
+    ExpressionAttributeValues: {
+      ':otherUserId': otherUserId,
+      ':now': now,
+    },
+  }).promise().catch(err => {
+    console.error('Error querying reminders for otherUserId:', err);
+    throw err;
+  });
+
+  // Lọc và gộp kết quả
+  const reminders = [];
+
+  // Thêm nhắc nhở của userId
+  if (userReminders.Items) {
+    reminders.push(...userReminders.Items.filter(msg => 
+      (msg.senderId === userId && msg.receiverId === otherUserId) ||
+      (msg.senderId === otherUserId && msg.receiverId === userId)
+    ).map(msg => ({
+      messageId: msg.messageId,
+      reminder: msg.reminder,
+      scope: msg.reminderScope,
+      reminderContent: msg.reminderContent,
+      repeatType: msg.repeatType,
+      daysOfWeek: msg.daysOfWeek,
+      setBy: msg.ownerId,
+    })));
+  }
+
+  // Thêm nhắc nhở của otherUserId với scope = both
+  if (otherUserReminders.Items) {
+    reminders.push(...otherUserReminders.Items.filter(msg => 
+      msg.reminderScope === 'both' &&
+      ((msg.senderId === userId && msg.receiverId === otherUserId) ||
+       (msg.senderId === otherUserId && msg.receiverId === userId))
+    ).map(msg => ({
+      messageId: msg.messageId,
+      reminder: msg.reminder,
+      scope: msg.reminderScope,
+      reminderContent: msg.reminderContent,
+      repeatType: msg.repeatType,
+      daysOfWeek: msg.daysOfWeek,
+      setBy: msg.ownerId,
+    })));
+  }
+
+  return { success: true, reminders };
+};
+
+const checkAndNotifyReminders = async () => {
+  const now = new Date();
+  const messages = await dynamoDB.scan({
+    TableName: 'Messages',
+    FilterExpression: 'reminder <= :now',
+    ExpressionAttributeValues: { ':now': now.toISOString() },
+  }).promise().catch(err => {
+    console.error('Error scanning reminders:', err);
+    throw err;
+  });
+
+  for (const msg of messages.Items) {
+    const { repeatType, daysOfWeek, reminder } = msg;
+    let newReminder = null;
+
+    if (repeatType && repeatType !== 'none') {
+      const reminderDate = new Date(reminder);
+      switch (repeatType) {
+        case 'daily':
+          newReminder = new Date(reminderDate.setDate(reminderDate.getDate() + 1)).toISOString();
+          break;
+        case 'weekly':
+          newReminder = new Date(reminderDate.setDate(reminderDate.getDate() + 7)).toISOString();
+          break;
+        case 'multipleDaysWeekly':
+          const currentDay = now.getDay() || 7; // 1-7
+          const nextDay = daysOfWeek.find(day => day > currentDay) || daysOfWeek[0];
+          const daysToAdd = nextDay > currentDay ? nextDay - currentDay : 7 - currentDay + nextDay;
+          newReminder = new Date(reminderDate.setDate(reminderDate.getDate() + daysToAdd)).toISOString();
+          break;
+        case 'monthly':
+          newReminder = new Date(reminderDate.setMonth(reminderDate.getMonth() + 1)).toISOString();
+          break;
+        case 'yearly':
+          newReminder = new Date(reminderDate.setFullYear(reminderDate.getFullYear() + 1)).toISOString();
+          break;
+      }
+    }
+
+    // Gửi thông báo
+    io().to(msg.ownerId).emit('reminderTriggered', { 
+      messageId: msg.messageId, 
+      reminderContent: msg.reminderContent 
+    });
+    if (msg.reminderScope === 'both') {
+      const otherUserId = msg.senderId === msg.ownerId ? msg.receiverId : msg.senderId;
+      io().to(otherUserId).emit('reminderTriggered', { 
+        messageId: msg.messageId, 
+        reminderContent: msg.reminderContent 
+      });
+    }
+
+    // Cập nhật hoặc xóa nhắc nhở
+    if (newReminder) {
+      await dynamoDB.update({
+        TableName: 'Messages',
+        Key: { messageId: msg.messageId, ownerId: msg.ownerId },
+        UpdateExpression: 'SET reminder = :r',
+        ExpressionAttributeValues: { ':r': newReminder },
+      }).promise().catch(err => {
+        console.error('Error updating reminder:', err);
+        throw err;
+      });
+    } else {
+      await dynamoDB.update({
+        TableName: 'Messages',
+        Key: { messageId: msg.messageId, ownerId: msg.ownerId },
+        UpdateExpression: 'REMOVE reminder, reminderScope, reminderContent, repeatType, daysOfWeek',
+      }).promise().catch(err => {
+        console.error('Error removing reminder:', err);
+        throw err;
+      });
+    }
+
+    // Ghi log
+    await dynamoDB.put({
+      TableName: 'ReminderLogs',
+      Item: {
+        logId: uuidv4(),
+        messageId: msg.messageId,
+        userId: msg.ownerId,
+        reminder: msg.reminder,
+        reminderContent: msg.reminderContent || `Nhắc nhở cho tin nhắn ${msg.messageId}`,
+        timestamp: now.toISOString(),
+      },
+    }).promise().catch(err => {
+      console.error('Error logging reminder:', err);
+      throw err;
+    });
+  }
+};
+
+const getReminderHistory = async (userId, otherUserId) => {
+  console.log('Getting reminder history between users:', { userId, otherUserId });
+
+  // Lấy lịch sử nhắc nhở
+  const logs = await dynamoDB.scan({
+    TableName: 'ReminderLogs',
+    FilterExpression: 'userId = :userId',
+    ExpressionAttributeValues: {
+      ':userId': userId,
+    },
+  }).promise().catch(err => {
+    console.error('Error scanning reminder logs:', err);
+    throw err;
+  });
+
+  // Lọc lịch sử liên quan đến otherUserId
+  const history = [];
+  if (logs.Items) {
+    for (const log of logs.Items) {
+      const message = await dynamoDB.get({
+        TableName: 'Messages',
+        Key: { messageId: log.messageId, ownerId: userId },
+      }).promise().catch(err => {
+        console.error('Error getting message for log:', err);
+        return null;
+      });
+
+      if (message.Item &&
+          ((message.Item.senderId === userId && message.Item.receiverId === otherUserId) ||
+           (message.Item.senderId === otherUserId && message.Item.receiverId === userId))) {
+        history.push({
+          logId: log.logId,
+          messageId: log.messageId,
+          reminder: log.reminder,
+          reminderContent: log.reminderContent,
+          timestamp: log.timestamp,
+        });
+      }
+    }
+  }
+
+  return { success: true, history };
+};
+
+const editReminder = async (userId, messageId, reminder, scope, reminderContent, repeat, daysOfWeek) => {
+  console.log('Editing reminder for message:', { messageId, userId, reminder, scope, reminderContent, repeat, daysOfWeek });
+
+  // Kiểm tra thời gian nhắc nhở hợp lệ
+  const now = new Date().toISOString();
+  if (reminder && reminder <= now) {
+    throw new Error('Thời gian nhắc nhở phải ở tương lai!');
+  }
+
+  // Kiểm tra scope nếu được cung cấp
+  if (scope && !['onlyMe', 'both'].includes(scope)) {
+    throw new Error('Phạm vi nhắc nhở phải là "onlyMe" hoặc "both"!');
+  }
+
+  // Kiểm tra repeat nếu được cung cấp
+  const validRepeatTypes = ['none', 'daily', 'weekly', 'multipleDaysWeekly', 'monthly', 'yearly'];
+  if (repeat && !validRepeatTypes.includes(repeat)) {
+    throw new Error('Loại lặp lại không hợp lệ! Chấp nhận: none, daily, weekly, multipleDaysWeekly, monthly, yearly');
+  }
+
+  // Kiểm tra daysOfWeek nếu repeat là multipleDaysWeekly
+  if (repeat === 'multipleDaysWeekly') {
+    if (!Array.isArray(daysOfWeek) || daysOfWeek.length === 0) {
+      throw new Error('daysOfWeek phải là một mảng không rỗng khi lặp lại nhiều ngày trong tuần!');
+    }
+    if (!daysOfWeek.every(day => Number.isInteger(day) && day >= 1 && day <= 7)) {
+      throw new Error('daysOfWeek phải chứa các số nguyên từ 1 đến 7!');
+    }
+  } else if (daysOfWeek && repeat !== 'multipleDaysWeekly') {
+    throw new Error('daysOfWeek chỉ được cung cấp khi repeat là multipleDaysWeekly!');
+  }
+
+  // Lấy tin nhắn
+  const message = await dynamoDB.get({
+    TableName: 'Messages',
+    Key: { messageId, ownerId: userId },
+  }).promise().catch(err => {
+    console.error('Error getting message in editReminder:', err);
+    throw err;
+  });
+
+  if (!message.Item) throw new Error('Tin nhắn không tồn tại!');
+  if (message.Item.isRecalled) {
+    throw new Error('Tin nhắn đã bị thu hồi, không thể chỉnh sửa nhắc nhở!');
+  }
+  if (!message.Item.reminder) {
+    throw new Error('Tin nhắn này chưa có nhắc nhở để chỉnh sửa!');
+  }
+
+  // Xác định senderId và receiverId
+  const senderId = message.Item.senderId;
+  const receiverId = message.Item.receiverId;
+
+  // Kiểm tra quyền
+  if (userId !== senderId && userId !== receiverId) {
+    throw new Error('Bạn không có quyền chỉnh sửa nhắc nhở cho tin nhắn này!');
+  }
+
+  // Xác định otherUserId
+  const otherUserId = userId === senderId ? receiverId : senderId;
+
+  // Xác định nội dung nhắc nhở
+  const finalReminderContent = reminderContent !== undefined ? 
+                              (reminderContent || 
+                               (message.Item.type === 'text' && message.Item.content ? 
+                                message.Item.content : 
+                                `Nhắc nhở cho tin nhắn ${messageId}`)) : 
+                              message.Item.reminderContent;
+
+  // Chuẩn bị update expression
+  let updateExpression = 'SET reminder = :r';
+  const expressionAttributeValues = { ':r': reminder };
+
+  if (scope) {
+    updateExpression += ', reminderScope = :s';
+    expressionAttributeValues[':s'] = scope;
+  }
+
+  if (reminderContent !== undefined) {
+    updateExpression += ', reminderContent = :rc';
+    expressionAttributeValues[':rc'] = finalReminderContent;
+  }
+
+  if (repeat) {
+    updateExpression += ', repeatType = :rt';
+    expressionAttributeValues[':rt'] = repeat;
+  }
+
+  if (repeat === 'multipleDaysWeekly' && daysOfWeek) {
+    updateExpression += ', daysOfWeek = :dow';
+    expressionAttributeValues[':dow'] = daysOfWeek;
+  } else if (repeat && repeat !== 'multipleDaysWeekly') {
+    updateExpression += ' REMOVE daysOfWeek';
+  }
+
+  // Cập nhật nhắc nhở
+  await dynamoDB.update({
+    TableName: 'Messages',
+    Key: { messageId, ownerId: userId },
+    UpdateExpression: updateExpression,
+    ExpressionAttributeValues: expressionAttributeValues,
+  }).promise().catch(err => {
+    console.error(`Error updating reminder for ${userId}:`, err);
+    throw err;
+  });
+
+  // Lấy scope hiện tại nếu không cung cấp scope mới
+  const finalScope = scope || message.Item.reminderScope || 'both';
+  const finalRepeat = repeat || message.Item.repeatType || 'none';
+  const finalDaysOfWeek = repeat === 'multipleDaysWeekly' ? daysOfWeek : 
+                          (repeat && repeat !== 'multipleDaysWeekly' ? undefined : message.Item.daysOfWeek);
+
+  // Phát sự kiện Socket.IO
+  const reminderData = { 
+    messageId, 
+    reminder, 
+    scope: finalScope, 
+    reminderContent: finalReminderContent, 
+    repeatType: finalRepeat, 
+    daysOfWeek: finalDaysOfWeek, 
+    setBy: userId 
+  };
+  io().to(userId).emit('reminderEdited', reminderData);
+  if (finalScope === 'both') {
+    io().to(otherUserId).emit('reminderEdited', reminderData);
+  }
+
+  return { success: true, message: 'Đã chỉnh sửa nhắc nhở!' };
+};
+
 
 // Hàm xóa tin nhắn chỉ với bạn
 const deleteMessage = async (userId, messageId) => {
@@ -1244,7 +1717,14 @@ module.exports = {
   pinMessage,
   unpinMessage,
   getPinnedMessages,
+
   setReminder,
+  unsetReminder,
+  getRemindersBetweenUsers,
+  checkAndNotifyReminders,
+  getReminderHistory,
+  editReminder,
+
   deleteMessage,
   restoreMessage,
   retryMessage,
