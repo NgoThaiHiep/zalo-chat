@@ -1,3 +1,4 @@
+const { log } = require('winston');
 const MessageService = require('../services/message.service');
 const multer = require('multer');
 
@@ -9,7 +10,7 @@ const upload = multer({
       'image/jpeg', 'image/png', 'image/heic', 'image/gif',
       'video/mp4',
       'audio/mpeg', 'audio/wav', 'audio/mp4',
-      'application/pdf', 'application/zip', 'application/x-rar-compressed', 'application/vnd.rar', 'text/plain'
+      'application/pdf', 'application/zip', 'application/x-rar-compressed', 'application/vnd.rar', 'text/plain',
     ];
     if (allowedMimeTypes.includes(file.mimetype)) {
       cb(null, true);
@@ -18,38 +19,6 @@ const upload = multer({
     }
   },
 });
-
-const setAutoDeleteSettingController = async (req, res) => {
-  try {
-    const userId = req.user.id;
-    const { targetUserId, autoDeleteAfter } = req.body;
-
-    if (!targetUserId || !autoDeleteAfter) {
-      return res.status(400).json({ message: 'Thiếu targetUserId hoặc autoDeleteAfter!' });
-    }
-
-    const result = await MessageService.setAutoDeleteSetting(userId, targetUserId, autoDeleteAfter);
-    res.status(200).json(result);
-  } catch (error) {
-    res.status(500).json({ message: error.message || 'Lỗi khi cài đặt tự động xóa!' });
-  }
-};
-
-const getAutoDeleteSettingController = async (req, res) => {
-  try {
-    const userId = req.user.id;
-    const { targetUserId } = req.params;
-
-    if (!targetUserId) {
-      return res.status(400).json({ message: 'Thiếu targetUserId!' });
-    }
-
-    const setting = await MessageService.getAutoDeleteSetting(userId, targetUserId);
-    res.status(200).json({ autoDeleteAfter: setting });
-  } catch (error) {
-    res.status(500).json({ message: error.message || 'Lỗi khi lấy cài đặt tự động xóa!' });
-  }
-};
 
 const sendMessageController = async (req, res) => {
   try {
@@ -117,13 +86,34 @@ const getMessagesBetweenController = async (req, res) => {
   }
 };
 
-const getConversationUsers = async (req, res) => {
+const getConversationSummaryController = async (req, res) => {
   try {
-    const currentUserId = req.user.id;
-    const result = await MessageService.getConversationUsers(currentUserId);
-    res.json(result);
+    const userId = req.user.id;
+    const { minimal = 'false' } = req.query; // Lấy minimal từ query param
+
+    console.log('Lấy tóm tắt hội thoại cho:', { userId, minimal });
+
+    const result = await MessageService.getConversationSummary(userId, { minimal: minimal === 'true' });
+
+    if (!result.success) {
+      return res.status(500).json({
+        success: false,
+        message: result.error || 'Lỗi khi lấy tóm tắt hội thoại',
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: minimal === 'true' ? 'Lấy danh sách người nhắn thành công' : 'Lấy tóm tắt hội thoại thành công',
+      data: result.data,
+    });
   } catch (error) {
-    res.status(500).json({ success: false, message: 'Lỗi lấy danh sách người nhắn', error: error.message });
+    console.error('Lỗi trong getConversationSummaryController:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Lỗi server',
+      error: error.message,
+    });
   }
 };
 
@@ -131,6 +121,7 @@ const forwardMessageController = async (req, res) => {
   try {
     const { messageId, targetReceiverId } = req.body;
     const senderId = req.user.id;
+    console.log('Sender ID:', senderId);
     console.log('Forward message request:', { senderId, messageId, targetReceiverId });
 
     if (!messageId || !targetReceiverId) {
@@ -152,17 +143,17 @@ const forwardMessageController = async (req, res) => {
 const recallMessageController = async (req, res) => {
   try {
     const { messageId } = req.params;
-    const userId = req.user.id; // Đổi tên cho rõ ràng
+    const userId = req.user.id;
 
     if (!messageId) {
       return res.status(400).json({ success: false, message: 'messageId là bắt buộc!' });
     }
 
-    console.log('Pin message request:', { userId, messageId });
+    console.log('Recall message request:', { userId, messageId });
 
     const result = await MessageService.recallMessage(userId, messageId);
    
-    res.status(200).json(result);
+    res.status(200).json({ success: true, ...result });
   } catch (error) {
     res.status(403).json({ success: false, message: error.message });
   }
@@ -174,7 +165,7 @@ const pinMessageController = async (req, res) => {
     const senderId = req.user.id;
 
     const result = await MessageService.pinMessage(senderId, messageId);
-    res.status(200).json(result);
+    res.status(200).json({ success: true, ...result });
   } catch (error) {
     res.status(403).json({ success: false, message: error.message });
   }
@@ -192,13 +183,12 @@ const unpinMessageController = async (req, res) => {
     console.log('Unpin message request:', { userId, messageId });
 
     const result = await MessageService.unpinMessage(userId, messageId);
-    res.status(200).json(result);
+    res.status(200).json({ success: true, ...result });
   } catch (error) {
     res.status(403).json({ success: false, message: error.message });
   }
 };
 
-// Controller cho lấy tin nhắn ghim
 const getPinnedMessagesController = async (req, res) => {
   try {
     const { otherUserId } = req.params;
@@ -211,7 +201,7 @@ const getPinnedMessagesController = async (req, res) => {
     console.log('Get pinned messages request:', { userId, otherUserId });
 
     const result = await MessageService.getPinnedMessages(userId, otherUserId);
-    res.status(200).json(result);
+    res.status(200).json({ success: true, ...result });
   } catch (error) {
     console.error('Error in getPinnedMessagesController:', error);
     res.status(500).json({ success: false, message: error.message || 'Không thể lấy tin nhắn ghim' });
@@ -229,7 +219,7 @@ const setReminderController = async (req, res) => {
     }
 
     const result = await MessageService.setReminder(userId, messageId, reminder, scope, reminderContent, repeat, daysOfWeek);
-    res.status(200).json(result);
+    res.status(200).json({ success: true, ...result });
   } catch (error) {
     console.error('Error in setReminderController:', error);
     const status = error.message.includes('không tồn tại') ? 404 :
@@ -253,7 +243,7 @@ const unsetReminderController = async (req, res) => {
     }
 
     const result = await MessageService.unsetReminder(userId, messageId);
-    res.status(200).json(result);
+    res.status(200).json({ success: true, ...result });
   } catch (error) {
     console.error('Error in unsetReminderController:', error);
     const status = error.message.includes('không tồn tại') ? 404 :
@@ -273,7 +263,7 @@ const getRemindersBetweenUsersController = async (req, res) => {
     }
 
     const result = await MessageService.getRemindersBetweenUsers(userId, otherUserId);
-    res.status(200).json(result);
+    res.status(200).json({ success: true, ...result });
   } catch (error) {
     console.error('Error in getRemindersBetweenUsersController:', error);
     res.status(500).json({ success: false, message: error.message });
@@ -290,7 +280,7 @@ const getReminderHistoryController = async (req, res) => {
     }
 
     const result = await MessageService.getReminderHistory(userId, otherUserId);
-    res.status(200).json(result);
+    res.status(200).json({ success: true, ...result });
   } catch (error) {
     console.error('Error in getReminderHistoryController:', error);
     res.status(500).json({ success: false, message: error.message });
@@ -308,7 +298,7 @@ const editReminderController = async (req, res) => {
     }
 
     const result = await MessageService.editReminder(userId, messageId, reminder, scope, reminderContent, repeat, daysOfWeek);
-    res.status(200).json(result);
+    res.status(200).json({ success: true, ...result });
   } catch (error) {
     console.error('Error in editReminderController:', error);
     const status = error.message.includes('không tồn tại') ? 404 :
@@ -323,21 +313,19 @@ const editReminderController = async (req, res) => {
   }
 };
 
-
 const deleteMessageController = async (req, res) => {
   try {
     const { messageId } = req.params;
-    const userId = req.user.id; // Đổi từ senderId thành userId cho rõ ràng
-   
+    const userId = req.user.id;
 
     if (!messageId) {
       return res.status(400).json({ success: false, message: 'messageId là bắt buộc!' });
     }
 
-    console.log('Delete message request:', { userId, messageId});
+    console.log('Delete message request:', { userId, messageId });
 
     const result = await MessageService.deleteMessage(userId, messageId);
-    res.status(200).json(result);
+    res.status(200).json({ success: true, ...result });
   } catch (error) {
     res.status(403).json({ success: false, message: error.message });
   }
@@ -349,7 +337,7 @@ const restoreMessageController = async (req, res) => {
     const senderId = req.user.id;
 
     const result = await MessageService.restoreMessage(senderId, messageId);
-    res.status(200).json(result);
+    res.status(200).json({ success: true, ...result });
   } catch (error) {
     res.status(403).json({ success: false, message: error.message });
   }
@@ -389,62 +377,6 @@ const markMessageAsSeenController = async (req, res) => {
   }
 };
 
-const muteConversationController = async (req, res) => {
-  try {
-    const userId = req.user.id;
-    const { mutedUserId, duration } = req.body;
-    if (!mutedUserId || !duration) {
-      return res.status(400).json({ success: false, message: 'mutedUserId và duration là bắt buộc!' });
-    }
-    const result = await MessageService.muteConversation(userId, mutedUserId, duration);
-    res.status(200).json(result);
-  } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
-  }
-};
-
-const hideConversationController = async (req, res) => {
-  try {
-    const userId = req.user.id;
-    const { hiddenUserId, password } = req.body;
-    if (!hiddenUserId || !password) {
-      return res.status(400).json({ success: false, message: 'hiddenUserId và password là bắt buộc!' });
-    }
-    const result = await MessageService.hideConversation(userId, hiddenUserId, password);
-    res.status(200).json(result);
-  } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
-  }
-};
-
-const unhideConversationController = async (req, res) => {
-  try {
-    const userId = req.user.id;
-    const { hiddenUserId, password } = req.body;
-    if (!hiddenUserId || !password) {
-      return res.status(400).json({ success: false, message: 'hiddenUserId và password là bắt buộc!' });
-    }
-    const result = await MessageService.unhideConversation(userId, hiddenUserId, password);
-    res.status(200).json(result);
-  } catch (error) {
-    res.status(403).json({ success: false, message: error.message });
-  }
-};
-
-const setConversationNicknameController = async (req, res) => {
-  try {
-    const userId = req.user.id;
-    const { targetUserId, nickname } = req.body;
-    if (!targetUserId || !nickname) {
-      return res.status(400).json({ success: false, message: 'targetUserId và nickname là bắt buộc!' });
-    }
-    const result = await MessageService.setConversationNickname(userId, targetUserId, nickname);
-    res.status(200).json(result);
-  } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
-  }
-};
-
 const checkBlockStatusController = async (req, res) => {
   try {
     const senderId = req.user.id;
@@ -478,32 +410,66 @@ const checkBlockStatusController = async (req, res) => {
   }
 };
 
+const searchMessagesBetweenUsers = async (userId, otherUserId, keyword) => {
+  try {
+    // Chuẩn hóa từ khóa: loại bỏ khoảng trắng thừa, chuyển về chữ thường
+    const normalizedKeyword = keyword.toLowerCase().trim();
+
+    // Truy vấn tin nhắn giữa hai người dùng
+    const params = {
+      TableName: 'Messages',
+      FilterExpression:
+        '(senderId = :userId AND receiverId = :otherUserId) OR (senderId = :otherUserId AND receiverId = :userId)',
+      ExpressionAttributeValues: {
+        ':userId': userId,
+        ':otherUserId': otherUserId,
+      },
+    };
+
+    const result = await dynamoDB.scan(params).promise();
+    if (!result.Items || result.Items.length === 0) {
+      return { success: true, data: [] };
+    }
+
+    // Lọc tin nhắn theo từ khóa (chỉ áp dụng cho type = 'text')
+    const matchedMessages = result.Items.filter((msg) => {
+      if (msg.type !== 'text' || !msg.content) return false;
+      return msg.content.toLowerCase().includes(normalizedKeyword);
+    });
+
+    // Sắp xếp theo timestamp (mới nhất trước)
+    matchedMessages.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+
+    return {
+      success: true,
+      data: matchedMessages,
+    };
+  } catch (error) {
+    console.error('Lỗi trong searchMessagesBetweenUsers:', error);
+    return {
+      success: false,
+      error: error.message || 'Lỗi khi tìm kiếm tin nhắn',
+    };
+  }
+};
 module.exports = {
   sendMessageController: [upload.single('file'), sendMessageController],
   getMessagesBetweenController,
-  getConversationUsers,
+  getConversationSummaryController,
   forwardMessageController,
   recallMessageController,
-
   pinMessageController,
   unpinMessageController,
   getPinnedMessagesController,
-
   setReminderController,
   unsetReminderController,
   getRemindersBetweenUsersController,
   getReminderHistoryController,
   editReminderController,
-  
   deleteMessageController,
   restoreMessageController,
   retryMessageController,
   markMessageAsSeenController,
-  muteConversationController,
-  hideConversationController,
-  unhideConversationController,
-  setConversationNicknameController,
   checkBlockStatusController,
-  setAutoDeleteSettingController,
-  getAutoDeleteSettingController,
+  searchMessagesBetweenUsers,
 };

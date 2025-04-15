@@ -1,10 +1,11 @@
 const express = require('express');
 const { 
   sendMessageController, 
-  getMessagesBetweenController, 
-  getConversationUsers,
+  getMessagesBetweenController,
+
   forwardMessageController,
   recallMessageController,
+
   pinMessageController,
   unpinMessageController,
   getPinnedMessagesController,
@@ -19,45 +20,50 @@ const {
   restoreMessageController,
   retryMessageController,
   markMessageAsSeenController,
-  muteConversationController,
-  hideConversationController,
-  unhideConversationController,
-  setConversationNicknameController,
+
+
   checkBlockStatusController,
-  setAutoDeleteSettingController,
-  getAutoDeleteSettingController,
+  searchMessagesBetweenUsers,
+  getConversationSummaryController
 } = require('../controllers/messageController');
 const {authMiddleware ,checkOwnership} = require('../middlewares/authMiddleware');
 
 const router = express.Router();
 
-router.post('/send', authMiddleware, sendMessageController);
-router.get('/user/:userId', authMiddleware, getMessagesBetweenController);
-router.get('/conversations', authMiddleware, getConversationUsers);
-router.post('/forward', authMiddleware, forwardMessageController);
-router.patch('/recall/:messageId', authMiddleware, recallMessageController);
+// Nhóm: Gửi và lấy tin nhắn
+router.post('/send', authMiddleware, sendMessageController);// Gửi tin nhắn
+router.get('/user/:userId', authMiddleware, getMessagesBetweenController); // Lấy tin nhắn giữa hai người dùng
+router.get('/summary', authMiddleware, getConversationSummaryController);// Lấy tóm tắt hội thoại
 
-router.patch('/pin/:messageId', authMiddleware, pinMessageController);
-router.patch('/unpin/:messageId', authMiddleware, unpinMessageController);
-router.get('/pinned/:otherUserId', authMiddleware, getPinnedMessagesController);
 
-router.patch('/remind/:messageId', authMiddleware, setReminderController);
-router.delete('/reminder/:messageId', authMiddleware, unsetReminderController);
-router.patch('/reminder/:messageId', authMiddleware, editReminderController);
-router.get('/reminders/:otherUserId', authMiddleware, getRemindersBetweenUsersController);
-router.get('/reminder-history/:otherUserId', authMiddleware, getReminderHistoryController);
+// Nhóm: Chuyển tiếp và thu hồi tin nhắn
+router.post('/forward', authMiddleware, forwardMessageController); // Chuyển tiếp tin nhắn
+router.patch('/recall/:messageId', authMiddleware, recallMessageController);// Thu hồi tin nhắn
 
-router.delete('/:messageId', authMiddleware, deleteMessageController);
-router.patch('/:messageId/restore', authMiddleware, restoreMessageController);
-router.post('/retry', retryMessageController);
-router.patch('/seen/:messageId', markMessageAsSeenController);
-router.post('/mute', authMiddleware, muteConversationController);
-router.post('/hide', authMiddleware, hideConversationController);
-router.post('/unhide', authMiddleware, unhideConversationController);
-router.post('/nickname', authMiddleware, setConversationNicknameController);
-router.get('/check-block-status', authMiddleware, checkBlockStatusController);
-router.post('/set-auto-delete', authMiddleware, setAutoDeleteSettingController);
-router.get('/get-auto-delete/:targetUserId', authMiddleware, getAutoDeleteSettingController);
+// Nhóm: Ghim tin nhắn
+router.route('/pin/:messageId')
+      .patch( authMiddleware, pinMessageController) // Ghim tin nhắn
+      .delete( authMiddleware, unpinMessageController); // Bỏ ghim tin nhắn
+router.get('/pinned/:otherUserId', authMiddleware, getPinnedMessagesController); // Lấy danh sách tin nhắn đã ghim
+
+// Nhóm: Nhắc nhở tin nhắn
+router.route('/reminder/:messageId')
+      .patch( authMiddleware, setReminderController) // Đặt nhắc nhở
+      .delete( authMiddleware, unsetReminderController) // Xóa nhắc nhở
+      .put(authMiddleware, editReminderController); // Sửa nhắc nhở
+router.get('/reminders/:otherUserId', authMiddleware, getRemindersBetweenUsersController); // Lấy danh sách nhắc nhở
+router.get('/reminder-history/:otherUserId', authMiddleware, getReminderHistoryController); // Lấy lịch sử nhắc nhở
+
+// Nhóm: Xóa và khôi phục tin nhắn
+router.delete('/:messageId', authMiddleware, deleteMessageController); // Xóa tin nhắn
+router.patch('/:messageId/restore', authMiddleware, restoreMessageController) ; // Khôi phục tin nhắn
+
+// Nhóm: Các hành động khác
+router.post('/retry', retryMessageController); // Thử gửi lại tin nhắn
+router.patch('/seen/:messageId', markMessageAsSeenController); // Đánh dấu tin nhắn đã xem
+router.get('/check-block-status', authMiddleware, checkBlockStatusController); // Kiểm tra trạng thái chặn
+router.get('/search', authMiddleware, searchMessagesBetweenUsers); // Tìm kiếm tin nhắn
+
 
 module.exports = router;
 

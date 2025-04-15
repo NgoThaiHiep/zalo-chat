@@ -1,7 +1,8 @@
 const { get } = require('../routes/authRoutes');
 const FriendService = require('../services/friend.service');
 const {getUserByPhoneNumber}=  require('../services/otp.services')
-    const sendFriendRequestController =  async (req, res) => {
+
+const sendFriendRequestController =  async (req, res) => {
         const { receiverId } = req.body;
         const senderId = req.user.id;
         try {
@@ -11,7 +12,7 @@ const {getUserByPhoneNumber}=  require('../services/otp.services')
        
           res.status(500).json({  error: error.message });
         }
-      }
+}
  
     // 1. Lấy danh sách yêu cầu kết bạn đã nhận
     const  getReceivedFriendRequestsController = async(req, res) => {
@@ -227,6 +228,59 @@ const {getUserByPhoneNumber}=  require('../services/otp.services')
           res.status(500).json({ message: 'Error fetching mutual friends', error: error.message });
         }
       }
+    const getUserNameController = async (req, res) => {
+        try {
+          const currentUserId = req.user.id;
+          const { targetUserId } = req.query;
+      
+          if (!targetUserId) {
+            return res.status(400).json({ success: false, message: 'targetUserId là bắt buộc!' });
+          }
+      
+          const result = await FriendService.getUserName(currentUserId, targetUserId);
+          res.status(200).json(result);
+        } catch (error) {
+          console.error('Lỗi trong getUserNameController:', error);
+          res.status(403).json({ success: false, message: error.message || 'Lỗi khi lấy tên người dùng' });
+        }
+      };  
+
+    const setConversationNicknameController = async (req, res) => {
+        try {
+          const userId = req.user.id;
+          const { targetUserId, nickname } = req.body;
+          if (!targetUserId || !nickname) {
+            return res.status(400).json({ success: false, message: 'targetUserId và nickname là bắt buộc!' });
+          }
+          const result = await FriendService.setConversationNickname(userId, targetUserId, nickname);
+          res.status(200).json(result);
+        } catch (error) {
+          res.status(500).json({ success: false, message: error.message });
+        }
+      };
+
+
+      const getConversationNicknameController = async (req, res) => {
+        try {
+          const userId = req.user.id;
+          const { targetUserId } = req.query; // Hoặc req.body, tùy thuộc vào thiết kế API
+      
+          if (!targetUserId) {
+            return res.status(400).json({ success: false, message: 'targetUserId là bắt buộc!' });
+          }
+      
+          const nickname = await FriendService.getConversationNickname(userId, targetUserId);
+          res.status(200).json({
+            success: true,
+            message: nickname ? 'Lấy tên gợi nhớ thành công!' : 'Không có tên gợi nhớ được đặt!',
+            data: { nickname: nickname || null },
+          });
+        } catch (error) {
+          console.error('Lỗi trong getConversationNicknameController:', error);
+          res.status(500).json({ success: false, message: error.message || 'Lỗi khi lấy tên gợi nhớ' });
+        }
+      };
+    
 module.exports = {
     acceptFriendRequestController,
     getReceivedFriendRequestsController,
@@ -242,12 +296,15 @@ module.exports = {
     searchUsersController,
     getFriendSuggestionsController,
     getUserStatusController,
+
     getUserProfileController,
+    getUserNameController,
+
     markFavoriteController,
     unmarkFavoriteController,
     getFavoriteFriendsController,
     getMutualFriends,
 
-
-
+    setConversationNicknameController,
+    getConversationNicknameController,
 }

@@ -1,22 +1,46 @@
 const { Server } = require('socket.io');
+const { createAdapter } = require('@socket.io/redis-adapter');
 const Queue = require('bull');
-const { redisClient, redisSubscriber } = require('./config/redis');
-const { transcribe, s3 } = require('./config/aws.config');
-const { dynamoDB } = require('./config/aws.config');
+const { redisClient } = require('./config/redis');
+const { transcribe, s3, dynamoDB } = require('./config/aws.config');
+const { corsOptions } = require('./config/cors');
+const logger = require('./config/logger');
+const { processTranscribeJob } = require('./services/transcribe.service');
+const { verifyToken } = require('./services/auth.service'); // Giả sử có auth.service.js
 
 let ioInstance;
 let transcribeQueue;
 
 const initializeSocket = (server) => {
   ioInstance = new Server(server, {
-    
-    cors: {
-      origin: 'http://localhost:3001',
-      methods: ['GET', 'POST'],
-    },
+    cors: corsOptions, // Sử dụng cấu hình CORS chung
+    adapter: createAdapter(redisClient, redisClient.duplicate()),
   });
-  console.log('[SOCKET] ioInstance initialized');
-  
+
+  logger.info('[SOCKET] Socket.IO server initialized');
+
+  // Middleware xác thực Socket.IO
+  ioInstance.use(async (socket, next) => {
+    try {
+      // Cho phép sự kiện 'join' xử lý xác thực riêng
+      if (socket.handshake.query.event === 'join') {
+        return next();
+      }
+      // Yêu cầu token cho các sự kiện khác
+      const token = socket.handshake.auth.token;
+      if (!token) {
+        throw new Error('Token không được cung cấp');
+      }
+      const { id } = await verifyToken(token);
+      socket.userId = id; // Lưu userId vào socket
+      next();
+    } catch (error) {
+      logger.error('[SOCKET] Socket authentication error', { error: error.message });
+      next(new Error('Xác thực thất bại'));
+    }
+  });
+
+  // Khởi tạo queue xử lý transcription
   transcribeQueue = new Queue('transcribe-queue', {
     redis: { client: redisClient },
   });
@@ -24,98 +48,40 @@ const initializeSocket = (server) => {
   // Xử lý job trong queue
   transcribeQueue.process(async (job) => {
     const { messageId, senderId, receiverId, tableName, bucketName } = job.data;
-    const status = await updateTranscribeStatus(messageId, tableName, senderId, receiverId, bucketName);
+    logger.info('[SOCKET] Processing transcribe job', { jobId: job.id, messageId });
 
-    if (status === 'IN_PROGRESS') {
-      throw new Error('Job vẫn đang xử lý, thử lại sau'); // Bull sẽ retry tự động
-    }
+    await processTranscribeJob({
+      messageId,
+      senderId,
+      receiverId,
+      tableName,
+      bucketName,
+      io: ioInstance,
+    });
 
-    // Nếu job hoàn thành hoặc thất bại, xóa khỏi queue
-    await job.remove();
+    await job.remove(); // Xóa job sau khi hoàn thành
   });
 
-  // Xử lý retry logic
+  // Xử lý sự kiện queue
   transcribeQueue.on('failed', (job, err) => {
-    console.log(`Job ${job.id} failed with error: ${err.message}`);
+    logger.error('[SOCKET] Transcribe job failed', { jobId: job.id, error: err.message });
   });
 
   transcribeQueue.on('completed', (job) => {
-    console.log(`Job ${job.id} completed`);
+    logger.info('[SOCKET] Transcribe job completed', { jobId: job.id });
   });
 
   return ioInstance;
 };
 
-const checkTranscribeStatus = async (jobName) => {
-  try {
-    const response = await transcribe
-      .getTranscriptionJob({ TranscriptionJobName: jobName })
-      .promise();
-    return response.TranscriptionJob.TranscriptionJobStatus;
-  } catch (error) {
-    console.error(`Error checking transcribe job ${jobName}:`, error);
-    throw error;
-  }
-};
-
-const updateTranscribeStatus = async (messageId, tableName, senderId, receiverId, bucketName) => {
-  const jobName = `voice-${messageId}`;
-  const status = await checkTranscribeStatus(jobName);
-
-  let transcriptText = null;
-
-  if (status === 'COMPLETED') {
-    // Lấy file JSON từ S3
-    const transcriptKey = `${jobName}.json`;
-    try {
-      const transcriptData = await s3
-        .getObject({
-          Bucket: bucketName,
-          Key: transcriptKey,
-        })
-        .promise();
-      transcriptText = JSON.parse(transcriptData.Body.toString()).results.transcripts[0].transcript;
-    } catch (s3Error) {
-      console.error(`Error fetching transcript from S3 for ${transcriptKey}:`, s3Error);
-      throw new Error('Failed to fetch transcript from S3');
-    }
-  }
-
-  // Cập nhật DynamoDB
-  const updateParams = {
-    TableName: tableName,
-    Key: { messageId },
-    UpdateExpression: 'SET #metadata.transcribeStatus = :status' + (transcriptText ? ', #metadata.transcript = :transcript' : ''),
-    ExpressionAttributeNames: { '#metadata': 'metadata' },
-    ExpressionAttributeValues: {
-      ':status': status,
-      ...(transcriptText && { ':transcript': transcriptText }),
-    },
-    ReturnValues: 'ALL_NEW',
-  };
-
-  const updatedMessage = await dynamoDB.update(updateParams).promise();
-
-  // Phát sự kiện socket
-  if (status === 'COMPLETED') {
-    const messageData = {
-      messageId,
-      transcript: transcriptText,
-      transcribeStatus: 'COMPLETED',
-    };
-    ioInstance.to(senderId).emit('transcribeCompleted', messageData);
-    ioInstance.to(receiverId).emit('transcribeCompleted', messageData);
-  } else if (status === 'FAILED') {
-    ioInstance.to(senderId).emit('transcribeFailed', { messageId, error: 'Transcription failed' });
-    ioInstance.to(receiverId).emit('transcribeFailed', { messageId, error: 'Transcription failed' });
-  }
-
-  return status;
-};
-
 module.exports = {
   initializeSocket,
-  io: () => ioInstance,
-  transcribeQueue: () => transcribeQueue,
-  updateTranscribeStatus,
+  io: () => {
+    if (!ioInstance) throw new Error('Socket.IO chưa được khởi tạo');
+    return ioInstance;
+  },
+  transcribeQueue: () => {
+    if (!transcribeQueue) throw new Error('Transcribe queue chưa được khởi tạo');
+    return transcribeQueue;
+  },
 };

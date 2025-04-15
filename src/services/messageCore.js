@@ -1,11 +1,25 @@
-const { dynamoDB, s3, transcribe } = require('../config/aws.config');
+const { dynamoDB, s3 } = require('../config/aws.config');
 const { v4: uuidv4 } = require('uuid');
 const sharp = require('sharp');
+const { transcribeQueue } = require('../socket');
 
 const sendMessageCore = async (message, tableName, bucketName) => {
   const {
-    type, content, file, fileName, mimeType, metadata, mediaUrl,
-    isAnonymous, isSecret, quality, replyToMessageId, expiresAt, senderId, receiverId, ownerId
+    type,
+    content,
+    file,
+    fileName,
+    mimeType,
+    metadata,
+    mediaUrl,
+    isAnonymous,
+    isSecret,
+    quality,
+    replyToMessageId,
+    expiresAt,
+    senderId,
+    receiverId,
+    ownerId,
   } = message;
 
   console.log('Core - type:', type);
@@ -59,6 +73,12 @@ const sendMessageCore = async (message, tableName, bucketName) => {
 
   validateInput();
 
+  if (tableName === 'Messages') {
+    if (!senderId || !receiverId ) {
+      throw new Error('senderId hoặc receiverId không hợp lệ!');
+    }
+  }
+
   const mimeTypeMap = {
     'image/jpeg': { type: 'image', folder: 'images', ext: 'jpg', maxSize: 10 * 1024 * 1024 },
     'image/png': { type: ['image', 'sticker'], folder: 'images', ext: 'png', maxSize: 10 * 1024 * 1024 },
@@ -92,6 +112,7 @@ const sendMessageCore = async (message, tableName, bucketName) => {
     if (type === 'image' && quality === 'compressed') {
       processedFile = await sharp(file).jpeg({ quality: 80 }).toBuffer();
     }
+
     const messageId = message.messageId || uuidv4();
     s3Key = `${mimeInfo.folder}/${messageId}.${mimeInfo.ext}`;
     try {
@@ -111,6 +132,10 @@ const sendMessageCore = async (message, tableName, bucketName) => {
 
   let messageToSave = {};
   const messageId = message.messageId || uuidv4();
+  const parsedExpiresAt = expiresAt ? new Date(expiresAt) : null;
+  if (expiresAt && isNaN(parsedExpiresAt)) {
+    throw new Error('expiresAt không đúng định dạng ISO!');
+  }
 
   if (tableName === 'Messages') {
     messageToSave = {
@@ -128,10 +153,10 @@ const sendMessageCore = async (message, tableName, bucketName) => {
       isSecret,
       quality,
       replyToMessageId: replyToMessageId || null,
-      isRecalled: false,
       isPinned: false,
+      status: senderId === receiverId ? 'sent' : 'sending',
       timestamp: new Date().toISOString(),
-      expiresAt,
+      expiresAt: expiresAt ? parsedExpiresAt.toISOString() : null,
     };
   } else if (tableName === 'GroupMessages') {
     messageToSave = {
@@ -148,32 +173,35 @@ const sendMessageCore = async (message, tableName, bucketName) => {
       isSecret,
       quality,
       replyToMessageId: replyToMessageId || null,
-      isRecalled: false,
       isPinned: false,
+      status: 'sending',
       timestamp: new Date().toISOString(),
-      expiresAt,
+      expiresAt: expiresAt ? parsedExpiresAt.toISOString() : null,
     };
   }
 
   if (type === 'voice' && metadata?.transcribe) {
     const transcribeJobName = `voice-${messageId}-${ownerId}`;
+    messageToSave.metadata = {
+      ...messageToSave.metadata,
+      transcript: `s3://${bucketName}/${transcribeJobName}.json`,
+      transcribeStatus: 'QUEUED',
+    };
     try {
-      await transcribe
-        .startTranscriptionJob({
-          LanguageCode: 'vi-VN',
-          Media: { MediaFileUri: finalMediaUrl },
-          OutputBucketName: bucketName,
-          TranscriptionJobName: transcribeJobName,
-        })
-        .promise();
-      messageToSave.metadata = {
-        ...messageToSave.metadata,
-        transcript: `s3://${bucketName}/${transcribeJobName}.json`,
-        transcribeStatus: 'IN_PROGRESS',
-      };
-    } catch (transcribeError) {
-      console.error('Lỗi khi tạo job transcribe:', transcribeError);
-      throw new Error(`Lỗi khi tạo job transcribe: ${transcribeError.message}`);
+      await transcribeQueue().add(
+        {
+          messageId,
+          ownerId,
+          tableName,
+          bucketName,
+          mediaUrl: finalMediaUrl,
+          transcribeJobName,
+        },
+        { attempts: 5, backoff: { type: 'exponential', delay: 5000 } }
+      );
+    } catch (queueError) {
+      console.error('Lỗi khi thêm job vào hàng đợi:', queueError);
+      throw new Error(`Lỗi khi thêm job phiên âm vào hàng đợi: ${queueError.message}`);
     }
   }
 

@@ -1,4 +1,7 @@
 const { dynamoDB } = require('../config/aws.config');
+const conversation = require('./conversation.service');
+const {redisClient} = require('../config/redis')
+const MessageService = require('./message.service');
 const {checkBlockStatus} = require('./message.service')
     const sendFriendRequest =  async (senderId, receiverId) => {
     if (senderId === receiverId) {
@@ -298,6 +301,34 @@ const {checkBlockStatus} = require('./message.service')
           }).promise();
           return !!result.Item;
     }
+    const getUserName = async (currentUserId, targetUserId) => {
+        console.log('Lấy tên người dùng:', { currentUserId, targetUserId });
+      
+        const user = await dynamoDB.get({
+          TableName: 'Users',
+          Key: { userId: targetUserId },
+        }).promise();
+      
+        if (!user.Item) {
+          throw new Error('Người dùng không tồn tại!');
+        }
+      
+        const nickname = await getConversationNickname(currentUserId, targetUserId);
+        const name = nickname || user.Item.name || targetUserId;
+      
+        // Ghi log nếu fallback về userId
+        if (name === targetUserId) {
+          console.warn(`Không tìm thấy nickname hoặc name cho userId: ${targetUserId}, fallback về userId`);
+        }
+      
+        return {
+          success: true,
+          name,
+          phoneNumber: user.Item.phoneNumber || null,
+        };
+      
+    };
+
     // Lấy thông tin người dùng, ẩn trạng thái nếu cần
     const getUserProfile = async (currentUserId, targetUserId) =>{
     const user = await dynamoDB.get({
@@ -364,23 +395,151 @@ const {checkBlockStatus} = require('./message.service')
         const mutualFriends = userFriends.filter(f => targetFriends.includes(f));
         return mutualFriends;
     }
+
+    // Hàm đặt tên gợi nhớ
+const setConversationNickname = async (userId, targetUserId, nickname) => {
+    await redisClient.set(`nickname:${userId}:${targetUserId}`, nickname);
+    return { success: true, message: 'Đã đặt tên gợi nhớ!' };
+  };
+  
+  // Hàm lấy tên gợi nhớ
+  const getConversationNickname = async (userId, targetUserId) => {
+    return await redisClient.get(`nickname:${userId}:${targetUserId}`);
+  };
+
+  const searchUserByPhoneNumber = async (phoneNumber) => {
+    try {
+      const params = {
+        TableName: 'Users',
+        IndexName: 'PhoneNumberIndex',
+        KeyConditionExpression: 'phoneNumber = :phoneNumber',
+        ExpressionAttributeValues: {
+          ':phoneNumber': phoneNumber,
+        },
+      };
+  
+      const result = await dynamoDB.query(params).promise();
+      if (!result.Items || result.Items.length === 0) {
+        return {
+          success: false,
+          error: 'Không tìm thấy người dùng với số điện thoại này',
+        };
+      }
+  
+      const user = result.Items[0];
+      return {
+        success: true,
+        data: {
+          userId: user.userId,
+          name: user.name || user.userId,
+          phoneNumber: user.phoneNumber,
+        },
+      };
+    } catch (error) {
+      console.error('Lỗi trong searchUserByPhoneNumber:', error);
+      return {
+        success: false,
+        error: error.message || 'Lỗi khi tìm kiếm theo số điện thoại',
+      };
+    }
+  };
+
+  const searchUsersByName = async (currentUserId, name) => {
+    try {
+      if (!name || name.length < 2) {
+        return {
+          success: false,
+          error: 'Tên tìm kiếm phải có ít nhất 2 ký tự',
+        };
+      }
+  
+      const normalizedName = name.toLowerCase().trim();
+  
+      const friendsResult = await dynamoDB.query({
+        TableName: 'Friends',
+        KeyConditionExpression: 'userId = :userId',
+        ExpressionAttributeValues: {
+          ':userId': currentUserId,
+        },
+      }).promise();
+  
+      const friendIds = friendsResult.Items?.map(item => item.friendId) || [];
+  
+      const conversationResult = await MessageService.getConversationSummary(currentUserId, { minimal: true });
+      const conversationUserIds = conversationResult.success
+        ? conversationResult.data.conversations.map(conv => conv.userId)
+        : [];
+  
+      const uniqueUserIds = [...new Set([...friendIds, ...conversationUserIds])];
+  
+      const users = [];
+      for (const userId of uniqueUserIds) {
+        try {
+          const userResult = await dynamoDB.get({
+            TableName: 'Users',
+            Key: { userId },
+          }).promise();
+  
+          if (!userResult.Item) continue;
+  
+          const userName = userResult.Item.name?.toLowerCase() || '';
+          if (!userName.includes(normalizedName)) continue;
+  
+          const isFriend = friendIds.includes(userId);
+          const hasConversation = conversationUserIds.includes(userId);
+  
+          const nickname = await getConversationNickname(currentUserId, userId);
+          const displayName = nickname || userResult.Item.name || userId;
+  
+          users.push({
+            userId,
+            name: userResult.Item.name || userId,
+            phoneNumber: userResult.Item.phoneNumber || null,
+            displayName,
+            isFriend,
+            hasConversation,
+          });
+        } catch (error) {
+          console.error(`Lỗi khi lấy thông tin người dùng ${userId}:`, error);
+          continue;
+        }
+      }
+  
+      return {
+        success: true,
+        data: users,
+      };
+    } catch (error) {
+      console.error('Lỗi trong searchUsersByName:', error);
+      return {
+        success: false,
+        error: error.message || 'Lỗi khi tìm kiếm theo tên',
+      };
+    }
+  };
+  
 module.exports = {
-        sendFriendRequest,
-        acceptFriendRequest,
-        getReceivedFriendRequests,
-        getSentFriendRequests,
-        getFriends,
-        rejectFriendRequest,
-        cancelFriendRequest,
-        blockUser,
-        getBlockedUsers,
-        unblockUser,
-        removeFriend,
-        getFriendSuggestions,
-        getUserStatus,
-        getUserProfile,
-        markFavorite,
-        unmarkFavorite,
-        getFavoriteFriends,
-        getMutualFriends,
+    sendFriendRequest,
+    acceptFriendRequest,
+    getReceivedFriendRequests,
+    getSentFriendRequests,
+    getFriends,
+    rejectFriendRequest,
+    cancelFriendRequest,
+    blockUser,
+    getBlockedUsers,
+    unblockUser,
+    removeFriend,
+    getFriendSuggestions,
+    getUserStatus,
+    getUserProfile,
+    markFavorite,
+    unmarkFavorite,
+    getFavoriteFriends,
+    getMutualFriends,
+    getUserName,
+    setConversationNickname,
+    getConversationNickname,
+    searchUserByPhoneNumber,
+    searchUsersByName,
 }

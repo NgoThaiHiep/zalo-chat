@@ -335,5 +335,4 @@ module.exports = {
   updateRestrictStrangerMessagesController,
   updateReadReceiptsSettingController,
   getUserActivityStatusController,
-
 };

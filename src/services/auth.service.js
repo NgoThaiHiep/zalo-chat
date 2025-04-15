@@ -6,7 +6,7 @@ const { v4: uuidv4 } = require('uuid');
 const { verifyOTP, deleteOTP, getUserByPhoneNumber } = require('./otp.services');
 const { io } = require('../socket');
 require('dotenv').config();
-const {normalizePhoneNumber} = require('./utils')
+const {normalizePhoneNumber} = require('../untils/utils')
 
 
 // Kiểm tra người dùng online/offline
@@ -410,6 +410,13 @@ const getOwnProfile = async (userId) => {
         throw new Error(error.message || 'Lỗi khi lấy thông tin profile!');
     }
 };
+const verifyToken = async (token) => {
+  try {
+    return jwt.verify(token, process.env.JWT_SECRET);
+  } catch (error) {
+    throw new Error('Invalid token');
+  }
+};
 module.exports = { 
   createUser, 
   loginUser, 
@@ -423,4 +430,5 @@ module.exports = {
   updateReadReceiptsSetting,
   isUserOnline,
   getUserActivityStatus,
+  verifyToken,
 };
