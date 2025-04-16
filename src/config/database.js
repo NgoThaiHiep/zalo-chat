@@ -556,53 +556,9 @@ const initializeDatabase = async () => {
     await createTableIfNotExists('ReminderLogs', reminderLogsTableParams);
     await updateTableWithNewGSI('ReminderLogs', reminderLogsTableParams);
     await enableTTL('ReminderLogs', 'ttl');
-    // 12. Tạo bảng MutedConversations
-    const MutedConversationsTableParams = {
-      TableName: 'MutedConversations',
-      AttributeDefinitions: [
-        { AttributeName: 'userId', AttributeType: 'S' },
-        { AttributeName: 'mutedUserId', AttributeType: 'S' },
-      ],
-      KeySchema: [
-        { AttributeName: 'userId', KeyType: 'HASH' },
-        { AttributeName: 'mutedUserId', KeyType: 'RANGE' },
-      ],
-      BillingMode: 'PAY_PER_REQUEST',
-    };
-    await createTableIfNotExists('MutedConversations', MutedConversationsTableParams);
-    await updateTableWithNewGSI('MutedConversations', MutedConversationsTableParams);
+   
     
-    // 13. Tạo bảng HiddenConversations
-    const HiddenConversationsTableParams = {
-      TableName: 'HiddenConversations',
-      AttributeDefinitions: [
-        { AttributeName: 'userId', AttributeType: 'S' },
-        { AttributeName: 'hiddenUserId', AttributeType: 'S' },
-      ],
-      KeySchema: [
-        { AttributeName: 'userId', KeyType: 'HASH' },
-        { AttributeName: 'hiddenUserId', KeyType: 'RANGE' },
-      ],
-      BillingMode: 'PAY_PER_REQUEST',
-    };
-    await createTableIfNotExists('HiddenConversations', HiddenConversationsTableParams);
-    await updateTableWithNewGSI('HiddenConversations', HiddenConversationsTableParams);
-    //14. Tạo bảng PinnedConversations
-    const PinnedConversationsTableParams = {
-      TableName: 'PinnedConversations',
-      AttributeDefinitions: [
-        { AttributeName: 'userId', AttributeType: 'S' },
-        { AttributeName: 'pinnedUserId', AttributeType: 'S' },
-      ],
-      KeySchema: [
-        { AttributeName: 'userId', KeyType: 'HASH' },
-        { AttributeName: 'pinnedUserId', KeyType: 'RANGE' },
-      ],
-      BillingMode: 'PAY_PER_REQUEST',
-    };
-    await createTableIfNotExists('PinnedConversations', PinnedConversationsTableParams);
-    await updateTableWithNewGSI('PinnedConversations', PinnedConversationsTableParams);
-    
+  
     //15. Tạo bảng nicknames
     const NicknamesTableParams = {
       TableName: 'Nicknames',
