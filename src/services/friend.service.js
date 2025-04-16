@@ -407,116 +407,9 @@ const setConversationNickname = async (userId, targetUserId, nickname) => {
     return await redisClient.get(`nickname:${userId}:${targetUserId}`);
   };
 
-  const searchUserByPhoneNumber = async (phoneNumber) => {
-    try {
-      const params = {
-        TableName: 'Users',
-        IndexName: 'PhoneNumberIndex',
-        KeyConditionExpression: 'phoneNumber = :phoneNumber',
-        ExpressionAttributeValues: {
-          ':phoneNumber': phoneNumber,
-        },
-      };
-  
-      const result = await dynamoDB.query(params).promise();
-      if (!result.Items || result.Items.length === 0) {
-        return {
-          success: false,
-          error: 'Không tìm thấy người dùng với số điện thoại này',
-        };
-      }
-  
-      const user = result.Items[0];
-      return {
-        success: true,
-        data: {
-          userId: user.userId,
-          name: user.name || user.userId,
-          phoneNumber: user.phoneNumber,
-        },
-      };
-    } catch (error) {
-      console.error('Lỗi trong searchUserByPhoneNumber:', error);
-      return {
-        success: false,
-        error: error.message || 'Lỗi khi tìm kiếm theo số điện thoại',
-      };
-    }
-  };
 
-  const searchUsersByName = async (currentUserId, name) => {
-    try {
-      if (!name || name.length < 2) {
-        return {
-          success: false,
-          error: 'Tên tìm kiếm phải có ít nhất 2 ký tự',
-        };
-      }
-  
-      const normalizedName = name.toLowerCase().trim();
-  
-      const friendsResult = await dynamoDB.query({
-        TableName: 'Friends',
-        KeyConditionExpression: 'userId = :userId',
-        ExpressionAttributeValues: {
-          ':userId': currentUserId,
-        },
-      }).promise();
-  
-      const friendIds = friendsResult.Items?.map(item => item.friendId) || [];
-  
-      const conversationResult = await MessageService.getConversationSummary(currentUserId, { minimal: true });
-      const conversationUserIds = conversationResult.success
-        ? conversationResult.data.conversations.map(conv => conv.userId)
-        : [];
-  
-      const uniqueUserIds = [...new Set([...friendIds, ...conversationUserIds])];
-  
-      const users = [];
-      for (const userId of uniqueUserIds) {
-        try {
-          const userResult = await dynamoDB.get({
-            TableName: 'Users',
-            Key: { userId },
-          }).promise();
-  
-          if (!userResult.Item) continue;
-  
-          const userName = userResult.Item.name?.toLowerCase() || '';
-          if (!userName.includes(normalizedName)) continue;
-  
-          const isFriend = friendIds.includes(userId);
-          const hasConversation = conversationUserIds.includes(userId);
-  
-          const nickname = await getConversationNickname(currentUserId, userId);
-          const displayName = nickname || userResult.Item.name || userId;
-  
-          users.push({
-            userId,
-            name: userResult.Item.name || userId,
-            phoneNumber: userResult.Item.phoneNumber || null,
-            displayName,
-            isFriend,
-            hasConversation,
-          });
-        } catch (error) {
-          console.error(`Lỗi khi lấy thông tin người dùng ${userId}:`, error);
-          continue;
-        }
-      }
-  
-      return {
-        success: true,
-        data: users,
-      };
-    } catch (error) {
-      console.error('Lỗi trong searchUsersByName:', error);
-      return {
-        success: false,
-        error: error.message || 'Lỗi khi tìm kiếm theo tên',
-      };
-    }
-  };
+
+
   
 module.exports = {
     sendFriendRequest,
@@ -540,6 +433,6 @@ module.exports = {
     getUserName,
     setConversationNickname,
     getConversationNickname,
-    searchUserByPhoneNumber,
-    searchUsersByName,
+    
+  
 }

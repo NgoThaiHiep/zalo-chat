@@ -2,37 +2,33 @@ const { Server } = require('socket.io');
 const { createAdapter } = require('@socket.io/redis-adapter');
 const Queue = require('bull');
 const { redisClient } = require('./config/redis');
-const { transcribe, s3, dynamoDB } = require('./config/aws.config');
 const { corsOptions } = require('./config/cors');
 const logger = require('./config/logger');
 const { processTranscribeJob } = require('./services/transcribe.service');
-const { verifyToken } = require('./services/auth.service'); // Giả sử có auth.service.js
+const { verifyToken } = require('./services/auth.service');
 
 let ioInstance;
 let transcribeQueue;
+let reminderQueue;
 
 const initializeSocket = (server) => {
   ioInstance = new Server(server, {
-    cors: corsOptions, // Sử dụng cấu hình CORS chung
+    cors: corsOptions,
     adapter: createAdapter(redisClient, redisClient.duplicate()),
   });
 
   logger.info('[SOCKET] Socket.IO server initialized');
 
-  // Middleware xác thực Socket.IO
+  // Global authentication middleware
   ioInstance.use(async (socket, next) => {
     try {
-      // Cho phép sự kiện 'join' xử lý xác thực riêng
-      if (socket.handshake.query.event === 'join') {
-        return next();
-      }
-      // Yêu cầu token cho các sự kiện khác
       const token = socket.handshake.auth.token;
-      if (!token) {
-        throw new Error('Token không được cung cấp');
+      if (!token || typeof token !== 'string') {
+        throw new Error('Token không được cung cấp hoặc không hợp lệ');
       }
       const { id } = await verifyToken(token);
-      socket.userId = id; // Lưu userId vào socket
+      socket.userId = id;
+      socket.join(id); // Join user-specific room
       next();
     } catch (error) {
       logger.error('[SOCKET] Socket authentication error', { error: error.message });
@@ -40,16 +36,19 @@ const initializeSocket = (server) => {
     }
   });
 
-  // Khởi tạo queue xử lý transcription
+  // Initialize queues
   transcribeQueue = new Queue('transcribe-queue', {
     redis: { client: redisClient },
   });
 
-  // Xử lý job trong queue
+  reminderQueue = new Queue('reminder-queue', {
+    redis: { client: redisClient },
+  });
+
+  // Process transcription jobs
   transcribeQueue.process(async (job) => {
     const { messageId, senderId, receiverId, tableName, bucketName } = job.data;
     logger.info('[SOCKET] Processing transcribe job', { jobId: job.id, messageId });
-
     await processTranscribeJob({
       messageId,
       senderId,
@@ -58,11 +57,9 @@ const initializeSocket = (server) => {
       bucketName,
       io: ioInstance,
     });
-
-    await job.remove(); // Xóa job sau khi hoàn thành
+    await job.remove();
   });
 
-  // Xử lý sự kiện queue
   transcribeQueue.on('failed', (job, err) => {
     logger.error('[SOCKET] Transcribe job failed', { jobId: job.id, error: err.message });
   });
@@ -83,5 +80,9 @@ module.exports = {
   transcribeQueue: () => {
     if (!transcribeQueue) throw new Error('Transcribe queue chưa được khởi tạo');
     return transcribeQueue;
+  },
+  reminderQueue: () => {
+    if (!reminderQueue) throw new Error('Reminder queue chưa được khởi tạo');
+    return reminderQueue;
   },
 };

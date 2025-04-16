@@ -311,9 +311,10 @@ const initializeDatabase = async () => {
           Projection: { ProjectionType: 'ALL' },
         },
         {
-          IndexName: 'ReminderIndex',
+          IndexName: 'ReceiverStatusIndex',
           KeySchema: [
-            { AttributeName: 'reminder', KeyType: 'HASH' },
+            { AttributeName: 'receiverId', KeyType: 'HASH' },
+            { AttributeName: 'status', KeyType: 'RANGE' },
           ],
           Projection: { ProjectionType: 'ALL' },
         },
@@ -535,10 +536,11 @@ const initializeDatabase = async () => {
         {
           IndexName: 'ReminderIndex',
           KeySchema: [
-            { AttributeName: 'senderId', KeyType: 'HASH' },
-            { AttributeName: 'receiverId', KeyType: 'RANGE' },
+            { AttributeName: 'ownerId', KeyType: 'HASH' },
+            { AttributeName: 'reminder', KeyType: 'RANGE' },
           ],
           Projection: { ProjectionType: 'ALL' },
+
         },
         {
           IndexName: 'UserIdTimestampIndex',

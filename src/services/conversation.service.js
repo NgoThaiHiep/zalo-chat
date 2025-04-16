@@ -4,7 +4,7 @@ const { redisClient } = require('../config/redis');
 const bcrypt = require('bcrypt');
 const logger = require('../config/logger');
 const { v4: uuidv4 } = require('uuid');
-const { AppError } = require('../untils/errorHandler');
+const { AppError } = require('../utils/errorHandler');
 
 // Hàm hỗ trợ kiểm tra hội thoại tồn tại
 const checkConversationExists = async (userId, targetUserId) => {

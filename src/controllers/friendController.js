@@ -141,17 +141,7 @@ const sendFriendRequestController =  async (req, res) => {
         res.status(500).json({ message: 'Error removing friend', error: error.message });
         }
     }
-    //Tìm kiếm người dùng (bạn bè hoặc người lạ)
-    const searchUsersController = async (req, res) => {
-        const { phoneNumber } = req.query;
-        
-        try {
-          const users = await getUserByPhoneNumber(phoneNumber);
-          res.status(200).json(users);
-        } catch (error) {
-          res.status(500).json({ message: 'Không tìm thấy người dùng', error: error.message });
-        }
-    }
+   
 
     // Gợi ý kết bạn
     const getFriendSuggestionsController = async (req, res)=> {
@@ -293,7 +283,7 @@ module.exports = {
     getBlockedUsersController,
     unblockUserController,
     removeFriendController,
-    searchUsersController,
+    
     getFriendSuggestionsController,
     getUserStatusController,
 

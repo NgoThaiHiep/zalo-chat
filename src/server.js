@@ -1,40 +1,50 @@
 const http = require('http');
 const app = require('./app');
 const { initializeDatabase } = require('./config/database');
+const logger = require('./config/logger');
 const { initializeSocket } = require('./socket');
-const { initializeChatSocket,setupReminderCheck } = require('./sockets/chat.socket');
+const initializeChatSocket = require('./sockets/chat.socket');
 const { initializeFriendSocket } = require('./sockets/friend.socket');
 const { initializeConversationSocket } = require('./sockets/conversation.socket');
-const logger = require('./config/logger');
+const initializeSearchSocket = require('./sockets/search.socket');
 
 const server = http.createServer(app);
 const io = initializeSocket(server);
 
-io.on('connection', (socket) => {
-  logger.info('[SERVER] New socket connection', { socketId: socket.id });
-  initializeChatSocket(socket);
-  initializeFriendSocket(socket);
-  initializeConversationSocket(socket);
-});
+// Initialize socket namespaces
+const chatIo = io.of('/chat');
+const friendIo = io.of('/friend');
+const conversationIo = io.of('/conversation');
+const searchIo = io.of('/search');
 
-// Thiết lập kiểm tra nhắc nhở (nếu cần)
-setupReminderCheck();
+// Ensure socket initialization completes before attaching handlers
+Promise.resolve()
+  .then(() => {
+    initializeChatSocket(chatIo);
+    initializeFriendSocket(friendIo);
+    initializeConversationSocket(conversationIo);
+    initializeSearchSocket(searchIo);
+    logger.info('[SERVER] All socket namespaces initialized');
+  })
+  .catch((error) => {
+    logger.error('[SERVER] Failed to initialize socket namespaces', { error: error.message });
+  });
 
-// Graceful shutdown
 const shutdown = async () => {
   logger.info('[SERVER] Initiating graceful shutdown');
   try {
-    await new Promise((resolve) => server.close(resolve));
+    await new Promise((resolve, reject) => {
+      server.close((err) => (err ? reject(err) : resolve()));
+    });
     io.close();
     logger.info('[SERVER] Server and Socket.IO closed');
     process.exit(0);
   } catch (error) {
-    logger.error('[SERVER] Error during shutdown', { error: error.message });
+    logger.error('[SERVER] Shutdown error', { error: error.message });
     process.exit(1);
   }
 };
 
-// Xử lý tín hiệu dừng server
 process.on('SIGTERM', shutdown);
 process.on('SIGINT', shutdown);
 
@@ -42,8 +52,12 @@ const startServer = async () => {
   try {
     await initializeDatabase();
     const PORT = process.env.PORT || 3000;
-    server.listen(PORT, () => {
-      logger.info(`[SERVER] Server running on port ${PORT}`);
+    await new Promise((resolve, reject) => {
+      server.listen(PORT, (err) => {
+        if (err) return reject(err);
+        logger.info(`[SERVER] Server running on port ${PORT}`);
+        resolve();
+      });
     });
   } catch (error) {
     logger.error('[SERVER] Failed to start server', { error: error.message });

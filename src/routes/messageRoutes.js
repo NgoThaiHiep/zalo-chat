@@ -23,7 +23,7 @@ const {
 
 
   checkBlockStatusController,
-  searchMessagesBetweenUsers,
+ 
   getConversationSummaryController
 } = require('../controllers/messageController');
 const {authMiddleware ,checkOwnership} = require('../middlewares/authMiddleware');
@@ -62,7 +62,7 @@ router.patch('/:messageId/restore', authMiddleware, restoreMessageController) ; 
 router.post('/retry',authMiddleware, retryMessageController); // Thử gửi lại tin nhắn
 router.patch('/seen/:messageId', authMiddleware,markMessageAsSeenController); // Đánh dấu tin nhắn đã xem
 router.get('/check-block-status', authMiddleware, checkBlockStatusController); // Kiểm tra trạng thái chặn
-router.get('/search', authMiddleware, searchMessagesBetweenUsers); // Tìm kiếm tin nhắn
+
 
 
 module.exports = router;

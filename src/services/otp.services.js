@@ -1,6 +1,6 @@
 const {redisClient, redisSubscriber} = require("../config/redis");
 const {dynamoDB,s3, sns } = require("../config/aws.config");
-const {normalizePhoneNumber} = require('../untils/utils')
+const {normalizePhoneNumber} = require('../utils/utils')
 
 
 

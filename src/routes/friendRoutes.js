@@ -27,7 +27,7 @@ router.get('/blocked', FriendController.getBlockedUsersController);       // L�
 router.post('/unblock',checkOwnership, FriendController.unblockUserController);          // Bỏ chặn người dùng
 
 // Nhóm: Tìm kiếm và hồ sơ
-router.get('/search', FriendController.searchUsersController);             // Tìm kiếm người dùng
+// router.get('/search', FriendController.searchUsersController);             // Tìm kiếm người dùng
 router.get('/suggestions', FriendController.getFriendSuggestionsController); //Gợi ý kết bạn
 router.get('/status/:targetUserId', FriendController.getUserStatusController); //Kiểm tra trạng thái bạn bè/người lạ
 router.get('/profile/:targetUserId', FriendController.getUserProfileController); // Lấy thông tin người dùng

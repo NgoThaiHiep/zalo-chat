@@ -411,48 +411,7 @@ const checkBlockStatusController = async (req, res) => {
   }
 };
 
-const searchMessagesBetweenUsers = async (userId, otherUserId, keyword) => {
-  try {
-    // Chuẩn hóa từ khóa: loại bỏ khoảng trắng thừa, chuyển về chữ thường
-    const normalizedKeyword = keyword.toLowerCase().trim();
 
-    // Truy vấn tin nhắn giữa hai người dùng
-    const params = {
-      TableName: 'Messages',
-      FilterExpression:
-        '(senderId = :userId AND receiverId = :otherUserId) OR (senderId = :otherUserId AND receiverId = :userId)',
-      ExpressionAttributeValues: {
-        ':userId': userId,
-        ':otherUserId': otherUserId,
-      },
-    };
-
-    const result = await dynamoDB.scan(params).promise();
-    if (!result.Items || result.Items.length === 0) {
-      return { success: true, data: [] };
-    }
-
-    // Lọc tin nhắn theo từ khóa (chỉ áp dụng cho type = 'text')
-    const matchedMessages = result.Items.filter((msg) => {
-      if (msg.type !== 'text' || !msg.content) return false;
-      return msg.content.toLowerCase().includes(normalizedKeyword);
-    });
-
-    // Sắp xếp theo timestamp (mới nhất trước)
-    matchedMessages.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-
-    return {
-      success: true,
-      data: matchedMessages,
-    };
-  } catch (error) {
-    console.error('Lỗi trong searchMessagesBetweenUsers:', error);
-    return {
-      success: false,
-      error: error.message || 'Lỗi khi tìm kiếm tin nhắn',
-    };
-  }
-};
 module.exports = {
   sendMessageController: [upload.single('file'), sendMessageController],
   getMessagesBetweenController,
@@ -472,5 +431,5 @@ module.exports = {
   retryMessageController,
   markMessageAsSeenController,
   checkBlockStatusController,
-  searchMessagesBetweenUsers,
+
 };

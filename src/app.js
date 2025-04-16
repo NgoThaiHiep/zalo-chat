@@ -11,7 +11,7 @@ const messageRoutes = require('./routes/messageRoutes');
 const groupRoutes = require('./routes/groupRoutes');
 const friendRoutes = require('./routes/friendRoutes')
 const conversationRoutes = require('./routes/conversationRoutes');
-
+const searchRoutes = require('./routes/searchRouters'); // Tìm kiếm người dùng và tin nhắn
 const app = express();
 
 // Middleware
@@ -28,6 +28,7 @@ app.use(`${API_PREFIX}/messages`, messageRoutes); // Quản lý tin nhắn
 app.use(`${API_PREFIX}/groups`, groupRoutes); // Quản lý nhóm
 app.use(`${API_PREFIX}/friends`, friendRoutes); // Quản lý bạn bè
 app.use(`${API_PREFIX}/conversations`, conversationRoutes); // Quản lý hội thoại
+app.use(`${API_PREFIX}/searchs`, searchRoutes); // Tìm kiếm người dùng và tin nhắn
 
 // Xử lý lỗi toàn cục
 app.use(errorHandler);

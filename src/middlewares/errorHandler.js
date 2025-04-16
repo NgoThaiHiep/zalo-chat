@@ -1,4 +1,4 @@
-const { AppError } = require('../untils/errorHandler')
+const { AppError } = require('../utils/errorHandler')
 
 const errorHandler = (err, req, res, next) => {
   console.error(`Error: ${err.message}\nStack: ${err.stack}`);

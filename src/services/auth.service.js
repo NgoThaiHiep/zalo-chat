@@ -6,15 +6,29 @@ const { v4: uuidv4 } = require('uuid');
 const { verifyOTP, deleteOTP, getUserByPhoneNumber } = require('./otp.services');
 const { io } = require('../socket');
 require('dotenv').config();
-const {normalizePhoneNumber} = require('../untils/utils')
+const {normalizePhoneNumber} = require('../utils/utils')
 
 
 // Kiểm tra người dùng online/offline
-const isUserOnline = (userId) => {
-  const sockets = io().sockets.sockets;
-  return Array.from(sockets.values()).some(socket => socket.userId === userId);
+const isUserOnline = async (userId) => {
+  try {
+    const status = await redisClient.get(`online:${userId}`);
+    return status === 'true';
+  } catch (error) {
+    logger.error('[isUserOnline] Error checking online status', { userId, error: error.message });
+    return false; // Mặc định offline nếu lỗi
+  }
 };
 
+// Cập nhật trạng thái khi kết nối/ngắt kết nối
+const updateUserOnlineStatus = async (userId, isOnline) => {
+  try {
+    await redisClient.set(`online:${userId}`, 'false', 'EX', 60);
+    logger.info(`[updateUserOnlineStatus] Updated status for ${userId}: ${isOnline}`);
+  } catch (error) {
+    logger.error('[updateUserOnlineStatus] Error updating status', { userId, error: error.message });
+  }
+};
 
 // Lấy trạng thái hoạt động của người dùng
 const getUserActivityStatus = async (userId, requesterId) => {
@@ -410,11 +424,35 @@ const getOwnProfile = async (userId) => {
         throw new Error(error.message || 'Lỗi khi lấy thông tin profile!');
     }
 };
+
 const verifyToken = async (token) => {
   try {
     return jwt.verify(token, process.env.JWT_SECRET);
   } catch (error) {
     throw new Error('Invalid token');
+  }
+};
+
+const getActiveOwnerIds = async () => {
+  try {
+    const params = {
+      TableName: 'Users',
+      ProjectionExpression: 'userId, lastActive',
+    };
+    const { Items } = await dynamoDB.scan(params).promise();
+    const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    const userIds = Items
+      .filter(item => item.lastActive && item.lastActive >= oneDayAgo)
+      .map(item => item.userId);
+    logger.info(`Lấy danh sách ownerId active thành công`, { count: userIds.length });
+    return userIds;
+  } catch (error) {
+    logger.error(`Lỗi khi lấy danh sách ownerId`, {
+      error: error.message,
+      code: error.code,
+      requestId: error.requestId,
+    });
+    throw error;
   }
 };
 module.exports = { 
@@ -431,4 +469,6 @@ module.exports = {
   isUserOnline,
   getUserActivityStatus,
   verifyToken,
+  updateUserOnlineStatus,
+  getActiveOwnerIds,
 };

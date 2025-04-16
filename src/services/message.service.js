@@ -3,11 +3,11 @@ const { dynamoDB, s3 } = require('../config/aws.config');
 const { v4: uuidv4 } = require('uuid');
 const { sendMessageCore } = require('./messageCore');
 const { io, transcribeQueue } = require('../socket');
-const { isUserOnline } = require('./auth.service');
+const { isUserOnline ,getActiveOwnerIds} = require('./auth.service');
 const {getHiddenConversations,getMutedConversations,getPinnedConversations, createConversation,getAutoDeleteSetting}= require('./conversation.service');
 const FriendService = require('./friend.service');
 const logger = require('../config/logger');
-const { AppError } = require('../untils/errorHandler');
+const { AppError } = require('../utils/errorHandler');
 const { redisClient } = require('../config/redis');
 const bcrypt = require('bcrypt');
 
@@ -207,12 +207,16 @@ const createMessage = async (senderId, receiverId, messageData) => {
       ? MESSAGE_STATUSES.SENT
       : isRestricted
       ? MESSAGE_STATUSES.RESTRICTED
+      : receiverOnline
+      ? MESSAGE_STATUSES.DELIVERED
       : MESSAGE_STATUSES.SENT;
 
-    await updateMessageStatus(messageId, senderId, initialStatus);
-    if (receiverMessage) {
-      await updateMessageStatus(messageId, receiverId, initialStatus);
-    }
+    // Chỉ emit một lần sau khi lưu xong
+    await Promise.all([
+      updateMessageStatus(messageId, senderId, initialStatus),
+      receiverMessage && updateMessageStatus(messageId, receiverId, initialStatus),
+    ]);
+    
 
     // Xử lý transcription cho tin nhắn thoại
     if (messageData.type === 'voice' && messageData.metadata?.transcribe) {
@@ -1155,114 +1159,150 @@ const getRemindersBetweenUsers = async (userId, otherUserId) => {
 
 // Hàm kiểm tra và thông báo nhắc nhở
 const checkAndNotifyReminders = async () => {
-  const now = new Date();
-  const messages = await dynamoDB.query({
-    TableName: 'Messages',
-    IndexName: 'ReminderIndex',
-    KeyConditionExpression: 'reminder <= :now',
-    ExpressionAttributeValues: { ':now': now.toISOString() },
-  }).promise();
+  try {
+    const now = new Date();
+    const ownerIds = await getActiveOwnerIds(); // Sử dụng hàm có sẵn
 
-  for (const msg of messages.Items || []) {
-    const { repeatType, daysOfWeek, reminder } = msg;
-    let newReminder = null;
-
-    if (repeatType && repeatType !== 'none') {
-      const reminderDate = new Date(reminder);
-      switch (repeatType) {
-        case 'daily':
-          newReminder = new Date(reminderDate.setDate(reminderDate.getDate() + 1)).toISOString();
-          break;
-        case 'weekly':
-          newReminder = new Date(reminderDate.setDate(reminderDate.getDate() + 7)).toISOString();
-          break;
-        case 'multipleDaysWeekly':
-          const currentDay = now.getDay() || 7;
-          const nextDay = daysOfWeek.find(day => day > currentDay) || daysOfWeek[0];
-          const daysToAdd = nextDay > currentDay ? nextDay - currentDay : 7 - currentDay + nextDay;
-          newReminder = new Date(reminderDate.setDate(reminderDate.getDate() + daysToAdd)).toISOString();
-          break;
-        case 'monthly':
-          newReminder = new Date(reminderDate.setMonth(reminderDate.getMonth() + 1)).toISOString();
-          break;
-        case 'yearly':
-          newReminder = new Date(reminderDate.setFullYear(reminderDate.getFullYear() + 1)).toISOString();
-          break;
-      }
-    }
-
-    const ownerOnline = isUserOnline(msg.ownerId);
-    if (ownerOnline) {
-      io().to(msg.ownerId).emit('reminderTriggered', {
-        messageId: msg.messageId,
-        reminderContent: msg.reminderContent,
-      });
-    } else {
-      await dynamoDB.put({
-        TableName: 'Notifications',
-        Item: {
-          notificationId: uuidv4(),
-          userId: msg.ownerId,
-          type: 'reminder',
-          messageId: msg.messageId,
-          content: msg.reminderContent,
-          timestamp: now.toISOString(),
-        },
-      }).promise();
-    }
-
-    if (msg.reminderScope === 'both') {
-      const otherUserId = msg.senderId === msg.ownerId ? msg.receiverId : msg.senderId;
-      const otherOnline = isUserOnline(otherUserId);
-      if (otherOnline) {
-        io().to(otherUserId).emit('reminderTriggered', {
-          messageId: msg.messageId,
-          reminderContent: msg.reminderContent,
-        });
-      } else {
-        await dynamoDB.put({
-          TableName: 'Notifications',
-          Item: {
-            notificationId: uuidv4(),
-            userId: otherUserId,
-            type: 'reminder',
-            messageId: msg.messageId,
-            content: msg.reminderContent,
-            timestamp: now.toISOString(),
+    for (const ownerId of ownerIds) {
+      try {
+        const params = {
+          TableName: 'Messages',
+          IndexName: 'OwnerReminderIndex', // Sửa thành OwnerReminderIndex
+          KeyConditionExpression: 'ownerId = :ownerId AND reminder <= :now',
+          ExpressionAttributeValues: {
+            ':ownerId': ownerId,
+            ':now': now.toISOString(),
           },
-        }).promise();
+        };
+
+        const { Items: messages } = await dynamoDB.query(params).promise();
+
+        for (const msg of messages || []) {
+          try {
+            const { repeatType, daysOfWeek, reminder, reminderContent } = msg;
+            let newReminder = null;
+
+            if (repeatType && repeatType !== 'none') {
+              const reminderDate = new Date(reminder);
+              switch (repeatType) {
+                case 'daily':
+                  newReminder = new Date(reminderDate.setDate(reminderDate.getDate() + 1)).toISOString();
+                  break;
+                case 'weekly':
+                  newReminder = new Date(reminderDate.setDate(reminderDate.getDate() + 7)).toISOString();
+                  break;
+                case 'multipleDaysWeekly':
+                  const currentDay = now.getDay() || 7;
+                  const nextDay = daysOfWeek.find(day => day > currentDay) || daysOfWeek[0];
+                  const daysToAdd = nextDay > currentDay ? nextDay - currentDay : 7 - currentDay + nextDay;
+                  newReminder = new Date(reminderDate.setDate(reminderDate.getDate() + daysToAdd)).toISOString();
+                  break;
+                case 'monthly':
+                  newReminder = new Date(reminderDate.setMonth(reminderDate.getMonth() + 1)).toISOString();
+                  break;
+                case 'yearly':
+                  newReminder = new Date(reminderDate.setFullYear(reminderDate.getFullYear() + 1)).toISOString();
+                  break;
+                default:
+                  logger.warn(`Loại lặp lại không xác định: ${repeatType}`, { messageId: msg.messageId });
+              }
+            }
+
+            const ownerOnline = await isUserOnline(msg.ownerId);
+            if (ownerOnline) {
+              io().to(msg.ownerId).emit('reminderTriggered', {
+                messageId: msg.messageId,
+                reminderContent: reminderContent || `Nhắc nhở cho tin nhắn ${msg.messageId}`,
+              });
+            } else {
+              await dynamoDB.put({
+                TableName: 'Notifications',
+                Item: {
+                  notificationId: uuidv4(),
+                  userId: msg.ownerId,
+                  type: 'reminder',
+                  messageId: msg.messageId,
+                  content: reminderContent || `Nhắc nhở cho tin nhắn ${msg.messageId}`,
+                  timestamp: now.toISOString(),
+                },
+              }).promise();
+            }
+
+            if (msg.reminderScope === 'both') {
+              const otherUserId = msg.senderId === msg.ownerId ? msg.receiverId : msg.senderId;
+              const otherOnline = await isUserOnline(otherUserId);
+              if (otherOnline) {
+                io().to(otherUserId).emit('reminderTriggered', {
+                  messageId: msg.messageId,
+                  reminderContent: reminderContent || `Nhắc nhở cho tin nhắn ${msg.messageId}`,
+                });
+              } else {
+                await dynamoDB.put({
+                  TableName: 'Notifications',
+                  Item: {
+                    notificationId: uuidv4(),
+                    userId: otherUserId,
+                    type: 'reminder',
+                    messageId: msg.messageId,
+                    content: reminderContent || `Nhắc nhở cho tin nhắn ${msg.messageId}`,
+                    timestamp: now.toISOString(),
+                  },
+                }).promise();
+              }
+            }
+
+            if (newReminder) {
+              await dynamoDB.update({
+                TableName: 'Messages',
+                Key: { messageId: msg.messageId, ownerId: msg.ownerId },
+                UpdateExpression: 'SET reminder = :r',
+                ExpressionAttributeValues: { ':r': newReminder },
+              }).promise();
+            } else {
+              await dynamoDB.update({
+                TableName: 'Messages',
+                Key: { messageId: msg.messageId, ownerId: msg.ownerId },
+                UpdateExpression: 'REMOVE reminder, reminderScope, reminderContent, repeatType, daysOfWeek',
+              }).promise();
+            }
+
+            await dynamoDB.put({
+              TableName: 'ReminderLogs',
+              Item: {
+                logId: uuidv4(),
+                messageId: msg.messageId,
+                userId: msg.ownerId,
+                reminder,
+                reminderContent: reminderContent || `Nhắc nhở cho tin nhắn ${msg.messageId}`,
+                timestamp: now.toISOString(),
+              },
+            }).promise();
+          } catch (error) {
+            logger.error(`Lỗi khi xử lý nhắc nhở cho tin nhắn ${msg.messageId}`, {
+              ownerId: msg.ownerId,
+              error: error.message,
+            });
+            continue;
+          }
+        }
+      } catch (error) {
+        logger.error(`Lỗi khi truy vấn nhắc nhở cho owner ${ownerId}`, {
+          error: error.message,
+          code: error.code,
+          requestId: error.requestId,
+        });
+        continue;
       }
     }
-
-    if (newReminder) {
-      await dynamoDB.update({
-        TableName: 'Messages',
-        Key: { messageId: msg.messageId, ownerId: msg.ownerId },
-        UpdateExpression: 'SET reminder = :r',
-        ExpressionAttributeValues: { ':r': newReminder },
-      }).promise();
-    } else {
-      await dynamoDB.update({
-        TableName: 'Messages',
-        Key: { messageId: msg.messageId, ownerId: msg.ownerId },
-        UpdateExpression: 'REMOVE reminder, reminderScope, reminderContent, repeatType, daysOfWeek',
-      }).promise();
-    }
-
-    await dynamoDB.put({
-      TableName: 'ReminderLogs',
-      Item: {
-        logId: uuidv4(),
-        messageId: msg.messageId,
-        userId: msg.ownerId,
-        reminder: msg.reminder,
-        reminderContent: msg.reminderContent || `Nhắc nhở cho tin nhắn ${msg.messageId}`,
-        timestamp: now.toISOString(),
-      },
-    }).promise();
+  } catch (error) {
+    logger.error(`Lỗi trong checkAndNotifyReminders`, {
+      error: error.message,
+      code: error.code,
+      requestId: error.requestId,
+    });
+    throw error;
   }
 };
-
 // Hàm lấy lịch sử nhắc nhở
 const getReminderHistory = async (userId, otherUserId) => {
   logger.info('Getting reminder history between users:', { userId, otherUserId });
@@ -1768,56 +1808,7 @@ const checkBlockStatus = async (senderId, receiverId) => {
   if (isReceiverBlocked.Item) throw new AppError('Bạn đã chặn người này', 403);
 };
 
-// Hàm tìm kiếm tin nhắn
-const searchMessagesBetweenUsers = async (userId, otherUserId, keyword) => {
-  logger.info('Searching messages:', { userId, otherUserId, keyword });
 
-  if (!keyword || typeof keyword !== 'string' || keyword.trim().length === 0) {
-    throw new AppError('Từ khóa tìm kiếm không hợp lệ!', 400);
-  }
-
-  try {
-    const normalizedKeyword = keyword.toLowerCase().trim();
-
-    const [senderResult, receiverResult] = await Promise.all([
-      dynamoDB.query({
-        TableName: 'Messages',
-        IndexName: 'SenderReceiverIndex',
-        KeyConditionExpression: 'senderId = :userId AND receiverId = :otherUserId',
-        FilterExpression: 'contains(#content, :keyword) AND #type = :text',
-        ExpressionAttributeNames: { '#content': 'content', '#type': 'type' },
-        ExpressionAttributeValues: {
-          ':userId': userId,
-          ':otherUserId': otherUserId,
-          ':keyword': normalizedKeyword,
-          ':text': 'text',
-        },
-      }).promise(),
-      dynamoDB.query({
-        TableName: 'Messages',
-        IndexName: 'ReceiverSenderIndex',
-        KeyConditionExpression: 'receiverId = :userId AND senderId = :otherUserId',
-        FilterExpression: 'contains(#content, :keyword) AND #type = :text',
-        ExpressionAttributeNames: { '#content': 'content', '#type': 'type' },
-        ExpressionAttributeValues: {
-          ':userId': userId,
-          ':otherUserId': otherUserId,
-          ':keyword': normalizedKeyword,
-          ':text': 'text',
-        },
-      }).promise(),
-    ]);
-
-    const matchedMessages = [...(senderResult.Items || []), ...(receiverResult.Items || [])]
-      .filter(msg => msg.ownerId === userId)
-      .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-
-    return { success: true, data: matchedMessages };
-  } catch (error) {
-    logger.error('Lỗi trong searchMessagesBetweenUsers:', error);
-    throw new AppError('Lỗi khi tìm kiếm tin nhắn', 500);
-  }
-};
 
 module.exports = {
   createMessage,
@@ -1841,5 +1832,5 @@ module.exports = {
   updateMessageStatusOnConnect,
   canSendMessageToUser,
   checkBlockStatus,
-  searchMessagesBetweenUsers,
+
 };
