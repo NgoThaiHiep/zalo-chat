@@ -16,6 +16,7 @@ const checkConversationExists = async (userId, targetUserId) => {
   return result.Item;
 };
 
+
 // Hàm ẩn hội thoại
 const hideConversation = async (userId, hiddenUserId, password) => {
   console.log('Ẩn hội thoại:', { userId, hiddenUserId });
@@ -496,6 +497,80 @@ const getPinnedConversations = async (userId) => {
   }
 };
 
+const  createConversation = async (userId, targetUserId) => {
+    if (!userId || !targetUserId) {
+      logger.error('Invalid userId or targetUserId', { userId, targetUserId });
+      throw new AppError('userId hoặc targetUserId không hợp lệ!', 400);
+    }
+    if (userId === targetUserId) {
+      logger.error('Cannot create conversation with self', { userId });
+      throw new AppError('Không thể tạo hội thoại với chính mình!', 400);
+    }
+
+    logger.info('Creating conversation', { userId, targetUserId });
+
+    const now = new Date().toISOString();
+    const conversationId = uuidv4(); // ID chung cho cả hai bản ghi hội thoại
+
+    // Tạo bản ghi hội thoại cho userId
+    const userConversation = {
+      userId,
+      targetUserId,
+      conversationId,
+      createdAt: now,
+      updatedAt: now,
+      lastMessage: null,
+      settings: {
+        autoDelete: 'never', // Mặc định không tự động xóa
+        pinnedMessages: [], // Danh sách tin nhắn ghim
+        mute: false, // Tắt thông báo
+        block: false, // Chặn người dùng
+      },
+    };
+
+    // Tạo bản ghi hội thoại cho targetUserId
+    const targetConversation = {
+      userId: targetUserId,
+      targetUserId: userId,
+      conversationId,
+      createdAt: now,
+      updatedAt: now,
+      lastMessage: null,
+      settings: {
+        autoDelete: 'never',
+        pinnedMessages: [],
+        mute: false,
+        block: false,
+      },
+    };
+
+    try {
+      // Lưu cả hai bản ghi hội thoại vào DynamoDB
+      await Promise.all([
+        dynamoDB.put({
+          TableName: 'Conversations',
+          Item: userConversation,
+          ConditionExpression: 'attribute_not_exists(userId) AND attribute_not_exists(targetUserId)',
+        }).promise(),
+        dynamoDB.put({
+          TableName: 'Conversations',
+          Item: targetConversation,
+          ConditionExpression: 'attribute_not_exists(userId) AND attribute_not_exists(targetUserId)',
+        }).promise(),
+      ]);
+
+      logger.info('Conversation created successfully', { conversationId, userId, targetUserId });
+      return { success: true, conversationId };
+    } catch (error) {
+      if (error.code === 'ConditionalCheckFailedException') {
+        logger.warn('Conversation already exists', { userId, targetUserId });
+        return { success: true, conversationId: null }; // Hội thoại đã tồn tại, không phải lỗi
+      }
+      logger.error('Failed to create conversation', { userId, targetUserId, error: error.message });
+      throw new AppError(`Không thể tạo hội thoại: ${error.message}`, 500);
+    }
+}
+
 // Hàm lấy cài đặt tự động xóa
 const getAutoDeleteSetting = async (userId, targetUserId) => {
   console.log('Lấy cài đặt tự động xóa:', { userId, targetUserId });
@@ -560,4 +635,5 @@ module.exports = {
   getPinnedConversations,
   getAutoDeleteSetting,
   setAutoDeleteSetting,
+  createConversation,
 };

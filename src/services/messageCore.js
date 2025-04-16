@@ -2,7 +2,7 @@ const { dynamoDB, s3 } = require('../config/aws.config');
 const { v4: uuidv4 } = require('uuid');
 const sharp = require('sharp');
 const { transcribeQueue } = require('../socket');
-
+const logger = require('../config/logger');
 const sendMessageCore = async (message, tableName, bucketName) => {
   const {
     type,
@@ -22,8 +22,8 @@ const sendMessageCore = async (message, tableName, bucketName) => {
     ownerId,
   } = message;
 
-  console.log('Core - type:', type);
-  console.log('Core - content:', content);
+  logger.info('Core - type:', type);
+  logger.info('Core - content:', content);
 
   const validTypes = ['text', 'image', 'file', 'video', 'voice', 'sticker', 'gif', 'location', 'contact', 'poll', 'event'];
   if (!validTypes.includes(type)) throw new Error('Loại tin nhắn không hợp lệ!');
@@ -74,7 +74,7 @@ const sendMessageCore = async (message, tableName, bucketName) => {
   validateInput();
 
   if (tableName === 'Messages') {
-    if (!senderId || !receiverId ) {
+    if (!senderId || !receiverId) {
       throw new Error('senderId hoặc receiverId không hợp lệ!');
     }
   }
@@ -98,7 +98,7 @@ const sendMessageCore = async (message, tableName, bucketName) => {
 
   let finalMediaUrl = mediaUrl;
   let s3Key = null;
-  if (['image', 'file', 'video', 'voice', 'sticker', 'gif'].includes(type) && !finalMediaUrl) {
+  if (['image', 'file', 'video', 'voice', 'sticker', 'gif'].includes(type) && !finalMediaUrl && file) {
     const mimeInfo = mimeTypeMap[mimeType];
     if (!mimeInfo) throw new Error(`MIME type ${mimeType} không được hỗ trợ!`);
     if (!Array.isArray(mimeInfo.type) ? mimeInfo.type !== type : !mimeInfo.type.includes(type)) {
@@ -200,27 +200,26 @@ const sendMessageCore = async (message, tableName, bucketName) => {
         { attempts: 5, backoff: { type: 'exponential', delay: 5000 } }
       );
     } catch (queueError) {
-      console.error('Lỗi khi thêm job vào hàng đợi:', queueError);
+      logger.error('Lỗi khi thêm job vào hàng đợi:', queueError);
       throw new Error(`Lỗi khi thêm job phiên âm vào hàng đợi: ${queueError.message}`);
     }
   }
 
   try {
-    console.log('ExpiresAt before saving:', messageToSave.expiresAt);
+    logger.info('Saving message to DynamoDB:', messageToSave);
     await dynamoDB.put({
       TableName: tableName,
       Item: messageToSave,
     }).promise();
   } catch (dbError) {
-    console.error('DynamoDB error:', dbError);
+    logger.error('DynamoDB error:', dbError);
     if (finalMediaUrl && s3Key) {
       await s3.deleteObject({ Bucket: bucketName, Key: s3Key }).promise();
     }
     throw new Error(`Lỗi khi lưu tin nhắn vào DynamoDB: ${dbError.message}`);
   }
 
-  console.log('Core - Đã gửi tin nhắn:', messageToSave);
+  logger.info('Core - Đã gửi tin nhắn:', messageToSave);
   return messageToSave;
 };
-
 module.exports = { sendMessageCore };

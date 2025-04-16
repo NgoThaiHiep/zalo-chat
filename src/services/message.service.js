@@ -64,17 +64,9 @@ const deleteS3Object = async (bucket, key) => {
 
 // Hàm tạo tin nhắn
 const createMessage = async (senderId, receiverId, messageData) => {
-  if (!senderId || !receiverId || !messageData || !messageData.type) {
+  // Kiểm tra các tham số cơ bản
+  if (!senderId || !receiverId || !messageData) {
     throw new AppError('senderId, receiverId hoặc messageData không hợp lệ!', 400);
-  }
-  if (!['text', 'image', 'video', 'voice', 'file'].includes(messageData.type)) {
-    throw new AppError('Loại tin nhắn không hợp lệ!', 400);
-  }
-  if (messageData.type === 'text' && (!messageData.content || typeof messageData.content !== 'string')) {
-    throw new AppError('Nội dung tin nhắn văn bản không hợp lệ!', 400);
-  }
-  if (['image', 'video', 'voice', 'file'].includes(messageData.type) && !messageData.mediaUrl) {
-    throw new AppError('Media URL là bắt buộc cho tin nhắn media!', 400);
   }
 
   logger.info(`Creating message`, { senderId, receiverId });
@@ -111,9 +103,10 @@ const createMessage = async (senderId, receiverId, messageData) => {
     messageId,
     senderId,
     receiverId,
-    type: messageData.type,
+    type: messageData.type || null,
     content: messageData.content || null,
     mediaUrl: messageData.mediaUrl || null,
+    file: messageData.file || null,
     fileName: messageData.fileName || null,
     mimeType: messageData.mimeType || null,
     metadata: messageData.metadata || {},
@@ -220,7 +213,6 @@ const createMessage = async (senderId, receiverId, messageData) => {
     throw new AppError(`Failed to send message: ${error.message}`, 500);
   }
 };
-
 // Hàm thử lại tin nhắn
 const retryMessage = async (senderId, messageId) => {
   logger.info(`Retrying message`, { messageId, senderId });
@@ -471,11 +463,22 @@ const forwardMessage = async (senderId, messageId, targetReceiverId) => {
     const bucketName = process.env.BUCKET_NAME_Chat_Send;
     const originalKey = newMediaUrl.split('/').slice(3).join('/');
     const mimeType = originalMessage.mimeType;
+
     const mimeTypeMap = {
-      'image/jpeg': { folder: 'images', ext: 'jpg' },
-      'image/png': { folder: 'images', ext: 'png' },
-      'video/mp4': { folder: 'videos', ext: 'mp4' },
-      'audio/mpeg': { folder: 'audios', ext: 'mp3' },
+      'image/jpeg': { type: 'image', folder: 'images', ext: 'jpg', maxSize: 10 * 1024 * 1024 },
+      'image/png': { type: ['image', 'sticker'], folder: 'images', ext: 'png', maxSize: 10 * 1024 * 1024 },
+      'image/heic': { type: 'image', folder: 'images', ext: 'heic', maxSize: 10 * 1024 * 1024 },
+      'image/gif': { type: ['gif', 'sticker'], folder: 'gifs', ext: 'gif', maxSize: 10 * 1024 * 1024 },
+      'video/mp4': { type: 'video', folder: 'videos', ext: 'mp4', maxSize: 1024 * 1024 * 1024 },
+      'audio/mpeg': { type: 'voice', folder: 'voice', ext: 'mp3', maxSize: 50 * 1024 * 1024 },
+      'audio/wav': { type: 'voice', folder: 'voice', ext: 'wav', maxSize: 50 * 1024 * 1024 },
+      'audio/mp4': { type: 'voice', folder: 'voice', ext: 'm4a', maxSize: 50 * 1024 * 1024 },
+      'application/pdf': { type: 'file', folder: 'files', ext: 'pdf', maxSize: 1024 * 1024 * 1024 },
+      'application/zip': { type: 'file', folder: 'files', ext: 'zip', maxSize: 1024 * 1024 * 1024 },
+      'application/x-rar-compressed': { type: 'file', folder: 'files', ext: 'rar', maxSize: 1024 * 1024 * 1024 },
+      'application/vnd.rar': { type: 'file', folder: 'files', ext: 'rar', maxSize: 1024 * 1024 * 1024 },
+      'text/plain': { type: 'file', folder: 'files', ext: 'txt', maxSize: 1024 * 1024 * 1024 },
+      'image/webp': { type: ['image', 'sticker', 'gif'], folder: 'images', ext: 'webp', maxSize: 10 * 1024 * 1024 },
     };
 
     const mimeInfo = mimeTypeMap[mimeType];
