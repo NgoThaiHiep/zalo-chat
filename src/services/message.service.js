@@ -4,10 +4,12 @@ const { v4: uuidv4 } = require('uuid');
 const { sendMessageCore } = require('./messageCore');
 const { io, transcribeQueue } = require('../socket');
 const { isUserOnline } = require('./auth.service');
-const ConversationService = require('./conversation.service');
+const {getHiddenConversations,getMutedConversations,getPinnedConversations, createConversation,getAutoDeleteSetting}= require('./conversation.service');
 const FriendService = require('./friend.service');
 const logger = require('../config/logger');
 const { AppError } = require('../untils/errorHandler');
+const { redisClient } = require('../config/redis');
+const bcrypt = require('bcrypt');
 
 const DAYS_TO_SECONDS = {
   '10s': 10,
@@ -25,6 +27,7 @@ const MESSAGE_STATUSES = {
   SEEN: 'seen',
   FAILED: 'failed',
   RECALLED: 'recalled',
+  RESTRICTED: 'restricted',
 };
 
 // Hàm hỗ trợ: Tạo bản ghi tin nhắn
@@ -64,7 +67,6 @@ const deleteS3Object = async (bucket, key) => {
 
 // Hàm tạo tin nhắn
 const createMessage = async (senderId, receiverId, messageData) => {
-  // Kiểm tra các tham số cơ bản
   if (!senderId || !receiverId || !messageData) {
     throw new AppError('senderId, receiverId hoặc messageData không hợp lệ!', 400);
   }
@@ -72,7 +74,10 @@ const createMessage = async (senderId, receiverId, messageData) => {
   logger.info(`Creating message`, { senderId, receiverId });
 
   // Kiểm tra quyền gửi tin nhắn
-  await canSendMessageToUser(senderId, receiverId);
+  const { canSend, isRestricted } = await canSendMessageToUser(senderId, receiverId);
+  if (!canSend) {
+    throw new AppError('Không có quyền gửi tin nhắn!', 403);
+  }
 
   // Kiểm tra hoặc tạo hội thoại
   const conversation = await dynamoDB.get({
@@ -80,13 +85,13 @@ const createMessage = async (senderId, receiverId, messageData) => {
     Key: { userId: senderId, targetUserId: receiverId },
   }).promise();
   if (!conversation.Item) {
-    await ConversationService.createConversation(senderId, receiverId);
+    await createConversation(senderId, receiverId);
   }
 
   // Lấy cài đặt auto-delete
   const [senderAutoDelete, receiverAutoDelete] = await Promise.all([
-    ConversationService.getAutoDeleteSetting(senderId, receiverId),
-    ConversationService.getAutoDeleteSetting(receiverId, senderId),
+    getAutoDeleteSetting(senderId, receiverId),
+    getAutoDeleteSetting(receiverId, senderId),
   ]);
 
   const now = Date.now();
@@ -116,7 +121,7 @@ const createMessage = async (senderId, receiverId, messageData) => {
   };
 
   const senderMessage = buildMessageRecord(baseMessage, senderId, senderExpiresAt);
-  const receiverMessage = buildMessageRecord(baseMessage, receiverId, receiverExpiresAt);
+  let receiverMessage = senderId === receiverId ? null : buildMessageRecord(baseMessage, receiverId, receiverExpiresAt);
 
   io().to(senderId).emit('messageStatus', { messageId, status: MESSAGE_STATUSES.PENDING });
 
@@ -126,33 +131,41 @@ const createMessage = async (senderId, receiverId, messageData) => {
   let receiverS3Key = null;
 
   try {
-    // Cập nhật trạng thái sang sending
+    // Cập nhật trạng thái
     io().to(senderId).emit('messageStatus', { messageId, status: MESSAGE_STATUSES.SENDING });
     senderMessage.status = MESSAGE_STATUSES.SENDING;
-    receiverMessage.status = MESSAGE_STATUSES.SENDING;
+    if (receiverMessage) {
+      receiverMessage.status = isRestricted ? MESSAGE_STATUSES.RESTRICTED : MESSAGE_STATUSES.SENDING;
+    }
 
     // Lưu tin nhắn
-    [senderResult, receiverResult] = await Promise.all([
+    const savePromises = [
       sendMessageCore(senderMessage, 'Messages', process.env.BUCKET_NAME_Chat_Send).then(result => {
         senderS3Key = result.mediaUrl?.startsWith(`s3://${process.env.BUCKET_NAME_Chat_Send}/`)
           ? result.mediaUrl.split('/').slice(3).join('/')
           : null;
         return result;
       }),
-      sendMessageCore(receiverMessage, 'Messages', process.env.BUCKET_NAME_Chat_Send).then(result => {
-        receiverS3Key = result.mediaUrl?.startsWith(`s3://${process.env.BUCKET_NAME_Chat_Send}/`)
-          ? result.mediaUrl.split('/').slice(3).join('/')
-          : null;
-        return result;
-      }),
-    ]);
+    ];
+    if (receiverMessage) {
+      savePromises.push(
+        sendMessageCore(receiverMessage, 'Messages', process.env.BUCKET_NAME_Chat_Send).then(result => {
+          receiverS3Key = result.mediaUrl?.startsWith(`s3://${process.env.BUCKET_NAME_Chat_Send}/`)
+            ? result.mediaUrl.split('/').slice(3).join('/')
+            : null;
+          return result;
+        })
+      );
+    }
 
-    if (!senderResult || !receiverResult) {
+    [senderResult, receiverResult] = await Promise.all(savePromises);
+
+    if (!senderResult || (receiverMessage && !receiverResult)) {
       throw new AppError('Failed to save message to DynamoDB', 500);
     }
 
     // Cập nhật Conversations
-    await Promise.all([
+    const updateConversationPromises = [
       dynamoDB.update({
         TableName: 'Conversations',
         Key: { userId: senderId, targetUserId: receiverId },
@@ -162,25 +175,36 @@ const createMessage = async (senderId, receiverId, messageData) => {
           ':time': baseMessage.timestamp,
         },
       }).promise(),
-      dynamoDB.update({
-        TableName: 'Conversations',
-        Key: { userId: receiverId, targetUserId: senderId },
-        UpdateExpression: 'SET lastMessage = :msg, updatedAt = :time',
-        ExpressionAttributeValues: {
-          ':msg': { messageId, content: messageData.content || '', createdAt: baseMessage.timestamp },
-          ':time': baseMessage.timestamp,
-        },
-      }).promise(),
-    ]);
+    ];
+    if (senderId !== receiverId && !isRestricted) {
+      updateConversationPromises.push(
+        dynamoDB.update({
+          TableName: 'Conversations',
+          Key: { userId: receiverId, targetUserId: senderId },
+          UpdateExpression: 'SET lastMessage = :msg, updatedAt = :time',
+          ExpressionAttributeValues: {
+            ':msg': { messageId, content: messageData.content || '', createdAt: baseMessage.timestamp },
+            ':time': baseMessage.timestamp,
+          },
+        }).promise()
+      );
+    }
+    await Promise.all(updateConversationPromises);
 
     // Cập nhật trạng thái
-    const receiverOnline = isUserOnline(receiverId);
-    const initialStatus = receiverOnline ? MESSAGE_STATUSES.DELIVERED : MESSAGE_STATUSES.SENT;
+    const receiverOnline = senderId !== receiverId && isUserOnline(receiverId);
+    const initialStatus = senderId === receiverId
+      ? MESSAGE_STATUSES.SENT
+      : isRestricted
+      ? MESSAGE_STATUSES.RESTRICTED
+      : receiverOnline
+      ? MESSAGE_STATUSES.DELIVERED
+      : MESSAGE_STATUSES.SENT;
 
-    await Promise.all([
-      updateMessageStatus(messageId, senderId, initialStatus),
-      updateMessageStatus(messageId, receiverId, initialStatus),
-    ]);
+    await updateMessageStatus(messageId, senderId, initialStatus);
+    if (receiverMessage && !isRestricted) {
+      await updateMessageStatus(messageId, receiverId, initialStatus);
+    }
 
     // Xử lý transcription cho tin nhắn thoại
     if (messageData.type === 'voice' && messageData.metadata?.transcribe) {
@@ -192,10 +216,10 @@ const createMessage = async (senderId, receiverId, messageData) => {
     }
 
     // Phát sự kiện
-    if (receiverOnline) {
+    if (senderId !== receiverId && receiverOnline && !isRestricted) {
       io().to(receiverId).emit('receiveMessage', { ...receiverMessage, status: initialStatus });
     }
-    io().to(senderId).emit('messageStatus', { messageId, status: initialStatus });
+    io().to(senderId).emit('receiveMessage', { ...senderMessage, status: initialStatus });
 
     return { ...baseMessage, status: initialStatus };
   } catch (error) {
@@ -213,6 +237,7 @@ const createMessage = async (senderId, receiverId, messageData) => {
     throw new AppError(`Failed to send message: ${error.message}`, 500);
   }
 };
+
 // Hàm thử lại tin nhắn
 const retryMessage = async (senderId, messageId) => {
   logger.info(`Retrying message`, { messageId, senderId });
@@ -354,6 +379,16 @@ const getMessagesBetweenUsers = async (user1, user2) => {
     }).promise();
     const deletedMessageIds = new Set(deletedMessages.map(item => item.messageId));
 
+    // Kiểm tra trạng thái bạn bè
+    let isFriend = true;
+    if (user1 !== user2) {
+      const friendResult = await dynamoDB.get({
+        TableName: 'Friends',
+        Key: { userId: user1, friendId: user2 },
+      }).promise();
+      isFriend = !!friendResult.Item;
+    }
+
     // Truy vấn tin nhắn
     const [senderResult, receiverResult] = await Promise.all([
       dynamoDB.query({
@@ -381,7 +416,9 @@ const getMessagesBetweenUsers = async (user1, user2) => {
       msg =>
         !deletedMessageIds.has(msg.messageId) &&
         (!msg.expiresAt || msg.expiresAt > now) &&
-        msg.ownerId === user1
+        msg.ownerId === user1 &&
+        // Ẩn tin nhắn RESTRICTED trừ khi người gửi là bạn bè
+        (isFriend || msg.status !== MESSAGE_STATUSES.RESTRICTED)
     );
 
     // Loại bỏ trùng lặp và sắp xếp
@@ -437,13 +474,13 @@ const forwardMessage = async (senderId, messageId, targetReceiverId) => {
     Key: { userId: senderId, targetUserId: targetReceiverId },
   }).promise();
   if (!conversation.Item) {
-    await ConversationService.createConversation(senderId, targetReceiverId);
+    await createConversation(senderId, targetReceiverId);
   }
 
   // Lấy cài đặt auto-delete
   const [senderAutoDelete, receiverAutoDelete] = await Promise.all([
-    ConversationService.getAutoDeleteSetting(senderId, targetReceiverId),
-    ConversationService.getAutoDeleteSetting(targetReceiverId, senderId),
+    getAutoDeleteSetting(senderId, targetReceiverId),
+    getAutoDeleteSetting(targetReceiverId, senderId),
   ]);
 
   const now = Date.now();
@@ -618,8 +655,8 @@ const pinMessage = async (userId, messageId) => {
   if (message.isPinned) {
     throw new AppError('Tin nhắn đã được ghim!', 400);
   }
-  if (message.status === MESSAGE_STATUSES.RECALLED) {
-    throw new AppError('Tin nhắn đã bị thu hồi, không thể ghim!', 400);
+  if (message.status === MESSAGE_STATUSES.RECALLED || message.status === MESSAGE_STATUSES.FAILED) {
+    throw new AppError('Không thể ghim tin nhắn đã thu hồi hoặc thất bại!', 400);
   }
 
   const otherUserId = message.senderId === userId ? message.receiverId : message.senderId;
@@ -987,16 +1024,47 @@ const checkAndNotifyReminders = async () => {
       }
     }
 
-    io().to(msg.ownerId).emit('reminderTriggered', {
-      messageId: msg.messageId,
-      reminderContent: msg.reminderContent,
-    });
-    if (msg.reminderScope === 'both') {
-      const otherUserId = msg.senderId === msg.ownerId ? msg.receiverId : msg.senderId;
-      io().to(otherUserId).emit('reminderTriggered', {
+    const ownerOnline = isUserOnline(msg.ownerId);
+    if (ownerOnline) {
+      io().to(msg.ownerId).emit('reminderTriggered', {
         messageId: msg.messageId,
         reminderContent: msg.reminderContent,
       });
+    } else {
+      await dynamoDB.put({
+        TableName: 'Notifications',
+        Item: {
+          notificationId: uuidv4(),
+          userId: msg.ownerId,
+          type: 'reminder',
+          messageId: msg.messageId,
+          content: msg.reminderContent,
+          timestamp: now.toISOString(),
+        },
+      }).promise();
+    }
+
+    if (msg.reminderScope === 'both') {
+      const otherUserId = msg.senderId === msg.ownerId ? msg.receiverId : msg.senderId;
+      const otherOnline = isUserOnline(otherUserId);
+      if (otherOnline) {
+        io().to(otherUserId).emit('reminderTriggered', {
+          messageId: msg.messageId,
+          reminderContent: msg.reminderContent,
+        });
+      } else {
+        await dynamoDB.put({
+          TableName: 'Notifications',
+          Item: {
+            notificationId: uuidv4(),
+            userId: otherUserId,
+            type: 'reminder',
+            messageId: msg.messageId,
+            content: msg.reminderContent,
+            timestamp: now.toISOString(),
+          },
+        }).promise();
+      }
     }
 
     if (newReminder) {
@@ -1257,17 +1325,82 @@ const getConversationSummary = async (userId, options = {}) => {
       return { success: true, data: { conversationCount: 0, conversations: [] } };
     }
 
-    const hiddenConversations = (await ConversationService.getHiddenConversations(userId)).hiddenConversations || [];
-    const mutedConversations = (await ConversationService.getMutedConversations(userId)).mutedConversations || [];
-    const pinnedConversations = (await ConversationService.getPinnedConversations(userId)).pinnedConversations || [];
+    const hiddenConversations = (await getHiddenConversations(userId)).hiddenConversations || [];
+    const mutedConversations = (await getMutedConversations(userId)).mutedConversations || [];
+    const pinnedConversations = (await getPinnedConversations(userId)).pinnedConversations || [];
+
+    // Cache user settings
+    const cacheKey = `user:settings:${userId}`;
+    let userSettings = await redisClient.get(cacheKey);
+    if (!userSettings) {
+      const userResult = await dynamoDB.get({
+        TableName: 'Users',
+        Key: { userId },
+      }).promise();
+      userSettings = userResult.Item?.settings || { restrictStrangerMessages: false };
+      await redisClient.set(cacheKey, JSON.stringify(userSettings), 'EX', 3600);
+    } else {
+      userSettings = JSON.parse(userSettings);
+    }
 
     const conversationList = [];
     for (const conv of conversations) {
       const otherUserId = conv.targetUserId;
 
+      // Ưu tiên kiểm tra ẩn
       if (hiddenConversations.some(hc => hc.hiddenUserId === otherUserId)) {
         continue;
       }
+
+      // Kiểm tra trạng thái bạn bè
+      let isFriend = true;
+      if (userId !== otherUserId) {
+        const friendCacheKey = `friends:${userId}:${otherUserId}`;
+        let friendCached = await redisClient.get(friendCacheKey);
+        if (!friendCached) {
+          const friendResult = await dynamoDB.get({
+            TableName: 'Friends',
+            Key: { userId, friendId: otherUserId },
+          }).promise();
+          isFriend = !!friendResult.Item;
+          await redisClient.set(friendCacheKey, isFriend ? '1' : '0', 'EX', 3600);
+        } else {
+          isFriend = friendCached === '1';
+        }
+      }
+
+      // Kiểm tra tin nhắn hợp lệ
+      let hasValidMessages = true;
+      if (userId !== otherUserId) {
+        const messages = await dynamoDB.query({
+          TableName: 'Messages',
+          IndexName: 'ReceiverSenderIndex',
+          KeyConditionExpression: 'receiverId = :userId AND senderId = :otherUserId',
+          ExpressionAttributeValues: {
+            ':userId': userId,
+            ':otherUserId': otherUserId,
+          },
+          Limit: 1,
+        }).promise();
+
+        const sentMessages = await dynamoDB.query({
+          TableName: 'Messages',
+          IndexName: 'SenderReceiverIndex',
+          KeyConditionExpression: 'senderId = :userId AND receiverId = :otherUserId',
+          ExpressionAttributeValues: {
+            ':userId': userId,
+            ':otherUserId': otherUserId,
+          },
+          Limit: 1,
+        }).promise();
+
+        hasValidMessages =
+          isFriend ||
+          (messages.Items?.some(msg => msg.status !== MESSAGE_STATUSES.RESTRICTED) ||
+            sentMessages.Items?.length > 0);
+      }
+
+      if (!hasValidMessages) continue;
 
       let name, phoneNumber;
       if (otherUserId === userId) {
@@ -1289,6 +1422,70 @@ const getConversationSummary = async (userId, options = {}) => {
         }
       }
 
+      // Lấy tin nhắn cuối cùng đầy đủ
+      let lastMessageFull = null;
+      if (!minimal) {
+        // Thử lấy tin nhắn từ lastMessage.messageId
+        if (conv.lastMessage?.messageId) {
+          const messageResult = await dynamoDB.get({
+            TableName: 'Messages',
+            Key: { messageId: conv.lastMessage.messageId, ownerId: userId },
+          }).promise();
+          if (
+            messageResult.Item &&
+            messageResult.Item.status !== MESSAGE_STATUSES.RECALLED &&
+            (isFriend ||
+              messageResult.Item.status !== MESSAGE_STATUSES.RESTRICTED ||
+              messageResult.Item.senderId === userId)
+          ) {
+            lastMessageFull = messageResult.Item;
+          }
+        }
+
+        // Nếu không tìm thấy tin nhắn hợp lệ, truy vấn tin nhắn gần nhất
+        if (!lastMessageFull && userId !== otherUserId) {
+          const recentMessages = await dynamoDB.query({
+            TableName: 'Messages',
+            IndexName: 'ReceiverSenderIndex',
+            KeyConditionExpression: 'receiverId = :userId AND senderId = :otherUserId',
+            ExpressionAttributeValues: {
+              ':userId': userId,
+              ':otherUserId': otherUserId,
+            },
+            ScanIndexForward: false,
+            Limit: 1,
+          }).promise();
+
+          const sentMessages = await dynamoDB.query({
+            TableName: 'Messages',
+            IndexName: 'SenderReceiverIndex',
+            KeyConditionExpression: 'senderId = :userId AND receiverId = :otherUserId',
+            ExpressionAttributeValues: {
+              ':userId': userId,
+              ':otherUserId': otherUserId,
+            },
+            ScanIndexForward: false,
+            Limit: 1,
+          }).promise();
+
+          // Chọn tin nhắn mới nhất từ cả hai chiều
+          const allMessages = [
+            ...(recentMessages.Items || []),
+            ...(sentMessages.Items || []),
+          ].filter(
+            msg =>
+              msg.status !== MESSAGE_STATUSES.RECALLED &&
+              (isFriend || msg.status !== MESSAGE_STATUSES.RESTRICTED || msg.senderId === userId)
+          );
+
+          if (allMessages.length > 0) {
+            lastMessageFull = allMessages.reduce((latest, msg) =>
+              !latest || new Date(msg.timestamp) > new Date(latest.timestamp) ? msg : latest
+            );
+          }
+        }
+      }
+
       if (minimal) {
         conversationList.push({
           userId: otherUserId,
@@ -1305,8 +1502,9 @@ const getConversationSummary = async (userId, options = {}) => {
       conversationList.push({
         otherUserId,
         displayName: name,
+        phoneNumber,
         isSelf: otherUserId === userId,
-        lastMessage: conv.lastMessage || null,
+        lastMessage: lastMessageFull || null,
         isMuted,
         isPinned,
       });
@@ -1317,7 +1515,7 @@ const getConversationSummary = async (userId, options = {}) => {
         if (a.isPinned && !b.isPinned) return -1;
         if (!a.isPinned && b.isPinned) return 1;
         if (!a.lastMessage || !b.lastMessage) return 0;
-        return new Date(b.lastMessage.createdAt) - new Date(a.lastMessage.createdAt);
+        return new Date(b.lastMessage.timestamp) - new Date(a.lastMessage.timestamp);
       });
     }
 
@@ -1338,7 +1536,7 @@ const getConversationSummary = async (userId, options = {}) => {
 const canSendMessageToUser = async (senderId, receiverId, isForward = false) => {
   logger.info('Checking canSendMessageToUser:', { senderId, receiverId, isForward });
 
-  if (senderId === receiverId) return true;
+  if (senderId === receiverId) return { canSend: true, isRestricted: false };
 
   await checkBlockStatus(senderId, receiverId);
 
@@ -1350,16 +1548,16 @@ const canSendMessageToUser = async (senderId, receiverId, isForward = false) => 
   const receiver = receiverResult.Item;
   if (!receiver) throw new AppError('Người nhận không tồn tại!', 404);
 
-  const restrictStrangerMessages = receiver.restrictStrangerMessages;
+  const restrictStrangerMessages = receiver.restrictStrangerMessages || false;
 
   if (!restrictStrangerMessages) {
-    if (!isForward) return true;
+    if (!isForward) return { canSend: true, isRestricted: false };
 
     const conversation = await dynamoDB.get({
       TableName: 'Conversations',
       Key: { userId: senderId, targetUserId: receiverId },
     }).promise();
-    if (conversation.Item) return true;
+    if (conversation.Item) return { canSend: true, isRestricted: false };
 
     throw new AppError('Chưa từng nhắn tin với người này, không thể chuyển tiếp!', 403);
   }
@@ -1369,9 +1567,10 @@ const canSendMessageToUser = async (senderId, receiverId, isForward = false) => 
     Key: { userId: receiverId, friendId: senderId },
   }).promise();
 
-  if (friendResult.Item) return true;
+  if (friendResult.Item) return { canSend: true, isRestricted: false };
 
-  throw new AppError('Người này không nhận tin nhắn từ người lạ!', 403);
+  // Cho phép gửi nhưng đánh dấu là bị hạn chế
+  return { canSend: true, isRestricted: true };
 };
 
 // Hàm kiểm tra chặn

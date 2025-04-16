@@ -556,10 +556,7 @@ const initializeDatabase = async () => {
     await createTableIfNotExists('ReminderLogs', reminderLogsTableParams);
     await updateTableWithNewGSI('ReminderLogs', reminderLogsTableParams);
     await enableTTL('ReminderLogs', 'ttl');
-   
-    
-  
-    //15. Tạo bảng nicknames
+    //12. Tạo bảng nicknames
     const NicknamesTableParams = {
       TableName: 'Nicknames',
       AttributeDefinitions: [
@@ -574,7 +571,32 @@ const initializeDatabase = async () => {
     };
     await createTableIfNotExists('Nicknames', NicknamesTableParams);
     await updateTableWithNewGSI('Nicknames', NicknamesTableParams);
-    
+    //13.Tạo bảng Notifications
+    const NotificationsTableParams = {
+      TableName: 'Notifications',
+      AttributeDefinitions: [
+        { AttributeName: 'notificationId', AttributeType: 'S' },
+        { AttributeName: 'userId', AttributeType: 'S' },
+        { AttributeName: 'timestamp', AttributeType: 'S' },
+      ],
+      KeySchema: [
+        { AttributeName: 'notificationId', KeyType: 'HASH' },
+        { AttributeName: 'userId', KeyType: 'RANGE' },
+      ],
+      GlobalSecondaryIndexes: [
+        {
+          IndexName: 'UserTimestampIndex',
+          KeySchema: [
+            { AttributeName: 'userId', KeyType: 'HASH' },
+            { AttributeName: 'timestamp', KeyType: 'RANGE' },
+          ],
+          Projection: { ProjectionType: 'ALL' }, 
+        },
+      ],
+      BillingMode: 'PAY_PER_REQUEST',
+    };
+    await createTableIfNotExists('Notifications', NotificationsTableParams);
+    await updateTableWithNewGSI('Notifications', NotificationsTableParams);
     // Bucket policy mẫu
     const defaultBucketPolicy = {
       Version: '2012-10-17',

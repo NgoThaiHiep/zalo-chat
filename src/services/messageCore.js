@@ -3,6 +3,7 @@ const { v4: uuidv4 } = require('uuid');
 const sharp = require('sharp');
 const { transcribeQueue } = require('../socket');
 const logger = require('../config/logger');
+
 const sendMessageCore = async (message, tableName, bucketName) => {
   const {
     type,
@@ -20,14 +21,18 @@ const sendMessageCore = async (message, tableName, bucketName) => {
     senderId,
     receiverId,
     ownerId,
+    status: initialStatus,
   } = message;
 
-  logger.info('Core - type:', type);
-  logger.info('Core - content:', content);
+  logger.info('Core - Sending message', { type, senderId, receiverId });
 
+  // Kiểm tra loại tin nhắn
   const validTypes = ['text', 'image', 'file', 'video', 'voice', 'sticker', 'gif', 'location', 'contact', 'poll', 'event'];
-  if (!validTypes.includes(type)) throw new Error('Loại tin nhắn không hợp lệ!');
+  if (!validTypes.includes(type)) {
+    throw new Error(`Loại tin nhắn không hợp lệ: ${type}`);
+  }
 
+  // Hàm kiểm tra đầu vào
   const validateInput = () => {
     switch (type) {
       case 'text':
@@ -73,12 +78,12 @@ const sendMessageCore = async (message, tableName, bucketName) => {
 
   validateInput();
 
-  if (tableName === 'Messages') {
-    if (!senderId || !receiverId) {
-      throw new Error('senderId hoặc receiverId không hợp lệ!');
-    }
+  // Kiểm tra senderId và receiverId cho bảng Messages
+  if (tableName === 'Messages' && (!senderId || !receiverId)) {
+    throw new Error('senderId hoặc receiverId không hợp lệ!');
   }
 
+  // Định nghĩa MIME type
   const mimeTypeMap = {
     'image/jpeg': { type: 'image', folder: 'images', ext: 'jpg', maxSize: 10 * 1024 * 1024 },
     'image/png': { type: ['image', 'sticker'], folder: 'images', ext: 'png', maxSize: 10 * 1024 * 1024 },
@@ -98,9 +103,13 @@ const sendMessageCore = async (message, tableName, bucketName) => {
 
   let finalMediaUrl = mediaUrl;
   let s3Key = null;
+
+  // Xử lý file upload lên S3
   if (['image', 'file', 'video', 'voice', 'sticker', 'gif'].includes(type) && !finalMediaUrl && file) {
     const mimeInfo = mimeTypeMap[mimeType];
-    if (!mimeInfo) throw new Error(`MIME type ${mimeType} không được hỗ trợ!`);
+    if (!mimeInfo) {
+      throw new Error(`MIME type không được hỗ trợ: ${mimeType}`);
+    }
     if (!Array.isArray(mimeInfo.type) ? mimeInfo.type !== type : !mimeInfo.type.includes(type)) {
       throw new Error(`MIME type ${mimeType} không phù hợp với loại tin nhắn ${type}!`);
     }
@@ -110,33 +119,38 @@ const sendMessageCore = async (message, tableName, bucketName) => {
 
     let processedFile = file;
     if (type === 'image' && quality === 'compressed') {
-      processedFile = await sharp(file).jpeg({ quality: 80 }).toBuffer();
+      try {
+        processedFile = await sharp(file).jpeg({ quality: 80 }).toBuffer();
+      } catch (sharpError) {
+        logger.error('Lỗi khi nén ảnh:', sharpError);
+        throw new Error('Lỗi khi nén ảnh!');
+      }
     }
 
     const messageId = message.messageId || uuidv4();
     s3Key = `${mimeInfo.folder}/${messageId}.${mimeInfo.ext}`;
     try {
-      await s3
-        .upload({
-          Bucket: bucketName,
-          Key: s3Key,
-          Body: processedFile,
-          ContentType: mimeType,
-        })
-        .promise();
+      await s3.upload({
+        Bucket: bucketName,
+        Key: s3Key,
+        Body: processedFile,
+        ContentType: mimeType,
+      }).promise();
       finalMediaUrl = `s3://${bucketName}/${s3Key}`;
     } catch (s3Error) {
+      logger.error('Lỗi khi upload file lên S3:', s3Error);
       throw new Error(`Lỗi khi upload file lên S3: ${s3Error.message}`);
     }
   }
 
-  let messageToSave = {};
+  // Chuẩn bị bản ghi tin nhắn
   const messageId = message.messageId || uuidv4();
   const parsedExpiresAt = expiresAt ? new Date(expiresAt) : null;
   if (expiresAt && isNaN(parsedExpiresAt)) {
     throw new Error('expiresAt không đúng định dạng ISO!');
   }
 
+  let messageToSave = {};
   if (tableName === 'Messages') {
     messageToSave = {
       messageId,
@@ -154,7 +168,7 @@ const sendMessageCore = async (message, tableName, bucketName) => {
       quality,
       replyToMessageId: replyToMessageId || null,
       isPinned: false,
-      status: senderId === receiverId ? 'sent' : 'sending',
+      status: initialStatus || (senderId === receiverId ? 'sent' : 'sending'),
       timestamp: new Date().toISOString(),
       expiresAt: expiresAt ? parsedExpiresAt.toISOString() : null,
     };
@@ -174,12 +188,13 @@ const sendMessageCore = async (message, tableName, bucketName) => {
       quality,
       replyToMessageId: replyToMessageId || null,
       isPinned: false,
-      status: 'sending',
+      status: initialStatus || 'sending',
       timestamp: new Date().toISOString(),
       expiresAt: expiresAt ? parsedExpiresAt.toISOString() : null,
     };
   }
 
+  // Xử lý phiên âm cho tin nhắn thoại
   if (type === 'voice' && metadata?.transcribe) {
     const transcribeJobName = `voice-${messageId}-${ownerId}`;
     messageToSave.metadata = {
@@ -199,27 +214,35 @@ const sendMessageCore = async (message, tableName, bucketName) => {
         },
         { attempts: 5, backoff: { type: 'exponential', delay: 5000 } }
       );
+      logger.info('Đã thêm job phiên âm vào hàng đợi', { messageId, transcribeJobName });
     } catch (queueError) {
-      logger.error('Lỗi khi thêm job vào hàng đợi:', queueError);
+      logger.error('Lỗi khi thêm job phiên âm:', queueError);
       throw new Error(`Lỗi khi thêm job phiên âm vào hàng đợi: ${queueError.message}`);
     }
   }
 
+  // Lưu tin nhắn vào DynamoDB
   try {
-    logger.info('Saving message to DynamoDB:', messageToSave);
+    logger.info('Saving message to DynamoDB:', { messageId, tableName });
     await dynamoDB.put({
       TableName: tableName,
       Item: messageToSave,
     }).promise();
   } catch (dbError) {
-    logger.error('DynamoDB error:', dbError);
+    logger.error('Lỗi khi lưu tin nhắn vào DynamoDB:', dbError);
     if (finalMediaUrl && s3Key) {
-      await s3.deleteObject({ Bucket: bucketName, Key: s3Key }).promise();
+      try {
+        await s3.deleteObject({ Bucket: bucketName, Key: s3Key }).promise();
+        logger.info('Đã xóa file S3 sau lỗi DynamoDB', { s3Key });
+      } catch (s3CleanupError) {
+        logger.error('Lỗi khi xóa file S3 sau lỗi DynamoDB:', s3CleanupError);
+      }
     }
     throw new Error(`Lỗi khi lưu tin nhắn vào DynamoDB: ${dbError.message}`);
   }
 
-  logger.info('Core - Đã gửi tin nhắn:', messageToSave);
+  logger.info('Core - Đã gửi tin nhắn thành công:', { messageId, tableName });
   return messageToSave;
 };
+
 module.exports = { sendMessageCore };

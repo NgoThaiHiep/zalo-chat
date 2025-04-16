@@ -2,6 +2,9 @@ const { dynamoDB } = require('../config/aws.config');
 const { io } = require('../socket');
 const { redisClient } = require('../config/redis');
 const bcrypt = require('bcrypt');
+const logger = require('../config/logger');
+const { v4: uuidv4 } = require('uuid');
+const { AppError } = require('../untils/errorHandler');
 
 // Hàm hỗ trợ kiểm tra hội thoại tồn tại
 const checkConversationExists = async (userId, targetUserId) => {
@@ -11,47 +14,64 @@ const checkConversationExists = async (userId, targetUserId) => {
   }).promise();
 
   if (!result.Item) {
-    throw new Error('Không tìm thấy hội thoại giữa hai người dùng!');
+    throw new AppError('Không tìm thấy hội thoại giữa hai người dùng!', 404);
   }
   return result.Item;
 };
 
-
 // Hàm ẩn hội thoại
 const hideConversation = async (userId, hiddenUserId, password) => {
-  console.log('Ẩn hội thoại:', { userId, hiddenUserId });
+  logger.info('Ẩn hội thoại:', { userId, hiddenUserId });
 
   // 1. Kiểm tra hợp lệ
   if (userId === hiddenUserId) {
-    throw new Error('Không thể ẩn hội thoại với chính mình!');
+    throw new AppError('Không thể ẩn hội thoại với chính mình!', 400);
   }
   if (!password || password.length < 6) {
-    throw new Error('Mật khẩu phải có ít nhất 6 ký tự!');
+    throw new AppError('Mật khẩu phải có ít nhất 6 ký tự!', 400);
   }
 
-  // 2. Kiểm tra hội thoại tồn tại
+  // 2. Kiểm tra trạng thái bạn bè nếu người nhận bật restrictStrangerMessages
+  const userResult = await dynamoDB.get({
+    TableName: 'Users',
+    Key: { userId: hiddenUserId },
+  }).promise();
+  if (!userResult.Item) {
+    throw new AppError('Người dùng không tồn tại!', 404);
+  }
+  if (userResult.Item.restrictStrangerMessages) {
+    const friendResult = await dynamoDB.get({
+      TableName: 'Friends',
+      Key: { userId: hiddenUserId, friendId: userId },
+    }).promise();
+    if (!friendResult.Item) {
+      throw new AppError('Không thể ẩn hội thoại với người lạ khi restrictStrangerMessages được bật!', 403);
+    }
+  }
+
+  // 3. Kiểm tra hội thoại tồn tại
   await checkConversationExists(userId, hiddenUserId);
 
-  // 3. Kiểm tra trạng thái ẩn
+  // 4. Kiểm tra trạng thái ẩn
   const conversation = await dynamoDB.get({
     TableName: 'Conversations',
     Key: { userId, targetUserId: hiddenUserId },
   }).promise();
 
   if (conversation.Item?.settings?.isHidden) {
-    throw new Error('Hội thoại đã được ẩn. Vui lòng bỏ ẩn trước!');
+    throw new AppError('Hội thoại đã được ẩn. Vui lòng bỏ ẩn trước!', 400);
   }
 
-  // 4. Băm mật khẩu
+  // 5. Băm mật khẩu
   let hashedPassword;
   try {
     hashedPassword = await bcrypt.hash(password, 10);
   } catch (err) {
-    console.error('Lỗi băm mật khẩu:', err);
-    throw new Error('Không thể xử lý mật khẩu!');
+    logger.error('Lỗi băm mật khẩu:', err);
+    throw new AppError('Không thể xử lý mật khẩu!', 500);
   }
 
-  // 5. Cập nhật Conversations
+  // 6. Cập nhật Conversations
   const timestamp = new Date().toISOString();
   try {
     await dynamoDB.update({
@@ -66,24 +86,23 @@ const hideConversation = async (userId, hiddenUserId, password) => {
       ConditionExpression: 'attribute_exists(userId)',
     }).promise();
   } catch (err) {
-    console.error('Lỗi cập nhật trạng thái ẩn:', err);
-    throw err;
+    logger.error('Lỗi cập nhật trạng thái ẩn:', err);
+    throw new AppError('Không thể ẩn hội thoại!', 500);
   }
 
-  // 6. Lưu vào Redis (tùy chọn)
+  // 7. Lưu vào Redis
   try {
     await redisClient.set(
       `hidden:${userId}:${hiddenUserId}`,
       JSON.stringify({ hiddenUserId, hashedPassword }),
       'EX',
-      24 * 60 * 60 // Cache 24h
+      24 * 60 * 60
     );
   } catch (err) {
-    console.error('Lỗi lưu vào Redis:', err);
-    // Không rollback vì DynamoDB đã cập nhật
+    logger.error('Lỗi lưu vào Redis:', err);
   }
 
-  // 7. Phát sự kiện
+  // 8. Phát sự kiện
   io().to(userId).emit('conversationHidden', { hiddenUserId });
 
   return { success: true, message: 'Đã ẩn cuộc trò chuyện!' };
@@ -91,11 +110,11 @@ const hideConversation = async (userId, hiddenUserId, password) => {
 
 // Hàm bỏ ẩn hội thoại
 const unhideConversation = async (userId, hiddenUserId, password) => {
-  console.log('Bỏ ẩn hội thoại:', { userId, hiddenUserId });
+  logger.info('Bỏ ẩn hội thoại:', { userId, hiddenUserId });
 
   // 1. Kiểm tra hợp lệ
   if (userId === hiddenUserId) {
-    throw new Error('Không thể bỏ ẩn hội thoại với chính mình!');
+    throw new AppError('Không thể bỏ ẩn hội thoại với chính mình!', 400);
   }
 
   // 2. Kiểm tra hội thoại và trạng thái ẩn
@@ -105,21 +124,21 @@ const unhideConversation = async (userId, hiddenUserId, password) => {
   }).promise();
 
   if (!conversation.Item) {
-    throw new Error('Không tìm thấy hội thoại!');
+    throw new AppError('Không tìm thấy hội thoại!', 404);
   }
   if (!conversation.Item.settings?.isHidden) {
-    throw new Error('Cuộc trò chuyện không được ẩn!');
+    throw new AppError('Cuộc trò chuyện không được ẩn!', 400);
   }
 
   // 3. Kiểm tra mật khẩu
   try {
     const isMatch = await bcrypt.compare(password, conversation.Item.settings.passwordHash);
     if (!isMatch) {
-      throw new Error('Mật khẩu không đúng!');
+      throw new AppError('Mật khẩu không đúng!', 401);
     }
   } catch (err) {
-    console.error('Lỗi so sánh mật khẩu:', err);
-    throw err;
+    logger.error('Lỗi so sánh mật khẩu:', err);
+    throw new AppError('Không thể xác minh mật khẩu!', 500);
   }
 
   // 4. Cập nhật Conversations
@@ -133,16 +152,15 @@ const unhideConversation = async (userId, hiddenUserId, password) => {
       },
     }).promise();
   } catch (err) {
-    console.error('Lỗi xóa trạng thái ẩn:', err);
-    throw err;
+    logger.error('Lỗi xóa trạng thái ẩn:', err);
+    throw new AppError('Không thể bỏ ẩn hội thoại!', 500);
   }
 
   // 5. Xóa khỏi Redis
   try {
     await redisClient.del(`hidden:${userId}:${hiddenUserId}`);
   } catch (err) {
-    console.error('Lỗi xóa Redis:', err);
-    // Không nghiêm trọng, tiếp tục
+    logger.error('Lỗi xóa Redis:', err);
   }
 
   // 6. Phát sự kiện
@@ -153,9 +171,15 @@ const unhideConversation = async (userId, hiddenUserId, password) => {
 
 // Hàm lấy hội thoại ẩn
 const getHiddenConversations = async (userId) => {
-  console.log('Lấy danh sách hội thoại ẩn:', { userId });
+  logger.info('Lấy danh sách hội thoại ẩn:', { userId });
 
+  const cacheKey = `hidden_conversations:${userId}`;
   try {
+    const cached = await redisClient.get(cacheKey);
+    if (cached) {
+      return { success: true, hiddenConversations: JSON.parse(cached) };
+    }
+
     const result = await dynamoDB.query({
       TableName: 'Conversations',
       KeyConditionExpression: 'userId = :userId',
@@ -166,12 +190,37 @@ const getHiddenConversations = async (userId) => {
       },
     }).promise();
 
-    const hiddenConversations = (result.Items || []).map(item => ({
-      hiddenUserId: item.targetUserId,
-      timestamp: item.updatedAt,
-    }));
+    const hiddenConversations = [];
+    for (const item of result.Items || []) {
+      const targetUserId = item.targetUserId;
+      const isFriend = await dynamoDB.get({
+        TableName: 'Friends',
+        Key: { userId, friendId: targetUserId },
+      }).promise().then(res => !!res.Item);
 
-    // Đồng bộ Redis
+      if (!isFriend) {
+        const messages = await dynamoDB.query({
+          TableName: 'Messages',
+          IndexName: 'ReceiverSenderIndex',
+          KeyConditionExpression: 'receiverId = :userId AND senderId = :targetUserId',
+          ExpressionAttributeValues: {
+            ':userId': userId,
+            ':targetUserId': targetUserId,
+          },
+          Limit: 1,
+        }).promise();
+        const hasNonRestricted = messages.Items?.some(msg => msg.status !== 'restricted');
+        if (!hasNonRestricted) continue;
+      }
+
+      hiddenConversations.push({
+        hiddenUserId: targetUserId,
+        timestamp: item.updatedAt,
+      });
+    }
+
+    await redisClient.set(cacheKey, JSON.stringify(hiddenConversations), 'EX', 24 * 60 * 60);
+
     for (const item of result.Items) {
       const redisKey = `hidden:${userId}:${item.targetUserId}`;
       const redisData = await redisClient.get(redisKey);
@@ -187,16 +236,28 @@ const getHiddenConversations = async (userId) => {
 
     return { success: true, hiddenConversations };
   } catch (err) {
-    console.error('Lỗi lấy hội thoại ẩn:', err);
-    throw err;
+    logger.error('Lỗi lấy hội thoại ẩn:', err);
+    throw new AppError('Không thể lấy danh sách hội thoại ẩn!', 500);
   }
 };
 
 // Hàm kiểm tra trạng thái mute
 const checkMuteStatus = async (userId, mutedUserId) => {
-  console.log('Kiểm tra trạng thái mute:', { userId, mutedUserId });
+  logger.info('Kiểm tra trạng thái mute:', { userId, mutedUserId });
 
   try {
+    const cacheKey = `mute:${userId}:${mutedUserId}`;
+    const cached = await redisClient.get(cacheKey);
+    if (cached) {
+      const { muteUntil } = JSON.parse(cached);
+      const now = new Date();
+      if (muteUntil === 'permanent' || new Date(muteUntil) > now) {
+        return { isMuted: true, muteUntil };
+      }
+      await redisClient.del(cacheKey);
+      return { isMuted: false };
+    }
+
     const conversation = await dynamoDB.get({
       TableName: 'Conversations',
       Key: { userId, targetUserId: mutedUserId },
@@ -212,9 +273,8 @@ const checkMuteStatus = async (userId, mutedUserId) => {
     }
 
     const now = new Date();
-    const muteUntilDate = new Date(muteUntil);
+    const muteUntilDate = muteUntil === 'permanent' ? new Date(9999, 0, 1) : new Date(muteUntil);
     if (muteUntilDate <= now) {
-      // Xóa trạng thái mute
       await dynamoDB.update({
         TableName: 'Conversations',
         Key: { userId, targetUserId: mutedUserId },
@@ -226,18 +286,25 @@ const checkMuteStatus = async (userId, mutedUserId) => {
       return { isMuted: false };
     }
 
+    await redisClient.set(cacheKey, JSON.stringify({ mutedUserId, muteUntil }), 'EX', 8 * 60 * 60);
     return { isMuted: true, muteUntil };
   } catch (err) {
-    console.error('Lỗi kiểm tra mute:', err);
-    throw err;
+    logger.error('Lỗi kiểm tra mute:', err);
+    throw new AppError('Không thể kiểm tra trạng thái mute!', 500);
   }
 };
 
 // Hàm lấy hội thoại mute
 const getMutedConversations = async (userId) => {
-  console.log('Lấy danh sách hội thoại mute:', { userId });
+  logger.info('Lấy danh sách hội thoại mute:', { userId });
 
+  const cacheKey = `muted_conversations:${userId}`;
   try {
+    const cached = await redisClient.get(cacheKey);
+    if (cached) {
+      return { success: true, mutedConversations: JSON.parse(cached) };
+    }
+
     const result = await dynamoDB.query({
       TableName: 'Conversations',
       KeyConditionExpression: 'userId = :userId',
@@ -250,17 +317,39 @@ const getMutedConversations = async (userId) => {
     const expiredMutes = [];
 
     for (const item of result.Items || []) {
-      if (!item.settings.muteUntil || new Date(item.settings.muteUntil) > now) {
+      const muteUntil = item.settings.muteUntil;
+      if (!muteUntil) continue;
+
+      const isFriend = await dynamoDB.get({
+        TableName: 'Friends',
+        Key: { userId, friendId: item.targetUserId },
+      }).promise().then(res => !!res.Item);
+
+      if (!isFriend) {
+        const messages = await dynamoDB.query({
+          TableName: 'Messages',
+          IndexName: 'ReceiverSenderIndex',
+          KeyConditionExpression: 'receiverId = :userId AND senderId = :targetUserId',
+          ExpressionAttributeValues: {
+            ':userId': userId,
+            ':targetUserId': item.targetUserId,
+          },
+          Limit: 1,
+        }).promise();
+        const hasNonRestricted = messages.Items?.some(msg => msg.status !== 'restricted');
+        if (!hasNonRestricted) continue;
+      }
+
+      if (muteUntil === 'permanent' || new Date(muteUntil) > now) {
         validMutes.push({
           mutedUserId: item.targetUserId,
-          muteUntil: item.settings.muteUntil,
+          muteUntil,
         });
       } else {
         expiredMutes.push({ userId, targetUserId: item.targetUserId });
       }
     }
 
-    // Xóa các trạng thái mute hết hạn
     for (const expired of expiredMutes) {
       await dynamoDB.update({
         TableName: 'Conversations',
@@ -270,32 +359,48 @@ const getMutedConversations = async (userId) => {
           ':time': new Date().toISOString(),
         },
       }).promise();
+      await redisClient.del(`mute:${userId}:${expired.targetUserId}`);
     }
 
+    await redisClient.set(cacheKey, JSON.stringify(validMutes), 'EX', 24 * 60 * 60);
     return { success: true, mutedConversations: validMutes };
   } catch (err) {
-    console.error('Lỗi lấy hội thoại mute:', err);
-    throw err;
+    logger.error('Lỗi lấy hội thoại mute:', err);
+    throw new AppError('Không thể lấy danh sách hội thoại mute!', 500);
   }
 };
 
 // Hàm mute hội thoại
 const muteConversation = async (userId, mutedUserId, duration) => {
-  console.log('Cập nhật trạng thái mute:', { userId, mutedUserId, duration });
+  logger.info('Cập nhật trạng thái mute:', { userId, mutedUserId, duration });
 
-  // 1. Kiểm tra hợp lệ
   if (userId === mutedUserId) {
-    throw new Error('Không thể mute chính mình!');
+    throw new AppError('Không thể mute chính mình!', 400);
   }
   const validDurations = ['off', '1h', '3h', '8h', 'on'];
   if (!validDurations.includes(duration)) {
-    throw new Error('Tùy chọn mute không hợp lệ! Chọn: off, 1h, 3h, 8h, on');
+    throw new AppError('Tùy chọn mute không hợp lệ! Chọn: off, 1h, 3h, 8h, on', 400);
   }
 
-  // 2. Kiểm tra hội thoại tồn tại
   await checkConversationExists(userId, mutedUserId);
 
-  // 3. Xử lý unmute
+  const userResult = await dynamoDB.get({
+    TableName: 'Users',
+    Key: { userId: mutedUserId },
+  }).promise();
+  if (!userResult.Item) {
+    throw new AppError('Người dùng không tồn tại!', 404);
+  }
+  if (userResult.Item.restrictStrangerMessages) {
+    const friendResult = await dynamoDB.get({
+      TableName: 'Friends',
+      Key: { userId: mutedUserId, friendId: userId },
+    }).promise();
+    if (!friendResult.Item) {
+      throw new AppError('Không thể mute hội thoại với người lạ khi restrictStrangerMessages được bật!', 403);
+    }
+  }
+
   if (duration === 'off') {
     try {
       await dynamoDB.update({
@@ -307,28 +412,27 @@ const muteConversation = async (userId, mutedUserId, duration) => {
         },
         ConditionExpression: 'attribute_exists(settings.muteUntil)',
       }).promise();
+      await redisClient.del(`mute:${userId}:${mutedUserId}`);
       io().to(userId).emit('conversationUnmuted', { mutedUserId });
       return { success: true, message: 'Đã bật thông báo!' };
     } catch (err) {
       if (err.code === 'ConditionalCheckFailedException') {
         return { success: true, message: 'Hội thoại chưa được mute!' };
       }
-      console.error('Lỗi bỏ mute:', err);
-      throw err;
+      logger.error('Lỗi bỏ mute:', err);
+      throw new AppError('Không thể bỏ mute hội thoại!', 500);
     }
   }
 
-  // 4. Kiểm tra trạng thái mute hiện tại
   const conversation = await dynamoDB.get({
     TableName: 'Conversations',
     Key: { userId, targetUserId: mutedUserId },
   }).promise();
 
   if (conversation.Item?.settings?.muteUntil && duration !== 'on') {
-    throw new Error('Hội thoại đã được mute. Vui lòng bỏ mute trước!');
+    throw new AppError('Hội thoại đã được mute. Vui lòng bỏ mute trước!', 400);
   }
 
-  // 5. Tính muteUntil
   let muteUntil;
   if (duration === 'on') {
     muteUntil = 'permanent';
@@ -340,7 +444,6 @@ const muteConversation = async (userId, mutedUserId, duration) => {
     muteUntil = new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString();
   }
 
-  // 6. Cập nhật Conversations
   try {
     await dynamoDB.update({
       TableName: 'Conversations',
@@ -352,11 +455,21 @@ const muteConversation = async (userId, mutedUserId, duration) => {
       },
     }).promise();
   } catch (err) {
-    console.error('Lỗi cập nhật mute:', err);
-    throw err;
+    logger.error('Lỗi cập nhật mute:', err);
+    throw new AppError('Không thể mute hội thoại!', 500);
   }
 
-  // 7. Phát sự kiện
+  try {
+    await redisClient.set(
+      `mute:${userId}:${mutedUserId}`,
+      JSON.stringify({ mutedUserId, muteUntil }),
+      'EX',
+      duration === 'on' ? 30 * 24 * 60 * 60 : 8 * 60 * 60
+    );
+  } catch (err) {
+    logger.error('Lỗi lưu vào Redis:', err);
+  }
+
   io().to(userId).emit('conversationMuted', { mutedUserId, muteUntil });
 
   return { success: true, message: 'Đã chặn thông báo!', muteUntil };
@@ -364,27 +477,40 @@ const muteConversation = async (userId, mutedUserId, duration) => {
 
 // Hàm ghim hội thoại
 const pinConversation = async (userId, pinnedUserId) => {
-  console.log('Ghim hội thoại:', { userId, pinnedUserId });
+  logger.info('Ghim hội thoại:', { userId, pinnedUserId });
 
-  // 1. Kiểm tra hợp lệ
   if (userId === pinnedUserId) {
-    throw new Error('Không thể ghim hội thoại với chính mình!');
+    throw new AppError('Không thể ghim hội thoại với chính mình!', 400);
   }
 
-  // 2. Kiểm tra hội thoại tồn tại
   await checkConversationExists(userId, pinnedUserId);
 
-  // 3. Kiểm tra trạng thái ghim
+  const userResult = await dynamoDB.get({
+    TableName: 'Users',
+    Key: { userId: pinnedUserId },
+  }).promise();
+  if (!userResult.Item) {
+    throw new AppError('Người dùng không tồn tại!', 404);
+  }
+  if (userResult.Item.restrictStrangerMessages) {
+    const friendResult = await dynamoDB.get({
+      TableName: 'Friends',
+      Key: { userId: pinnedUserId, friendId: userId },
+    }).promise();
+    if (!friendResult.Item) {
+      throw new AppError('Không thể ghim hội thoại với người lạ khi restrictStrangerMessages được bật!', 403);
+    }
+  }
+
   const conversation = await dynamoDB.get({
     TableName: 'Conversations',
     Key: { userId, targetUserId: pinnedUserId },
   }).promise();
 
   if (conversation.Item?.settings?.isPinned) {
-    throw new Error('Hội thoại đã được ghim!');
+    throw new AppError('Hội thoại đã được ghim!', 400);
   }
 
-  // 4. Kiểm tra giới hạn ghim
   try {
     const pinnedResult = await dynamoDB.query({
       TableName: 'Conversations',
@@ -397,14 +523,13 @@ const pinConversation = async (userId, pinnedUserId) => {
     }).promise();
 
     if (pinnedResult.Items?.length >= 5) {
-      throw new Error('Bạn chỉ có thể ghim tối đa 5 hội thoại!');
+      throw new AppError('Bạn chỉ có thể ghim tối đa 5 hội thoại!', 400);
     }
   } catch (err) {
-    console.error('Lỗi kiểm tra số lượng ghim:', err);
-    throw err;
+    logger.error('Lỗi kiểm tra số lượng ghim:', err);
+    throw new AppError('Không thể kiểm tra số lượng hội thoại ghim!', 500);
   }
 
-  // 5. Cập nhật Conversations
   try {
     await dynamoDB.update({
       TableName: 'Conversations',
@@ -416,11 +541,10 @@ const pinConversation = async (userId, pinnedUserId) => {
       },
     }).promise();
   } catch (err) {
-    console.error('Lỗi ghim hội thoại:', err);
-    throw err;
+    logger.error('Lỗi ghim hội thoại:', err);
+    throw new AppError('Không thể ghim hội thoại!', 500);
   }
 
-  // 6. Phát sự kiện
   io().to(userId).emit('conversationPinned', { pinnedUserId });
 
   return { success: true, message: 'Đã ghim hội thoại!' };
@@ -428,24 +552,21 @@ const pinConversation = async (userId, pinnedUserId) => {
 
 // Hàm bỏ ghim hội thoại
 const unpinConversation = async (userId, pinnedUserId) => {
-  console.log('Bỏ ghim hội thoại:', { userId, pinnedUserId });
+  logger.info('Bỏ ghim hội thoại:', { userId, pinnedUserId });
 
-  // 1. Kiểm tra hợp lệ
   if (userId === pinnedUserId) {
-    throw new Error('Không thể bỏ ghim hội thoại với chính mình!');
+    throw new AppError('Không thể bỏ ghim hội thoại với chính mình!', 400);
   }
 
-  // 2. Kiểm tra trạng thái ghim
   const conversation = await dynamoDB.get({
     TableName: 'Conversations',
     Key: { userId, targetUserId: pinnedUserId },
   }).promise();
 
   if (!conversation.Item?.settings?.isPinned) {
-    throw new Error('Hội thoại chưa được ghim!');
+    throw new AppError('Hội thoại chưa được ghim!', 400);
   }
 
-  // 3. Cập nhật Conversations
   try {
     await dynamoDB.update({
       TableName: 'Conversations',
@@ -456,11 +577,10 @@ const unpinConversation = async (userId, pinnedUserId) => {
       },
     }).promise();
   } catch (err) {
-    console.error('Lỗi bỏ ghim:', err);
-    throw err;
+    logger.error('Lỗi bỏ ghim:', err);
+    throw new AppError('Không thể bỏ ghim hội thoại!', 500);
   }
 
-  // 4. Phát sự kiện
   io().to(userId).emit('conversationUnpinned', { pinnedUserId });
 
   return { success: true, message: 'Đã bỏ ghim hội thoại!' };
@@ -468,9 +588,15 @@ const unpinConversation = async (userId, pinnedUserId) => {
 
 // Hàm lấy hội thoại ghim
 const getPinnedConversations = async (userId) => {
-  console.log('Lấy danh sách hội thoại ghim:', { userId });
+  logger.info('Lấy danh sách hội thoại ghim:', { userId });
 
+  const cacheKey = `pinned_conversations:${userId}`;
   try {
+    const cached = await redisClient.get(cacheKey);
+    if (cached) {
+      return { success: true, pinnedConversations: JSON.parse(cached) };
+    }
+
     const result = await dynamoDB.query({
       TableName: 'Conversations',
       KeyConditionExpression: 'userId = :userId',
@@ -481,71 +607,98 @@ const getPinnedConversations = async (userId) => {
       },
     }).promise();
 
-    const pinnedConversations = (result.Items || []).map(item => ({
-      pinnedUserId: item.targetUserId,
-      timestamp: item.updatedAt,
-    }));
+    const pinnedConversations = [];
+    for (const item of result.Items || []) {
+      const targetUserId = item.targetUserId;
+      const isFriend = await dynamoDB.get({
+        TableName: 'Friends',
+        Key: { userId, friendId: targetUserId },
+      }).promise().then(res => !!res.Item);
 
+      if (!isFriend) {
+        const messages = await dynamoDB.query({
+          TableName: 'Messages',
+          IndexName: 'ReceiverSenderIndex',
+          KeyConditionExpression: 'receiverId = :userId AND senderId = :targetUserId',
+          ExpressionAttributeValues: {
+            ':userId': userId,
+            ':targetUserId': targetUserId,
+          },
+          Limit: 1,
+        }).promise();
+        const hasNonRestricted = messages.Items?.some(msg => msg.status !== 'restricted');
+        if (!hasNonRestricted) continue;
+      }
+
+      pinnedConversations.push({
+        pinnedUserId: targetUserId,
+        timestamp: item.updatedAt,
+      });
+    }
+
+    await redisClient.set(cacheKey, JSON.stringify(pinnedConversations), 'EX', 24 * 60 * 60);
     return { success: true, pinnedConversations };
   } catch (err) {
-    console.error('Lỗi lấy hội thoại ghim:', err);
-    return {
-      success: false,
-      pinnedConversations: [],
-      error: err.message || 'Lỗi khi lấy danh sách hội thoại ghim',
-    };
+    logger.error('Lỗi lấy hội thoại ghim:', err);
+    throw new AppError('Không thể lấy danh sách hội thoại ghim!', 500);
   }
 };
 
-const  createConversation = async (userId, targetUserId) => {
-    if (!userId || !targetUserId) {
-      logger.error('Invalid userId or targetUserId', { userId, targetUserId });
-      throw new AppError('userId hoặc targetUserId không hợp lệ!', 400);
-    }
+// Hàm tạo hội thoại
+const createConversation = async (userId, targetUserId) => {
+  if (!userId || !targetUserId) {
+    logger.error('Invalid userId or targetUserId', { userId, targetUserId });
+    throw new AppError('userId hoặc targetUserId không hợp lệ!', 400);
+  }
+
+  logger.info('Creating conversation', { userId, targetUserId });
+
+  const now = new Date().toISOString();
+  const conversationId = uuidv4();
+
+  const [userSettings, targetSettings] = await Promise.all([
+    dynamoDB.get({
+      TableName: 'Users',
+      Key: { userId },
+    }).promise(),
+    dynamoDB.get({
+      TableName: 'Users',
+      Key: { userId: targetUserId },
+    }).promise(),
+  ]);
+
+  const userRestrict = userSettings.Item?.restrictStrangerMessages || false;
+  const targetRestrict = targetSettings.Item?.restrictStrangerMessages || false;
+
+  const createConversationRecord = (user, target, restrict) => ({
+    userId: user,
+    targetUserId: target,
+    conversationId,
+    createdAt: now,
+    updatedAt: now,
+    lastMessage: null,
+    settings: {
+      autoDelete: 'never',
+      pinnedMessages: [],
+      mute: false,
+      block: false,
+      restrictStrangers: restrict,
+    },
+  });
+
+  try {
     if (userId === targetUserId) {
-      logger.error('Cannot create conversation with self', { userId });
-      throw new AppError('Không thể tạo hội thoại với chính mình!', 400);
-    }
-
-    logger.info('Creating conversation', { userId, targetUserId });
-
-    const now = new Date().toISOString();
-    const conversationId = uuidv4(); // ID chung cho cả hai bản ghi hội thoại
-
-    // Tạo bản ghi hội thoại cho userId
-    const userConversation = {
-      userId,
-      targetUserId,
-      conversationId,
-      createdAt: now,
-      updatedAt: now,
-      lastMessage: null,
-      settings: {
-        autoDelete: 'never', // Mặc định không tự động xóa
-        pinnedMessages: [], // Danh sách tin nhắn ghim
-        mute: false, // Tắt thông báo
-        block: false, // Chặn người dùng
-      },
-    };
-
-    // Tạo bản ghi hội thoại cho targetUserId
-    const targetConversation = {
-      userId: targetUserId,
-      targetUserId: userId,
-      conversationId,
-      createdAt: now,
-      updatedAt: now,
-      lastMessage: null,
-      settings: {
-        autoDelete: 'never',
-        pinnedMessages: [],
-        mute: false,
-        block: false,
-      },
-    };
-
-    try {
-      // Lưu cả hai bản ghi hội thoại vào DynamoDB
+      const conversation = createConversationRecord(userId, targetUserId, userRestrict);
+      await dynamoDB.put({
+        TableName: 'Conversations',
+        Item: conversation,
+        ConditionExpression: 'attribute_not_exists(userId) AND attribute_not_exists(targetUserId)',
+      }).promise();
+      logger.info('Self-conversation created successfully', { conversationId, userId });
+      return { success: true, conversationId };
+    } else {
+      const userConversation = createConversationRecord(userId, targetUserId, userRestrict);
+      const targetConversation = createConversationRecord(targetUserId, userId, targetRestrict);
       await Promise.all([
         dynamoDB.put({
           TableName: 'Conversations',
@@ -558,22 +711,22 @@ const  createConversation = async (userId, targetUserId) => {
           ConditionExpression: 'attribute_not_exists(userId) AND attribute_not_exists(targetUserId)',
         }).promise(),
       ]);
-
       logger.info('Conversation created successfully', { conversationId, userId, targetUserId });
       return { success: true, conversationId };
-    } catch (error) {
-      if (error.code === 'ConditionalCheckFailedException') {
-        logger.warn('Conversation already exists', { userId, targetUserId });
-        return { success: true, conversationId: null }; // Hội thoại đã tồn tại, không phải lỗi
-      }
-      logger.error('Failed to create conversation', { userId, targetUserId, error: error.message });
-      throw new AppError(`Không thể tạo hội thoại: ${error.message}`, 500);
     }
-}
+  } catch (error) {
+    if (error.code === 'ConditionalCheckFailedException') {
+      logger.warn('Conversation already exists', { userId, targetUserId });
+      return { success: true, conversationId: null };
+    }
+    logger.error('Failed to create conversation', { userId, targetUserId, error: error.message });
+    throw new AppError(`Không thể tạo hội thoại: ${error.message}`, 500);
+  }
+};
 
 // Hàm lấy cài đặt tự động xóa
 const getAutoDeleteSetting = async (userId, targetUserId) => {
-  console.log('Lấy cài đặt tự động xóa:', { userId, targetUserId });
+  logger.info('Lấy cài đặt tự động xóa:', { userId, targetUserId });
 
   try {
     const result = await dynamoDB.get({
@@ -583,25 +736,22 @@ const getAutoDeleteSetting = async (userId, targetUserId) => {
 
     return result.Item?.settings?.autoDeleteAfter || 'never';
   } catch (err) {
-    console.error('Lỗi lấy cài đặt tự động xóa:', err);
-    throw err;
+    logger.error('Lỗi lấy cài đặt tự động xóa:', err);
+    throw new AppError('Không thể lấy cài đặt tự động xóa!', 500);
   }
 };
 
 // Hàm đặt cài đặt tự động xóa
 const setAutoDeleteSetting = async (userId, targetUserId, autoDeleteAfter) => {
-  console.log('Đặt cài đặt tự động xóa:', { userId, targetUserId, autoDeleteAfter });
+  logger.info('Đặt cài đặt tự động xóa:', { userId, targetUserId, autoDeleteAfter });
 
-  // 1. Kiểm tra hợp lệ
   const validOptions = ['10s', '60s', '1d', '3d', '7d', 'never'];
   if (!validOptions.includes(autoDeleteAfter)) {
-    throw new Error('Giá trị autoDeleteAfter không hợp lệ! Chọn: 10s, 60s, 1d, 3d, 7d, never');
+    throw new AppError('Giá trị autoDeleteAfter không hợp lệ! Chọn: 10s, 60s, 1d, 3d, 7d, never', 400);
   }
 
-  // 2. Kiểm tra hội thoại tồn tại
   await checkConversationExists(userId, targetUserId);
 
-  // 3. Cập nhật Conversations
   try {
     await dynamoDB.update({
       TableName: 'Conversations',
@@ -613,11 +763,10 @@ const setAutoDeleteSetting = async (userId, targetUserId, autoDeleteAfter) => {
       },
     }).promise();
   } catch (err) {
-    console.error('Lỗi đặt cài đặt tự động xóa:', err);
-    throw err;
+    logger.error('Lỗi đặt cài đặt tự động xóa:', err);
+    throw new AppError('Không thể đặt cài đặt tự động xóa!', 500);
   }
 
-  // 4. Phát sự kiện
   io().to(userId).emit('autoDeleteSettingUpdated', { targetUserId, autoDeleteAfter });
 
   return { success: true, message: `Cài đặt tự động xóa đã được đặt thành ${autoDeleteAfter}` };
