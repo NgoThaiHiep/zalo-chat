@@ -32,8 +32,8 @@ const router = express.Router();
 
 // Nhóm: Gửi và lấy tin nhắn
 router.post('/send', authMiddleware, sendMessageController);// Gửi tin nhắn
-router.get('/user/:userId', authMiddleware, getMessagesBetweenController); // Lấy tin nhắn giữa hai người dùng
-router.get('/summary', authMiddleware, getConversationSummaryController);// Lấy tóm tắt hội thoại
+router.get('/user/:userId', authMiddleware, getMessagesBetweenController); // Lấy tin nhắn giữa hai người dùng trong đoạn hội thoại
+router.get('/summary', authMiddleware, getConversationSummaryController); // Lấy tóm tắt hội người nhận với nhiều người
 
 
 // Nhóm: Chuyển tiếp và thu hồi tin nhắn

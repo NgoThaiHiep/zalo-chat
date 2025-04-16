@@ -135,7 +135,7 @@ const createMessage = async (senderId, receiverId, messageData) => {
     io().to(senderId).emit('messageStatus', { messageId, status: MESSAGE_STATUSES.SENDING });
     senderMessage.status = MESSAGE_STATUSES.SENDING;
     if (receiverMessage) {
-      receiverMessage.status = isRestricted ? MESSAGE_STATUSES.RESTRICTED : MESSAGE_STATUSES.SENDING;
+      receiverMessage.status = MESSAGE_STATUSES.SENDING;
     }
 
     // Lưu tin nhắn
@@ -171,7 +171,12 @@ const createMessage = async (senderId, receiverId, messageData) => {
         Key: { userId: senderId, targetUserId: receiverId },
         UpdateExpression: 'SET lastMessage = :msg, updatedAt = :time',
         ExpressionAttributeValues: {
-          ':msg': { messageId, content: messageData.content || '', createdAt: baseMessage.timestamp },
+          ':msg': {
+            messageId,
+            content: messageData.content || '',
+            createdAt: baseMessage.timestamp,
+            ownerId: senderId,
+          },
           ':time': baseMessage.timestamp,
         },
       }).promise(),
@@ -183,7 +188,12 @@ const createMessage = async (senderId, receiverId, messageData) => {
           Key: { userId: receiverId, targetUserId: senderId },
           UpdateExpression: 'SET lastMessage = :msg, updatedAt = :time',
           ExpressionAttributeValues: {
-            ':msg': { messageId, content: messageData.content || '', createdAt: baseMessage.timestamp },
+            ':msg': {
+              messageId,
+              content: messageData.content || '',
+              createdAt: baseMessage.timestamp,
+              ownerId: receiverId,
+            },
             ':time': baseMessage.timestamp,
           },
         }).promise()
@@ -197,12 +207,10 @@ const createMessage = async (senderId, receiverId, messageData) => {
       ? MESSAGE_STATUSES.SENT
       : isRestricted
       ? MESSAGE_STATUSES.RESTRICTED
-      : receiverOnline
-      ? MESSAGE_STATUSES.DELIVERED
       : MESSAGE_STATUSES.SENT;
 
     await updateMessageStatus(messageId, senderId, initialStatus);
-    if (receiverMessage && !isRestricted) {
+    if (receiverMessage) {
       await updateMessageStatus(messageId, receiverId, initialStatus);
     }
 
@@ -216,10 +224,10 @@ const createMessage = async (senderId, receiverId, messageData) => {
     }
 
     // Phát sự kiện
+    io().to(senderId).emit('receiveMessage', { ...senderMessage, status: initialStatus });
     if (senderId !== receiverId && receiverOnline && !isRestricted) {
       io().to(receiverId).emit('receiveMessage', { ...receiverMessage, status: initialStatus });
     }
-    io().to(senderId).emit('receiveMessage', { ...senderMessage, status: initialStatus });
 
     return { ...baseMessage, status: initialStatus };
   } catch (error) {
@@ -237,7 +245,6 @@ const createMessage = async (senderId, receiverId, messageData) => {
     throw new AppError(`Failed to send message: ${error.message}`, 500);
   }
 };
-
 // Hàm thử lại tin nhắn
 const retryMessage = async (senderId, messageId) => {
   logger.info(`Retrying message`, { messageId, senderId });
@@ -250,6 +257,22 @@ const retryMessage = async (senderId, messageId) => {
   if (!message) throw new AppError('Message not found', 404);
   if (message.senderId !== senderId) throw new AppError('Unauthorized to retry this message', 403);
   if (message.status !== MESSAGE_STATUSES.FAILED) throw new AppError('Message is not in failed state', 400);
+  if (message.status === MESSAGE_STATUSES.RECALLED) throw new AppError('Cannot retry recalled message', 400);
+
+  // Check if the message was deleted and within 60 seconds
+  const deletedMessage = await dynamoDB.get({
+    TableName: 'UserDeletedMessages',
+    Key: { userId: senderId, messageId },
+  }).promise();
+
+  if (deletedMessage.Item) {
+    const deletionTime = new Date(deletedMessage.Item.timestamp);
+    const now = new Date();
+    const timeDiffSeconds = (now - deletionTime) / 1000;
+    if (timeDiffSeconds > 60) {
+      throw new AppError('Cannot retry deleted message after 60 seconds', 400);
+    }
+  }
 
   await updateMessageStatus(messageId, senderId, MESSAGE_STATUSES.SENDING);
   io().to(senderId).emit('messageStatus', { messageId, status: MESSAGE_STATUSES.SENDING });
@@ -264,10 +287,66 @@ const retryMessage = async (senderId, messageId) => {
       updateMessageStatus(messageId, savedMessage.receiverId, newStatus),
     ]);
 
+    // Check if this message should become the last message
+    const conversation = await dynamoDB.get({
+      TableName: 'Conversations',
+      Key: { userId: senderId, targetUserId: savedMessage.receiverId },
+    }).promise();
+
+    const lastMessageId = conversation.Item?.lastMessage?.messageId;
+    let shouldUpdateLastMessage = !lastMessageId; // No last message exists
+
+    if (lastMessageId) {
+      const lastMessage = await dynamoDB.get({
+        TableName: 'Messages',
+        Key: { messageId: lastMessageId, ownerId: senderId },
+      }).promise();
+      shouldUpdateLastMessage = !lastMessage.Item || new Date(savedMessage.timestamp) > new Date(lastMessage.Item.timestamp);
+    }
+
+    if (shouldUpdateLastMessage) {
+      await Promise.all([
+        dynamoDB.update({
+          TableName: 'Conversations',
+          Key: { userId: senderId, targetUserId: savedMessage.receiverId },
+          UpdateExpression: 'SET lastMessage = :msg, updatedAt = :time',
+          ExpressionAttributeValues: {
+            ':msg': {
+              messageId: savedMessage.messageId,
+              content: savedMessage.content || '',
+              createdAt: savedMessage.timestamp,
+            },
+            ':time': new Date().toISOString(),
+          },
+        }).promise(),
+        dynamoDB.update({
+          TableName: 'Conversations',
+          Key: { userId: savedMessage.receiverId, targetUserId: senderId },
+          UpdateExpression: 'SET lastMessage = :msg, updatedAt = :time',
+          ExpressionAttributeValues: {
+            ':msg': {
+              messageId: savedMessage.messageId,
+              content: savedMessage.content || '',
+              createdAt: savedMessage.timestamp,
+            },
+            ':time': new Date().toISOString(),
+          },
+        }).promise(),
+      ]);
+    }
+
     if (receiverOnline) {
       io().to(savedMessage.receiverId).emit('receiveMessage', { ...savedMessage, status: newStatus });
     }
     io().to(senderId).emit('messageStatus', { messageId, status: newStatus });
+
+    // Remove from UserDeletedMessages if it was deleted
+    if (deletedMessage.Item) {
+      await dynamoDB.delete({
+        TableName: 'UserDeletedMessages',
+        Key: { userId: senderId, messageId },
+      }).promise();
+    }
 
     return { ...savedMessage, status: newStatus };
   } catch (error) {
@@ -328,34 +407,85 @@ const markMessageAsSeen = async (userId, messageId) => {
 };
 
 // Hàm thu hồi tin nhắn
-const recallMessage = async (senderId, messageId) => {
-  logger.info(`Recalling message`, { messageId, senderId });
+const recallMessage = async (userId, messageId) => {
+  logger.info(`Recalling message`, { messageId, userId });
 
   const { Item: message } = await dynamoDB.get({
     TableName: 'Messages',
-    Key: { messageId, ownerId: senderId },
+    Key: { messageId, ownerId: userId },
   }).promise();
 
-  if (!message) throw new AppError('Message not found', 404);
-  if (message.senderId !== senderId) throw new AppError('Unauthorized to recall this message', 403);
-  if (message.status === MESSAGE_STATUSES.RECALLED) throw new AppError('Message already recalled', 400);
+  if (!message) throw new AppError('Không tìm thấy tin nhắn', 404);
+  if (message.status === MESSAGE_STATUSES.RECALLED) throw new AppError('Tin nhắn đã bị thu hồi', 400);
+  if (message.senderId !== userId && message.receiverId !== userId)
+    throw new AppError('Unauthorized to recall this message', 403);
 
   const timeDiffHours = (new Date() - new Date(message.timestamp)) / (1000 * 60 * 60);
   if (timeDiffHours > 24) throw new AppError('Cannot recall message after 24 hours', 400);
 
   try {
+    // Cập nhật trạng thái tin nhắn thành RECALLED cho cả người gửi và người nhận
     await Promise.all([
-      updateMessageStatus(messageId, senderId, MESSAGE_STATUSES.RECALLED),
+      updateMessageStatus(messageId, message.senderId, MESSAGE_STATUSES.RECALLED),
       updateMessageStatus(messageId, message.receiverId, MESSAGE_STATUSES.RECALLED),
     ]);
 
+    // Xóa media nếu có
     if (message.mediaUrl) {
       const key = message.mediaUrl.split('/').slice(3).join('/');
       await deleteS3Object(process.env.BUCKET_NAME_Chat_Send, key);
     }
 
+    // Kiểm tra xem tin nhắn có phải là tin nhắn cuối cùng không
+    const [senderConv, receiverConv] = await Promise.all([
+      dynamoDB.get({
+        TableName: 'Conversations',
+        Key: { userId: message.senderId, targetUserId: message.receiverId },
+      }).promise(),
+      dynamoDB.get({
+        TableName: 'Conversations',
+        Key: { userId: message.receiverId, targetUserId: message.senderId },
+      }).promise(),
+    ]);
+
+    const isLastMessageSender = senderConv.Item?.lastMessage?.messageId === messageId;
+    const isLastMessageReceiver = receiverConv.Item?.lastMessage?.messageId === messageId;
+
+    // Nếu là tin nhắn cuối cùng, sử dụng chính dữ liệu của tin nhắn đó
+    if (isLastMessageSender || isLastMessageReceiver) {
+      const lastMessageUpdate = {
+        messageId: message.messageId,
+        content: message.content || '',
+        createdAt: message.timestamp,
+      };
+
+      // Cập nhật Conversations cho cả hai người dùng
+      await Promise.all([
+        isLastMessageSender &&
+          dynamoDB.update({
+            TableName: 'Conversations',
+            Key: { userId: message.senderId, targetUserId: message.receiverId },
+            UpdateExpression: 'SET lastMessage = :msg, updatedAt = :time',
+            ExpressionAttributeValues: {
+              ':msg': lastMessageUpdate,
+              ':time': new Date().toISOString(),
+            },
+          }).promise(),
+        isLastMessageReceiver &&
+          dynamoDB.update({
+            TableName: 'Conversations',
+            Key: { userId: message.receiverId, targetUserId: message.senderId },
+            UpdateExpression: 'SET lastMessage = :msg, updatedAt = :time',
+            ExpressionAttributeValues: {
+              ':msg': lastMessageUpdate,
+              ':time': new Date().toISOString(),
+            },
+          }).promise(),
+      ]);
+    }
+
     io().to(message.receiverId).emit('messageRecalled', { messageId });
-    io().to(senderId).emit('messageRecalled', { messageId });
+    io().to(message.senderId).emit('messageRecalled', { messageId });
 
     return { success: true, message: 'Message recalled successfully' };
   } catch (error) {
@@ -363,7 +493,6 @@ const recallMessage = async (senderId, messageId) => {
     throw new AppError(`Failed to recall message: ${error.message}`, 500);
   }
 };
-
 // Hàm lấy tin nhắn giữa hai người dùng
 const getMessagesBetweenUsers = async (user1, user2) => {
   logger.info(`Fetching messages between users`, { user1, user2 });
@@ -379,18 +508,27 @@ const getMessagesBetweenUsers = async (user1, user2) => {
     }).promise();
     const deletedMessageIds = new Set(deletedMessages.map(item => item.messageId));
 
-    // Kiểm tra trạng thái bạn bè
+    // Kiểm tra trạng thái bạn bè và cài đặt restrictStrangerMessages
     let isFriend = true;
+    let restrictStrangerMessages = false;
     if (user1 !== user2) {
-      const friendResult = await dynamoDB.get({
-        TableName: 'Friends',
-        Key: { userId: user1, friendId: user2 },
-      }).promise();
+      const [friendResult, userResult] = await Promise.all([
+        dynamoDB.get({
+          TableName: 'Friends',
+          Key: { userId: user1, friendId: user2 },
+        }).promise(),
+        dynamoDB.get({
+          TableName: 'Users',
+          Key: { userId: user1 },
+        }).promise(),
+      ]);
       isFriend = !!friendResult.Item;
+      restrictStrangerMessages = userResult.Item?.settings?.restrictStrangerMessages || false;
     }
 
-    // Truy vấn tin nhắn
-    const [senderResult, receiverResult] = await Promise.all([
+    // Nếu bật restrictStrangerMessages và không phải bạn bè, chỉ lấy tin nhắn do user1 gửi
+    const queryPromises = [];
+    queryPromises.push(
       dynamoDB.query({
         TableName: 'Messages',
         IndexName: 'SenderReceiverIndex',
@@ -398,18 +536,28 @@ const getMessagesBetweenUsers = async (user1, user2) => {
         ExpressionAttributeValues: { ':user1': user1, ':user2': user2 },
         Limit: 100,
         ScanIndexForward: false,
-      }).promise(),
-      dynamoDB.query({
-        TableName: 'Messages',
-        IndexName: 'ReceiverSenderIndex',
-        KeyConditionExpression: 'receiverId = :user1 AND senderId = :user2',
-        ExpressionAttributeValues: { ':user1': user1, ':user2': user2 },
-        Limit: 100,
-        ScanIndexForward: false,
-      }).promise(),
-    ]);
+      }).promise()
+    );
 
-    const allMessages = [...(senderResult.Items || []), ...(receiverResult.Items || [])];
+    if (!restrictStrangerMessages || isFriend) {
+      queryPromises.push(
+        dynamoDB.query({
+          TableName: 'Messages',
+          IndexName: 'ReceiverSenderIndex',
+          KeyConditionExpression: 'receiverId = :user1 AND senderId = :user2',
+          ExpressionAttributeValues: { ':user1': user1, ':user2': user2 },
+          Limit: 100,
+          ScanIndexForward: false,
+        }).promise()
+      );
+    }
+
+    const [senderResult, receiverResult] = await Promise.all(queryPromises);
+
+    const allMessages = [
+      ...(senderResult.Items || []),
+      ...(receiverResult ? receiverResult.Items || [] : []),
+    ];
 
     // Lọc tin nhắn
     const filteredMessages = allMessages.filter(
@@ -417,8 +565,8 @@ const getMessagesBetweenUsers = async (user1, user2) => {
         !deletedMessageIds.has(msg.messageId) &&
         (!msg.expiresAt || msg.expiresAt > now) &&
         msg.ownerId === user1 &&
-        // Ẩn tin nhắn RESTRICTED trừ khi người gửi là bạn bè
-        (isFriend || msg.status !== MESSAGE_STATUSES.RESTRICTED)
+        // Không lấy tin restricted nếu user1 không phải người gửi
+        (msg.status !== MESSAGE_STATUSES.RESTRICTED || msg.senderId === user1)
     );
 
     // Loại bỏ trùng lặp và sắp xếp
@@ -437,7 +585,10 @@ const getMessagesBetweenUsers = async (user1, user2) => {
 const forwardMessage = async (senderId, messageId, targetReceiverId) => {
   logger.info(`Forwarding message`, { senderId, messageId, targetReceiverId });
 
-  await canSendMessageToUser(senderId, targetReceiverId, true);
+  const { canSend, isRestricted } = await canSendMessageToUser(senderId, targetReceiverId, true);
+  if (!canSend) {
+    throw new AppError('Không có quyền gửi tin nhắn!', 403);
+  }
 
   // Lấy tin nhắn gốc
   let originalMessage = await dynamoDB.get({
@@ -569,7 +720,12 @@ const forwardMessage = async (senderId, messageId, targetReceiverId) => {
         Key: { userId: senderId, targetUserId: targetReceiverId },
         UpdateExpression: 'SET lastMessage = :msg, updatedAt = :time',
         ExpressionAttributeValues: {
-          ':msg': { messageId: newMessageId, content: baseMessage.content || '', createdAt: baseMessage.timestamp },
+          ':msg': {
+            messageId: newMessageId,
+            content: baseMessage.content || '',
+            createdAt: baseMessage.timestamp,
+            ownerId: senderId,
+          },
           ':time': baseMessage.timestamp,
         },
       }).promise(),
@@ -578,21 +734,32 @@ const forwardMessage = async (senderId, messageId, targetReceiverId) => {
         Key: { userId: targetReceiverId, targetUserId: senderId },
         UpdateExpression: 'SET lastMessage = :msg, updatedAt = :time',
         ExpressionAttributeValues: {
-          ':msg': { messageId: newMessageId, content: baseMessage.content || '', createdAt: baseMessage.timestamp },
+          ':msg': {
+            messageId: newMessageId,
+            content: baseMessage.content || '',
+            createdAt: baseMessage.timestamp,
+            ownerId: targetReceiverId,
+          },
           ':time': baseMessage.timestamp,
         },
       }).promise(),
     ]);
 
     const receiverOnline = isUserOnline(targetReceiverId);
-    const initialStatus = receiverOnline ? MESSAGE_STATUSES.DELIVERED : MESSAGE_STATUSES.SENT;
+    const initialStatus = isRestricted
+      ? MESSAGE_STATUSES.RESTRICTED
+      : receiverOnline
+      ? MESSAGE_STATUSES.DELIVERED
+      : MESSAGE_STATUSES.SENT;
 
     await Promise.all([
       updateMessageStatus(newMessageId, senderId, initialStatus),
-      updateMessageStatus(newMessageId, targetReceiverId, initialStatus),
+      updateMessageStatus(newMessageId, targetReceiverId, isRestricted ? MESSAGE_STATUSES.RESTRICTED : initialStatus),
     ]);
 
-    io().to(targetReceiverId).emit('receiveMessage', { ...receiverMessage, status: initialStatus });
+    if (!isRestricted) {
+      io().to(targetReceiverId).emit('receiveMessage', { ...receiverMessage, status: initialStatus });
+    }
     io().to(senderId).emit('receiveMessage', { ...senderMessage, status: initialStatus });
 
     return { ...baseMessage, status: initialStatus };
@@ -1241,10 +1408,72 @@ const deleteMessage = async (userId, messageId) => {
     throw new AppError('Bạn không thuộc hội thoại này!', 403);
   }
 
+  const otherUserId = message.Item.senderId === userId ? message.Item.receiverId : message.Item.senderId;
+
+  // Check if the message is the last message in the conversation
+  const conversation = await dynamoDB.get({
+    TableName: 'Conversations',
+    Key: { userId, targetUserId: otherUserId },
+  }).promise();
+
+  const isLastMessage = conversation.Item?.lastMessage?.messageId === messageId;
+
+  // Mark message as deleted
   await dynamoDB.put({
     TableName: 'UserDeletedMessages',
     Item: { userId, messageId, timestamp: new Date().toISOString() },
   }).promise();
+
+  // If it's the last message, find the previous valid message
+  if (isLastMessage) {
+    const [sentMessages, receivedMessages] = await Promise.all([
+      dynamoDB.query({
+        TableName: 'Messages',
+        IndexName: 'SenderReceiverIndex',
+        KeyConditionExpression: 'senderId = :userId AND receiverId = :otherUserId',
+        ExpressionAttributeValues: { ':userId': userId, ':otherUserId': otherUserId },
+        ScanIndexForward: false,
+        Limit: 10, // Limit to avoid excessive scanning
+      }).promise(),
+      dynamoDB.query({
+        TableName: 'Messages',
+        IndexName: 'ReceiverSenderIndex',
+        KeyConditionExpression: 'receiverId = :userId AND senderId = :otherUserId',
+        ExpressionAttributeValues: { ':userId': userId, ':otherUserId': otherUserId },
+        ScanIndexForward: false,
+        Limit: 10,
+      }).promise(),
+    ]);
+
+    const allMessages = [...(sentMessages.Items || []), ...(receivedMessages.Items || [])]
+      .filter(
+        msg =>
+          msg.messageId !== messageId &&
+          msg.ownerId === userId &&
+          msg.status !== MESSAGE_STATUSES.RECALLED &&
+          msg.status !== MESSAGE_STATUSES.FAILED
+      )
+      .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+
+    const previousMessage = allMessages[0];
+
+    // Update Conversations with the previous message or null
+    await dynamoDB.update({
+      TableName: 'Conversations',
+      Key: { userId, targetUserId: otherUserId },
+      UpdateExpression: 'SET lastMessage = :msg, updatedAt = :time',
+      ExpressionAttributeValues: {
+        ':msg': previousMessage
+          ? {
+              messageId: previousMessage.messageId,
+              content: previousMessage.content || '',
+              createdAt: previousMessage.timestamp,
+            }
+          : null,
+        ':time': new Date().toISOString(),
+      },
+    }).promise();
+  }
 
   io().to(userId).emit('messageDeleted', { messageId });
   return { success: true, message: 'Tin nhắn đã được xóa chỉ với bạn!' };
@@ -1329,122 +1558,55 @@ const getConversationSummary = async (userId, options = {}) => {
     const mutedConversations = (await getMutedConversations(userId)).mutedConversations || [];
     const pinnedConversations = (await getPinnedConversations(userId)).pinnedConversations || [];
 
-    // Cache user settings
-    const cacheKey = `user:settings:${userId}`;
-    let userSettings = await redisClient.get(cacheKey);
-    if (!userSettings) {
-      const userResult = await dynamoDB.get({
-        TableName: 'Users',
-        Key: { userId },
-      }).promise();
-      userSettings = userResult.Item?.settings || { restrictStrangerMessages: false };
-      await redisClient.set(cacheKey, JSON.stringify(userSettings), 'EX', 3600);
-    } else {
-      userSettings = JSON.parse(userSettings);
-    }
-
     const conversationList = [];
     for (const conv of conversations) {
       const otherUserId = conv.targetUserId;
 
-      // Ưu tiên kiểm tra ẩn
+      // Skip hidden conversations
       if (hiddenConversations.some(hc => hc.hiddenUserId === otherUserId)) {
         continue;
       }
 
-      // Kiểm tra trạng thái bạn bè
+      // Check recipient's restrictStrangerMessages setting and friendship status
+      let restrictStrangerMessages = false;
       let isFriend = true;
       if (userId !== otherUserId) {
-        const friendCacheKey = `friends:${userId}:${otherUserId}`;
-        let friendCached = await redisClient.get(friendCacheKey);
-        if (!friendCached) {
+        const receiverResult = await dynamoDB.get({
+          TableName: 'Users',
+          Key: { userId: otherUserId },
+        }).promise();
+        restrictStrangerMessages = receiverResult.Item?.settings?.restrictStrangerMessages || false;
+
+        if (restrictStrangerMessages) {
           const friendResult = await dynamoDB.get({
             TableName: 'Friends',
-            Key: { userId, friendId: otherUserId },
+            Key: { userId: otherUserId, friendId: userId },
           }).promise();
           isFriend = !!friendResult.Item;
-          await redisClient.set(friendCacheKey, isFriend ? '1' : '0', 'EX', 3600);
-        } else {
-          isFriend = friendCached === '1';
         }
       }
 
-      // Kiểm tra tin nhắn hợp lệ
-      let hasValidMessages = true;
-      if (userId !== otherUserId) {
-        const messages = await dynamoDB.query({
-          TableName: 'Messages',
-          IndexName: 'ReceiverSenderIndex',
-          KeyConditionExpression: 'receiverId = :userId AND senderId = :otherUserId',
-          ExpressionAttributeValues: {
-            ':userId': userId,
-            ':otherUserId': otherUserId,
-          },
-          Limit: 1,
-        }).promise();
-
-        const sentMessages = await dynamoDB.query({
-          TableName: 'Messages',
-          IndexName: 'SenderReceiverIndex',
-          KeyConditionExpression: 'senderId = :userId AND receiverId = :otherUserId',
-          ExpressionAttributeValues: {
-            ':userId': userId,
-            ':otherUserId': otherUserId,
-          },
-          Limit: 1,
-        }).promise();
-
-        hasValidMessages =
-          isFriend ||
-          (messages.Items?.some(msg => msg.status !== MESSAGE_STATUSES.RESTRICTED) ||
-            sentMessages.Items?.length > 0);
-      }
-
-      if (!hasValidMessages) continue;
-
-      let name, phoneNumber;
-      if (otherUserId === userId) {
-        name = 'FileCloud';
-        const userResult = await dynamoDB.get({
-          TableName: 'Users',
-          Key: { userId },
-        }).promise();
-        phoneNumber = userResult.Item?.phoneNumber || null;
-      } else {
-        try {
-          const userNameResult = await FriendService.getUserName(userId, otherUserId);
-          name = userNameResult.name;
-          phoneNumber = userNameResult.phoneNumber;
-        } catch (error) {
-          logger.error(`Lỗi lấy thông tin cho ${otherUserId}:`, error);
-          name = otherUserId;
-          phoneNumber = null;
-        }
-      }
-
-      // Lấy tin nhắn cuối cùng đầy đủ
+      // Get last message
       let lastMessageFull = null;
-      if (!minimal) {
-        // Thử lấy tin nhắn từ lastMessage.messageId
-        if (conv.lastMessage?.messageId) {
-          const messageResult = await dynamoDB.get({
-            TableName: 'Messages',
-            Key: { messageId: conv.lastMessage.messageId, ownerId: userId },
-          }).promise();
-          if (
-            messageResult.Item &&
-            messageResult.Item.status !== MESSAGE_STATUSES.RECALLED &&
-            (isFriend ||
-              messageResult.Item.status !== MESSAGE_STATUSES.RESTRICTED ||
-              messageResult.Item.senderId === userId)
-          ) {
-            lastMessageFull = messageResult.Item;
-          }
+      if (!minimal && conv.lastMessage?.messageId) {
+        const messageResult = await dynamoDB.get({
+          TableName: 'Messages',
+          Key: { messageId: conv.lastMessage.messageId, ownerId: userId },
+        }).promise();
+        if (
+          messageResult.Item &&
+          messageResult.Item.ownerId === userId &&
+          (messageResult.Item.status !== MESSAGE_STATUSES.RESTRICTED || messageResult.Item.senderId === userId) &&
+          (!restrictStrangerMessages || isFriend || messageResult.Item.senderId === userId)
+        ) {
+          lastMessageFull = messageResult.Item;
         }
+      }
 
-        // Nếu không tìm thấy tin nhắn hợp lệ, truy vấn tin nhắn gần nhất
-        if (!lastMessageFull && userId !== otherUserId) {
-          const recentMessages = await dynamoDB.query({
+      // If no valid last message, check recent messages
+      if (!lastMessageFull && userId !== otherUserId && !minimal) {
+        const [recentMessages, sentMessages] = await Promise.all([
+          dynamoDB.query({
             TableName: 'Messages',
             IndexName: 'ReceiverSenderIndex',
             KeyConditionExpression: 'receiverId = :userId AND senderId = :otherUserId',
@@ -1454,9 +1616,8 @@ const getConversationSummary = async (userId, options = {}) => {
             },
             ScanIndexForward: false,
             Limit: 1,
-          }).promise();
-
-          const sentMessages = await dynamoDB.query({
+          }).promise(),
+          dynamoDB.query({
             TableName: 'Messages',
             IndexName: 'SenderReceiverIndex',
             KeyConditionExpression: 'senderId = :userId AND receiverId = :otherUserId',
@@ -1466,48 +1627,67 @@ const getConversationSummary = async (userId, options = {}) => {
             },
             ScanIndexForward: false,
             Limit: 1,
-          }).promise();
+          }).promise(),
+        ]);
 
-          // Chọn tin nhắn mới nhất từ cả hai chiều
-          const allMessages = [
-            ...(recentMessages.Items || []),
-            ...(sentMessages.Items || []),
-          ].filter(
-            msg =>
-              msg.status !== MESSAGE_STATUSES.RECALLED &&
-              (isFriend || msg.status !== MESSAGE_STATUSES.RESTRICTED || msg.senderId === userId)
+        const allMessages = [
+          ...(recentMessages.Items || []).filter(msg => msg.ownerId === userId),
+          ...(sentMessages.Items || []).filter(msg => msg.ownerId === userId),
+        ].filter(
+          msg =>
+            (msg.status !== MESSAGE_STATUSES.RESTRICTED || msg.senderId === userId) &&
+            (!restrictStrangerMessages || isFriend || msg.senderId === userId)
+        );
+
+        if (allMessages.length > 0) {
+          lastMessageFull = allMessages.reduce((latest, msg) =>
+            !latest || new Date(msg.timestamp) > new Date(latest.timestamp) ? msg : latest
           );
-
-          if (allMessages.length > 0) {
-            lastMessageFull = allMessages.reduce((latest, msg) =>
-              !latest || new Date(msg.timestamp) > new Date(latest.timestamp) ? msg : latest
-            );
-          }
         }
       }
 
-      if (minimal) {
+      // Only include conversation if:
+      // - It's a self-conversation (userId === otherUserId)
+      // - The users are friends (isFriend)
+      // - There is a valid last message that is not restricted or is sent by the user
+      if (
+        userId === otherUserId || // Hội thoại với chính mình
+        (isFriend && lastMessageFull) || // Là bạn bè và có tin nhắn hợp lệ
+        (!restrictStrangerMessages && lastMessageFull) // Không hạn chế người lạ và có tin nhắn hợp lệ
+      ) {
+        let name, phoneNumber;
+        if (otherUserId === userId) {
+          name = 'FileCloud';
+          const userResult = await dynamoDB.get({
+            TableName: 'Users',
+            Key: { userId },
+          }).promise();
+          phoneNumber = userResult.Item?.phoneNumber || null;
+        } else {
+          try {
+            const userNameResult = await FriendService.getUserName(userId, otherUserId);
+            name = userNameResult.name;
+            phoneNumber = userNameResult.phoneNumber;
+          } catch (error) {
+            logger.error(`Lỗi lấy thông tin cho ${otherUserId}:`, error);
+            name = otherUserId;
+            phoneNumber = null;
+          }
+        }
+
+        const isMuted = mutedConversations.some(mc => mc.mutedUserId === otherUserId);
+        const isPinned = pinnedConversations.some(pc => pc.pinnedUserId === otherUserId);
+
         conversationList.push({
-          userId: otherUserId,
-          isSelf: otherUserId === userId,
-          name,
+          otherUserId,
+          displayName: name,
           phoneNumber,
+          isSelf: otherUserId === userId,
+          lastMessage: minimal ? null : lastMessageFull,
+          isMuted,
+          isPinned,
         });
-        continue;
       }
-
-      const isMuted = mutedConversations.some(mc => mc.mutedUserId === otherUserId);
-      const isPinned = pinnedConversations.some(pc => pc.pinnedUserId === otherUserId);
-
-      conversationList.push({
-        otherUserId,
-        displayName: name,
-        phoneNumber,
-        isSelf: otherUserId === userId,
-        lastMessage: lastMessageFull || null,
-        isMuted,
-        isPinned,
-      });
     }
 
     if (!minimal) {
@@ -1527,11 +1707,10 @@ const getConversationSummary = async (userId, options = {}) => {
       },
     };
   } catch (error) {
-    logger.error('Lỗi trong getConversationSummary:', error);
-    throw new AppError('Lỗi khi lấy tóm tắt hội thoại', 500);
+    logger.error('Error in getConversationSummary:', error);
+    throw new AppError('Failed to fetch conversation summary', 500);
   }
 };
-
 // Hàm kiểm tra quyền gửi tin nhắn
 const canSendMessageToUser = async (senderId, receiverId, isForward = false) => {
   logger.info('Checking canSendMessageToUser:', { senderId, receiverId, isForward });
@@ -1569,7 +1748,6 @@ const canSendMessageToUser = async (senderId, receiverId, isForward = false) => 
 
   if (friendResult.Item) return { canSend: true, isRestricted: false };
 
-  // Cho phép gửi nhưng đánh dấu là bị hạn chế
   return { canSend: true, isRestricted: true };
 };
 

@@ -100,7 +100,7 @@ const initializeChatSocket = (socket) => {
       const messagePayload = {
         type,
         content: content || null,
-        mediaUrl: file ? `s3://pending/${Date.now()}` : null, // Sẽ được cập nhật trong message.service.js
+        file: file ? Buffer.from(file, 'base64') : null,
         fileName: fileName || null,
         mimeType: mimeType || null,
         metadata: metadata && typeof metadata === 'string' ? JSON.parse(metadata) : metadata || null,
@@ -112,8 +112,7 @@ const initializeChatSocket = (socket) => {
 
       const savedMessage = await createMessage(socket.userId, receiverId, messagePayload);
       logger.info('[CHAT_SOCKET] Message sent', { messageId: savedMessage.messageId, senderId: socket.userId, receiverId });
-      socket.emit('receiveMessage', savedMessage); // Đồng bộ với message.service.js
-      io().to(receiverId).emit('receiveMessage', savedMessage);
+      // Không cần emit vì createMessage đã emit 'receiveMessage' trong message.service.js
     } catch (error) {
       logger.error('[CHAT_SOCKET] Error sending message', { userId: socket.userId, error: error.message });
       socket.emit('error', { message: error.message });
@@ -125,9 +124,9 @@ const initializeChatSocket = (socket) => {
       if (!messageId || typeof messageId !== 'string') {
         throw new Error('Thiếu hoặc messageId không hợp lệ!');
       }
-      const result = await recallMessage(socket.userId, messageId);
+      await recallMessage(socket.userId, messageId);
       logger.info('[CHAT_SOCKET] Message recalled', { messageId, userId: socket.userId });
-      socket.emit('messageRecalled', { messageId }); // Đồng bộ với message.service.js
+      // Không cần emit vì recallMessage đã emit 'messageRecalled' trong message.service.js
     } catch (error) {
       logger.error('[CHAT_SOCKET] Error recalling message', { userId: socket.userId, error: error.message });
       socket.emit('error', { message: error.message });
@@ -139,9 +138,9 @@ const initializeChatSocket = (socket) => {
       if (!messageId || typeof messageId !== 'string') {
         throw new Error('Thiếu hoặc messageId không hợp lệ!');
       }
-      const result = await pinMessage(socket.userId, messageId);
+      await pinMessage(socket.userId, messageId);
       logger.info('[CHAT_SOCKET] Message pinned', { messageId, userId: socket.userId });
-      socket.emit('messagePinned', { messageId }); // Đồng bộ với message.service.js
+      // Không cần emit vì pinMessage đã emit 'messagePinned' trong message.service.js
     } catch (error) {
       logger.error('[CHAT_SOCKET] Error pinning message', { userId: socket.userId, error: error.message });
       socket.emit('error', { message: error.message });
@@ -153,9 +152,9 @@ const initializeChatSocket = (socket) => {
       if (!messageId || typeof messageId !== 'string') {
         throw new Error('Thiếu hoặc messageId không hợp lệ!');
       }
-      const result = await unpinMessage(socket.userId, messageId);
+      await unpinMessage(socket.userId, messageId);
       logger.info('[CHAT_SOCKET] Message unpinned', { messageId, userId: socket.userId });
-      socket.emit('messageUnpinned', { messageId }); // Đồng bộ với message.service.js
+      // Không cần emit vì unpinMessage đã emit 'messageUnpinned' trong message.service.js
     } catch (error) {
       logger.error('[CHAT_SOCKET] Error unpinning message', { userId: socket.userId, error: error.message });
       socket.emit('error', { message: error.message });
@@ -181,9 +180,9 @@ const initializeChatSocket = (socket) => {
       if (!messageId || typeof messageId !== 'string') {
         throw new Error('Thiếu hoặc messageId không hợp lệ!');
       }
-      const result = await deleteMessage(socket.userId, messageId);
+      await deleteMessage(socket.userId, messageId);
       logger.info('[CHAT_SOCKET] Message deleted', { messageId, userId: socket.userId });
-      socket.emit('messageDeleted', { messageId }); // Đồng bộ với message.service.js
+      // Không cần emit vì deleteMessage đã emit 'messageDeleted' trong message.service.js
     } catch (error) {
       logger.error('[CHAT_SOCKET] Error deleting message', { userId: socket.userId, error: error.message });
       socket.emit('error', { message: error.message });
@@ -195,9 +194,9 @@ const initializeChatSocket = (socket) => {
       if (!messageId || typeof messageId !== 'string') {
         throw new Error('Thiếu hoặc messageId không hợp lệ!');
       }
-      const result = await restoreMessage(socket.userId, messageId);
+      await restoreMessage(socket.userId, messageId);
       logger.info('[CHAT_SOCKET] Message restored', { messageId, userId: socket.userId });
-      socket.emit('messageRestored', { messageId }); // Đồng bộ với message.service.js
+      // Không cần emit vì restoreMessage đã emit 'messageRestored' trong message.service.js
     } catch (error) {
       logger.error('[CHAT_SOCKET] Error restoring message', { userId: socket.userId, error: error.message });
       socket.emit('error', { message: error.message });
@@ -209,10 +208,9 @@ const initializeChatSocket = (socket) => {
       if (!messageId || !targetReceiverId || typeof messageId !== 'string' || typeof targetReceiverId !== 'string') {
         throw new Error('Thiếu hoặc messageId/targetReceiverId không hợp lệ!');
       }
-      const result = await forwardMessage(socket.userId, messageId, targetReceiverId);
+      await forwardMessage(socket.userId, messageId, targetReceiverId);
       logger.info('[CHAT_SOCKET] Message forwarded', { messageId, userId: socket.userId, targetReceiverId });
-      socket.emit('receiveMessage', result); // Đồng bộ với message.service.js
-      io().to(targetReceiverId).emit('receiveMessage', result);
+      // Không cần emit vì forwardMessage đã emit 'receiveMessage' trong message.service.js
     } catch (error) {
       logger.error('[CHAT_SOCKET] Error forwarding message', { userId: socket.userId, error: error.message });
       socket.emit('error', { message: error.message });
@@ -224,9 +222,9 @@ const initializeChatSocket = (socket) => {
       if (!messageId || typeof messageId !== 'string') {
         throw new Error('Thiếu hoặc messageId không hợp lệ!');
       }
-      const result = await retryMessage(socket.userId, messageId);
+      await retryMessage(socket.userId, messageId);
       logger.info('[CHAT_SOCKET] Message retried', { messageId, userId: socket.userId });
-      socket.emit('receiveMessage', result); // Đồng bộ với message.service.js
+      // Không cần emit vì retryMessage đã emit 'receiveMessage' trong message.service.js
     } catch (error) {
       logger.error('[CHAT_SOCKET] Error retrying message', { userId: socket.userId, error: error.message });
       socket.emit('error', { message: error.message });
@@ -238,9 +236,9 @@ const initializeChatSocket = (socket) => {
       if (!messageId || typeof messageId !== 'string') {
         throw new Error('Thiếu hoặc messageId không hợp lệ!');
       }
-      const result = await markMessageAsSeen(socket.userId, messageId);
+      await markMessageAsSeen(socket.userId, messageId);
       logger.info('[CHAT_SOCKET] Message marked as seen', { messageId, userId: socket.userId });
-      socket.emit('messageStatus', { messageId, status: 'seen' }); // Đồng bộ với message.service.js
+      // Không cần emit vì markMessageAsSeen đã emit 'messageStatus' trong message.service.js
     } catch (error) {
       logger.error('[CHAT_SOCKET] Error marking message as seen', { userId: socket.userId, error: error.message });
       socket.emit('error', { message: error.message });
@@ -286,9 +284,9 @@ const initializeChatSocket = (socket) => {
       if (new Date(reminder) <= new Date()) {
         throw new Error('Thời gian nhắc nhở phải ở tương lai!');
       }
-      const result = await setReminder(socket.userId, messageId, reminder, scope, reminderContent, repeat, daysOfWeek);
+      await setReminder(socket.userId, messageId, reminder, scope, reminderContent, repeat, daysOfWeek);
       logger.info('[CHAT_SOCKET] Reminder set', { messageId, userId: socket.userId });
-      socket.emit('reminderSet', result); // Đồng bộ với message.service.js
+      // Không cần emit vì setReminder đã emit 'reminderSet' trong message.service.js
     } catch (error) {
       logger.error('[CHAT_SOCKET] Error setting reminder', { userId: socket.userId, error: error.message });
       socket.emit('error', { message: error.message });
@@ -300,9 +298,9 @@ const initializeChatSocket = (socket) => {
       if (!messageId || typeof messageId !== 'string') {
         throw new Error('Thiếu hoặc messageId không hợp lệ!');
       }
-      const result = await unsetReminder(socket.userId, messageId);
+      await unsetReminder(socket.userId, messageId);
       logger.info('[CHAT_SOCKET] Reminder unset', { messageId, userId: socket.userId });
-      socket.emit('reminderUnset', { messageId }); // Đồng bộ với message.service.js
+      // Không cần emit vì unsetReminder đã emit 'reminderUnset' trong message.service.js
     } catch (error) {
       logger.error('[CHAT_SOCKET] Error unsetting reminder', { userId: socket.userId, error: error.message });
       socket.emit('error', { message: error.message });
@@ -348,9 +346,9 @@ const initializeChatSocket = (socket) => {
       if (new Date(reminder) <= new Date()) {
         throw new Error('Thời gian nhắc nhở phải ở tương lai!');
       }
-      const result = await editReminder(socket.userId, messageId, reminder, scope, reminderContent, repeat, daysOfWeek);
+      await editReminder(socket.userId, messageId, reminder, scope, reminderContent, repeat, daysOfWeek);
       logger.info('[CHAT_SOCKET] Reminder edited', { messageId, userId: socket.userId });
-      socket.emit('reminderEdited', result); // Đồng bộ với message.service.js
+      // Không cần emit vì editReminder đã emit 'reminderEdited' trong message.service.js
     } catch (error) {
       logger.error('[CHAT_SOCKET] Error editing reminder', { userId: socket.userId, error: error.message });
       socket.emit('error', { message: error.message });
@@ -388,7 +386,7 @@ const setupReminderCheck = () => {
     } catch (error) {
       logger.error('[CHAT_SOCKET] Error checking reminders', { error: error.message });
     }
-  }, 60 * 1000); // Chạy mỗi 1 phút để đảm bảo nhắc nhở kịp thời
+  }, 60 * 1000); // Chạy mỗi 1 phút
 };
 
 module.exports = { initializeChatSocket, setupReminderCheck };

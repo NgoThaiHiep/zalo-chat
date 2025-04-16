@@ -741,6 +741,71 @@ const getAutoDeleteSetting = async (userId, targetUserId) => {
   }
 };
 
+const getConversation = async (userId, targetUserId) => {
+  if (!userId || !targetUserId) {
+    logger.error('Invalid userId or targetUserId', { userId, targetUserId });
+    throw new AppError('userId hoặc targetUserId không hợp lệ!', 400);
+  }
+
+  logger.info('Fetching conversation', { userId, targetUserId });
+
+  try {
+    const conversationResult = await dynamoDB.get({
+      TableName: 'Conversations',
+      Key: { userId, targetUserId },
+    }).promise();
+
+    if (!conversationResult.Item) {
+      logger.warn('Conversation not found', { userId, targetUserId });
+      throw new AppError('Hội thoại không tồn tại', 404);
+    }
+
+    const conversation = conversationResult.Item;
+
+    // Lấy thông tin người dùng targetUserId (displayName, phoneNumber, v.v.)
+    let displayName = targetUserId;
+    let phoneNumber = null;
+    if (userId !== targetUserId) {
+      try {
+        const userNameResult = await FriendService.getUserName(userId, targetUserId);
+        displayName = userNameResult.name;
+        phoneNumber = userNameResult.phoneNumber;
+      } catch (error) {
+        logger.error(`Error fetching user info for ${targetUserId}:`, { error: error.message });
+        // Nếu không lấy được thông tin, giữ nguyên displayName là targetUserId
+      }
+    } else {
+      const userResult = await dynamoDB.get({
+        TableName: 'Users',
+        Key: { userId },
+      }).promise();
+      displayName = 'FileCloud';
+      phoneNumber = userResult.Item?.phoneNumber || null;
+    }
+
+    return {
+      success: true,
+      conversation: {
+        conversationId: conversation.conversationId,
+        userId: conversation.userId,
+        targetUserId: conversation.targetUserId,
+        displayName,
+        phoneNumber,
+        createdAt: conversation.createdAt,
+        updatedAt: conversation.updatedAt,
+        lastMessage: conversation.lastMessage,
+        settings: conversation.settings,
+      },
+    };
+  } catch (error) {
+    if (error instanceof AppError) {
+      throw error;
+    }
+    logger.error('Failed to fetch conversation', { userId, targetUserId, error: error.message });
+    throw new AppError(`Không thể lấy hội thoại: ${error.message}`, 500);
+  }
+};
+
 // Hàm đặt cài đặt tự động xóa
 const setAutoDeleteSetting = async (userId, targetUserId, autoDeleteAfter) => {
   logger.info('Đặt cài đặt tự động xóa:', { userId, targetUserId, autoDeleteAfter });
@@ -784,5 +849,8 @@ module.exports = {
   getPinnedConversations,
   getAutoDeleteSetting,
   setAutoDeleteSetting,
+  createConversation,
+  checkConversationExists,
+  getConversation,
   createConversation,
 };

@@ -9,11 +9,16 @@ const {
     getAutoDeleteSettingController,
     pinConversationController,
     unpinConversationController,
+    createConversationController,
+    getConversationController,
 
 }= require('../controllers/conversationController');
 const {authMiddleware ,checkOwnership} = require('../middlewares/authMiddleware');
 
 const router = express.Router();
+
+router.post('/create', createConversationController);
+router.get('/', getConversationController); // Lấy hội thoại giữa 2 người dùng
 
 // Tắt thông báo hội thoại
 router.route('/mute')

@@ -163,7 +163,53 @@ const getPinnedConversationsController = async (req, res) => {
     }
   };
 
- 
+  const createConversationController = async (req, res, next) => {
+    const { userId, targetUserId } = req.body;
+  
+    try {
+      const result = await ConversationService.createConversation(userId, targetUserId);
+      if (result.conversationId) {
+        return res.status(201).json({
+          success: true,
+          message: 'Hội thoại được tạo thành công',
+          data: { conversationId: result.conversationId },
+        });
+      } else {
+        return res.status(200).json({
+          success: true,
+          message: 'Hội thoại đã tồn tại',
+          data: { conversationId: null },
+        });
+      }
+    } catch (error) {
+      logger.error('Error in createConversation controller', {
+        userId,
+        targetUserId,
+        error: error.message,
+      });
+      next(error);
+    }
+  };
+  
+  const getConversationController = async (req, res, next) => {
+    const { userId, targetUserId } = req.query;
+  
+    try {
+      const result = await ConversationService.getConversation(userId, targetUserId);
+      return res.status(200).json({
+        success: true,
+        message: 'Lấy hội thoại thành công',
+        data: result.conversation,
+      });
+    } catch (error) {
+      logger.error('Error in getConversation controller', {
+        userId,
+        targetUserId,
+        error: error.message,
+      });
+      next(error);
+    }
+  };
 module.exports = {
     setAutoDeleteSettingController,
     getAutoDeleteSettingController,
@@ -177,4 +223,6 @@ module.exports = {
     getHiddenConversationsController,
 
     getPinnedConversationsController,
+    createConversationController,
+    getConversationController,
 }

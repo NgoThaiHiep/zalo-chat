@@ -24,7 +24,12 @@ const sendMessageCore = async (message, tableName, bucketName) => {
     status: initialStatus,
   } = message;
 
-  logger.info('Core - Sending message', { type, senderId, receiverId });
+  logger.info('Core - Sending message', { type, senderId, receiverId, ownerId });
+
+  // Kiểm tra ownerId
+  if (tableName === 'Messages' && ownerId !== senderId && ownerId !== receiverId) {
+    throw new Error('ownerId phải là senderId hoặc receiverId!');
+  }
 
   // Kiểm tra loại tin nhắn
   const validTypes = ['text', 'image', 'file', 'video', 'voice', 'sticker', 'gif', 'location', 'contact', 'poll', 'event'];
@@ -223,7 +228,7 @@ const sendMessageCore = async (message, tableName, bucketName) => {
 
   // Lưu tin nhắn vào DynamoDB
   try {
-    logger.info('Saving message to DynamoDB:', { messageId, tableName });
+    logger.info('Saving message to DynamoDB:', { messageId, tableName, ownerId });
     await dynamoDB.put({
       TableName: tableName,
       Item: messageToSave,
@@ -241,7 +246,7 @@ const sendMessageCore = async (message, tableName, bucketName) => {
     throw new Error(`Lỗi khi lưu tin nhắn vào DynamoDB: ${dbError.message}`);
   }
 
-  logger.info('Core - Đã gửi tin nhắn thành công:', { messageId, tableName });
+  logger.info('Core - Đã gửi tin nhắn thành công:', { messageId, tableName, ownerId });
   return messageToSave;
 };
 
