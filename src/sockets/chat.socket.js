@@ -81,13 +81,13 @@ const initializeChatSocket = (socket) => {
       if (!receiverId || !type) {
         throw new Error('Thiếu receiverId hoặc type!');
       }
-      if (!['text', 'image', 'video', 'voice', 'file'].includes(type)) {
+      if (!['text', 'image', 'video', 'voice', 'file','gif'].includes(type)) {
         throw new Error('Loại tin nhắn không hợp lệ!');
       }
       if (type === 'text' && (!content || typeof content !== 'string')) {
         throw new Error('Nội dung tin nhắn văn bản không hợp lệ!');
       }
-      if (['image', 'video', 'voice', 'file'].includes(type) && !file) {
+      if (['image', 'video', 'voice', 'file','gif'].includes(type) && !file) {
         throw new Error('File là bắt buộc cho tin nhắn media!');
       }
       if (file) {

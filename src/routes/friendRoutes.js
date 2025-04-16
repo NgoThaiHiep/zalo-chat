@@ -15,16 +15,16 @@ router.post('/cancel', FriendController.cancelFriendRequestController);    // H�
 
 // Nhóm: Quản lý danh sách bạn bè
 router.get('/list', FriendController.getFriendsController);     
-router.post('/remove', FriendController.removeFriendController);             // Lấy danh sách bạn bè
+router.post('/remove', checkOwnership, FriendController.removeFriendController);             // Lấy danh sách bạn bè
 router.post('/favorite/mark', FriendController.markFavoriteController);  //Đánh dấu bạn bè yêu thích.
 router.post('/favorite/unmark', FriendController.unmarkFavoriteController);//Bỏ đánh dấu yêu thích.
 router.get('/favorites', FriendController.getFavoriteFriendsController); //Lấy danh sách bạn bè yêu thích.
 router.get('/mutual/:targetUserId', FriendController.getMutualFriends); //Lấy bạn chung
 
 // Nhóm: Quản lý chặn người dùng
-router.post('/block', FriendController.blockUserController);              // Chặn người dùng
+router.post('/block',checkOwnership, FriendController.blockUserController);              // Chặn người dùng
 router.get('/blocked', FriendController.getBlockedUsersController);       // Lấy danh sách người bị chặn
-router.post('/unblock', FriendController.unblockUserController);          // Bỏ chặn người dùng
+router.post('/unblock',checkOwnership, FriendController.unblockUserController);          // Bỏ chặn người dùng
 
 // Nhóm: Tìm kiếm và hồ sơ
 router.get('/search', FriendController.searchUsersController);             // Tìm kiếm người dùng

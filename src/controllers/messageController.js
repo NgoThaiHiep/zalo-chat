@@ -366,9 +366,10 @@ const retryMessageController = async (req, res) => {
 
 const markMessageAsSeenController = async (req, res) => {
   try {
+    console.log("Current req.user:", req.user);
     const userId = req.user.id;
     const { messageId } = req.params;
-
+    console.log("Mark message as seen request:", { userId, messageId });
     const result = await MessageService.markMessageAsSeen(userId, messageId);
     res.status(200).json({ success: true, ...result });
   } catch (error) {

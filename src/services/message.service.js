@@ -398,7 +398,7 @@ const markMessageAsSeen = async (userId, messageId) => {
       updateMessageStatus(messageId, userId, MESSAGE_STATUSES.DELIVERED),
       updateMessageStatus(messageId, message.senderId, MESSAGE_STATUSES.DELIVERED),
     ]);
-  }
+  }receiveMessage
 
   io().to(message.senderId).emit('messageStatus', { messageId, status: newStatus });
   io().to(userId).emit('messageStatus', { messageId, status: newStatus });
