@@ -6,6 +6,7 @@ const { AppError } = require('../utils/errorHandler');
 const { getUserByPhoneNumber } = require('./otp.services');
 const conversation = require('./conversation.service');
 const  {normalizePhoneNumber} = require('../utils/utils');
+
 const MESSAGE_STATUSES = {
   PENDING: 'pending',
   SENDING: 'sending',
@@ -86,23 +87,27 @@ const searchUsersByName = async (currentUserId, keyword) => {
 // 2. Search users by phone number (friends only)
 const searchFriendsByPhoneNumber = async (currentUserId, phoneNumber) => {
   try {
-
     const normalizedPhone = normalizePhoneNumber(phoneNumber);
-    const { friendIds } = await getUserRelationships(currentUserId);
-    const user = await getUserByPhoneNumber(normalizePhoneNumber);
+    if (!normalizedPhone) {
+      return { success: false, error: 'Không thể chuẩn hóa số điện thoại' };
+    }
+
+    const { friendIds, conversationUserIds } = await getUserRelationships(currentUserId);
+    const user = await getUserByPhoneNumber(normalizedPhone);
     const users = [];
 
     if (user && friendIds.includes(user.userId)) {
-      const nickname = await FriendService.getConversationNickname(currentUserId, user.userId);
-      const displayName = nickname || user.name || user.userId;
+      const { password, ...safeUser } = user;
+      const isFriend = true;
+      const hasConversation = conversationUserIds.includes(safeUser.userId);
+      const nickname = await FriendService.getConversationNickname(currentUserId, safeUser.userId);
+      const displayName = nickname || safeUser.name || safeUser.userId;
 
       users.push({
-        userId: user.userId,
-        name: user.name || user.userId,
-        phoneNumber: user.phoneNumber || null,
+        ...safeUser,
         displayName,
-        isFriend: true,
-        hasConversation: false,
+        isFriend,
+        hasConversation,
       });
     }
 
@@ -113,22 +118,17 @@ const searchFriendsByPhoneNumber = async (currentUserId, phoneNumber) => {
   }
 };
 
+
 // 3. Search users by phone number (all users in database)
 const searchAllUsersByPhoneNumber = async (currentUserId, phoneNumber) => {
   try {
-   
-   
-
     const normalizedPhone = normalizePhoneNumber(phoneNumber);
-    console.log('normalizedPhone:', normalizedPhone);
     if (!normalizedPhone) {
       return { success: false, error: 'Không thể chuẩn hóa số điện thoại' };
     }
 
-    // Lấy danh sách bạn bè và người đã trò chuyện (để hiển thị mối quan hệ, nếu cần)
     const { friendIds, conversationUserIds } = await getUserRelationships(currentUserId);
 
-    // Truy vấn DynamoDB để tìm tất cả người dùng có số điện thoại khớp
     const params = {
       TableName: 'Users',
       IndexName: 'phoneNumber-index',
@@ -142,21 +142,18 @@ const searchAllUsersByPhoneNumber = async (currentUserId, phoneNumber) => {
     };
 
     const usersResult = await dynamoDB.query(params).promise();
-    console.log('usersResult:', usersResult); // Log kết quả từ DynamoDB để debug
     const users = [];
 
-    // Xử lý kết quả trả về
     if (usersResult.Items && usersResult.Items.length > 0) {
       for (const user of usersResult.Items) {
-        const isFriend = friendIds.includes(user.userId);
-        const hasConversation = conversationUserIds.includes(user.userId);
-        const nickname = await FriendService.getConversationNickname(currentUserId, user.userId);
-        const displayName = nickname || user.name || user.userId;
+        const { password, ...safeUser } = user;
+        const isFriend = friendIds.includes(safeUser.userId);
+        const hasConversation = conversationUserIds.includes(safeUser.userId);
+        const nickname = await FriendService.getConversationNickname(currentUserId, safeUser.userId);
+        const displayName = nickname || safeUser.name || safeUser.userId;
 
         users.push({
-          userId: user.userId,
-          name: user.name || user.userId,
-          phoneNumber: user.phoneNumber || null,
+          ...safeUser,
           displayName,
           isFriend,
           hasConversation,
@@ -170,6 +167,7 @@ const searchAllUsersByPhoneNumber = async (currentUserId, phoneNumber) => {
     return { success: false, error: error.message || 'Lỗi khi tìm kiếm tất cả người dùng theo số điện thoại' };
   }
 };
+
 // 4. Search messages in 1-1 conversation
 const searchMessagesBetweenUsers = async (userId, otherUserId, keyword) => {
   logger.info('Tìm kiếm tin nhắn 1-1:', { userId, otherUserId, keyword });

@@ -773,6 +773,71 @@ const forwardMessageToGroup = async (senderId, messageId, targetGroupId) => {
   return await forwardMessageUnified(senderId, messageId, false, true, targetGroupId);
 };
 
+const updateLastMessageForGroup = async (groupId, message = null) => {
+  try {
+    // Lấy thông tin nhóm để biết danh sách thành viên
+    const groupResult = await dynamoDB.get({ TableName: 'Groups', Key: { groupId } }).promise();
+    if (!groupResult.Item) {
+      logger.warn('Nhóm không tồn tại khi cập nhật lastMessage', { groupId });
+      return;
+    }
+
+    const group = groupResult.Item;
+    const members = group.members;
+
+    // Nếu không có message được cung cấp, lấy tin nhắn cuối cùng hợp lệ từ GroupMessages
+    let lastMessage = message;
+    if (!lastMessage) {
+      const messagesResult = await dynamoDB.query({
+        TableName: 'GroupMessages',
+        IndexName: 'GroupMessagesIndex',
+        KeyConditionExpression: 'groupId = :groupId',
+        ExpressionAttributeValues: { ':groupId': groupId },
+        ScanIndexForward: false, // Lấy tin nhắn mới nhất
+        // Limit: 10, // Lấy tối đa 10 tin nhắn để tìm tin nhắn hợp lệ
+      }).promise();
+
+      // Tìm tin nhắn hợp lệ (không bị xóa hoặc thu hồi)
+      lastMessage = (messagesResult.Items || []).find(
+        msg => msg.status !== MESSAGE_STATUSES.DELETE && msg.status !== MESSAGE_STATUSES.RECALLED
+      ) || null;
+    }
+
+    // Chuẩn bị dữ liệu lastMessage
+    const lastMessageData = lastMessage
+      ? {
+          messageId: lastMessage.messageId,
+          content: lastMessage.content || (lastMessage.type === 'image' ? '[Hình ảnh]' : `[${lastMessage.type}]`),
+          createdAt: lastMessage.timestamp, // Đồng bộ với getConversationSummary
+          senderId: lastMessage.senderId,
+          type: lastMessage.type,
+          isRecalled: lastMessage.status === MESSAGE_STATUSES.RECALLED, // Thêm trường isRecalled
+        }
+      : null;
+
+    // Cập nhật Conversations cho từng thành viên
+    const updatePromises = members.map(async (memberId) => {
+      try {
+        await dynamoDB.update({
+          TableName: 'Conversations',
+          Key: { userId: memberId, targetUserId: groupId },
+          UpdateExpression: 'SET lastMessage = :lastMessage, updatedAt = :updatedAt',
+          ExpressionAttributeValues: {
+            ':lastMessage': lastMessageData,
+            ':updatedAt': new Date().toISOString(),
+          },
+        }).promise();
+      } catch (error) {
+        logger.error('Lỗi khi cập nhật lastMessage cho thành viên', { groupId, memberId, error: error.message });
+      }
+    });
+
+    await Promise.all(updatePromises);
+    logger.info('Cập nhật lastMessage thành công cho nhóm', { groupId, lastMessage: lastMessageData });
+  } catch (error) {
+    logger.error('Lỗi khi cập nhật lastMessage cho nhóm', { groupId, error: error.message });
+  }
+};
 // Hàm ghim tin nhắn
 const pinMessage = async (userId, messageId) => {
   logger.info('Pinning message:', { messageId, userId });
