@@ -27,7 +27,7 @@ const validateId = (id, type = 'user') => {
 const searchUsersByNameController = async (req, res) => {
   try {
     const { keyword } = req.query;
-    const currentUserId = req.user.userId; // Assuming user ID comes from auth middleware
+    const currentUserId = req.user.id; // Assuming user ID comes from auth middleware
 
     validateKeyword(keyword);
     logger.info(`Tìm kiếm người dùng theo tên: ${keyword} bởi ${currentUserId}`);
@@ -48,7 +48,7 @@ const searchUsersByNameController = async (req, res) => {
 const searchFriendsByPhoneNumberController = async (req, res) => {
   try {
     const { phoneNumber } = req.query;
-    const currentUserId = req.user.userId;
+    const currentUserId = req.user.id;
 
     validateKeyword(phoneNumber);
     logger.info(`Tìm kiếm bạn bè theo số điện thoại: ${phoneNumber} bởi ${currentUserId}`);
@@ -69,7 +69,7 @@ const searchFriendsByPhoneNumberController = async (req, res) => {
 const searchAllUsersByPhoneNumberController = async (req, res) => {
   try {
     const { phoneNumber } = req.query;
-    const currentUserId = req.user.userId;
+    const currentUserId = req.user.id;
 
     validateKeyword(phoneNumber);
     logger.info(`Tìm kiếm tất cả người dùng theo số điện thoại: ${phoneNumber} bởi ${currentUserId}`);
@@ -90,7 +90,7 @@ const searchAllUsersByPhoneNumberController = async (req, res) => {
 const searchMessagesBetweenUsersController = async (req, res) => {
   try {
     const { otherUserId, keyword } = req.query;
-    const currentUserId = req.user.userId;
+    const currentUserId = req.user.id;
 
     validateId(otherUserId);
     validateKeyword(keyword);
@@ -108,7 +108,7 @@ const searchMessagesBetweenUsersController = async (req, res) => {
 const searchMessagesInGroupController = async (req, res) => {
   try {
     const { groupId, keyword } = req.query;
-    const currentUserId = req.user.userId;
+    const currentUserId = req.user.id;
 
     validateId(groupId, 'group');
     validateKeyword(keyword);
@@ -126,7 +126,7 @@ const searchMessagesInGroupController = async (req, res) => {
 const searchAllController = async (req, res) => {
   try {
     const { keyword } = req.query;
-    const currentUserId = req.user.userId;
+    const currentUserId = req.user.id;
 
     validateKeyword(keyword);
     logger.info(`Tìm kiếm toàn bộ với từ khóa: ${keyword} bởi ${currentUserId}`);
