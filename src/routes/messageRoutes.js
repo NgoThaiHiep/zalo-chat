@@ -10,12 +10,6 @@ const {
   unpinMessageController,
   getPinnedMessagesController,
 
-  setReminderController,
-  unsetReminderController,
-  getRemindersBetweenUsersController,
-  getReminderHistoryController,
-  editReminderController,
-  
   deleteMessageController,
   restoreMessageController,
   retryMessageController,
@@ -33,7 +27,7 @@ const router = express.Router();
 // Nhóm: Gửi và lấy tin nhắn
 router.post('/send', authMiddleware, sendMessageController);// Gửi tin nhắn
 router.get('/user/:userId', authMiddleware, getMessagesBetweenController); // Lấy tin nhắn giữa hai người dùng trong đoạn hội thoại
-router.get('/summary', authMiddleware, getConversationSummaryController); // Lấy tóm tắt hội người nhận với nhiều người
+
 
 
 // Nhóm: Chuyển tiếp và thu hồi tin nhắn
@@ -46,13 +40,6 @@ router.route('/pin/:messageId')
       .delete( authMiddleware, unpinMessageController); // Bỏ ghim tin nhắn
 router.get('/pinned/:otherUserId', authMiddleware, getPinnedMessagesController); // Lấy danh sách tin nhắn đã ghim
 
-// Nhóm: Nhắc nhở tin nhắn
-router.route('/reminder/:messageId')
-      .patch( authMiddleware, setReminderController) // Đặt nhắc nhở
-      .delete( authMiddleware, unsetReminderController) // Xóa nhắc nhở
-      .put(authMiddleware, editReminderController); // Sửa nhắc nhở
-router.get('/reminders/:otherUserId', authMiddleware, getRemindersBetweenUsersController); // Lấy danh sách nhắc nhở
-router.get('/reminder-history/:otherUserId', authMiddleware, getReminderHistoryController); // Lấy lịch sử nhắc nhở
 
 // Nhóm: Xóa và khôi phục tin nhắn
 router.delete('/:messageId', authMiddleware, deleteMessageController); // Xóa tin nhắn

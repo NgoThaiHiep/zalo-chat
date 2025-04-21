@@ -11,61 +11,21 @@ const { AppError } = require('../utils/errorHandler');
 const { redisClient } = require('../config/redis');
 const bcrypt = require('bcrypt');
 
-const DAYS_TO_SECONDS = {
-  '10s': 10,
-  '60s': 60,
-  '1d': 24 * 60 * 60,
-  '3d': 3 * 24 * 60 * 60,
-  '7d': 7 * 24 * 60 * 60,
-};
+const {
+  copyS3File,
+  getInitialStatus,
+  addTranscribeJob,
+} = require('../utils/messageUtils');
 
-const MESSAGE_STATUSES = {
-  PENDING: 'pending',
-  SENDING: 'sending',
-  SENT: 'sent',
-  DELIVERED: 'delivered',
-  SEEN: 'seen',
-  FAILED: 'failed',
-  RECALLED: 'recalled',
-  RESTRICTED: 'restricted',
-};
+const {
+  MESSAGE_STATUSES,
+  DAYS_TO_SECONDS,
+} = require('../config/constants');
 
-// Hàm hỗ trợ: Tạo bản ghi tin nhắn
-const buildMessageRecord = (baseMessage, ownerId, expiresAt) => ({
-  ...baseMessage,
-  ownerId,
-  expiresAt,
-});
 
-// Hàm hỗ trợ: Cập nhật trạng thái tin nhắn
-const updateMessageStatus = async (messageId, ownerId, status, tableName = 'Messages') => {
-  try {
-    await dynamoDB.update({
-      TableName: tableName,
-      Key: { messageId, ownerId },
-      UpdateExpression: 'SET #status = :status',
-      ExpressionAttributeNames: { '#status': 'status' },
-      ExpressionAttributeValues: { ':status': status },
-    }).promise();
-    logger.info(`Updated message status`, { messageId, ownerId, status });
-  } catch (error) {
-    logger.error(`Failed to update message status`, { messageId, ownerId, status, error: error.message });
-    throw new AppError(`Failed to update message status: ${error.message}`, 500);
-  }
-};
 
-// Hàm hỗ trợ: Xóa file S3
-const deleteS3Object = async (bucket, key) => {
-  if (!key) return;
-  try {
-    await s3.deleteObject({ Bucket: bucket, Key: key }).promise();
-    logger.info(`Deleted S3 object`, { bucket, key });
-  } catch (error) {
-    logger.error(`Failed to delete S3 object`, { bucket, key, error: error.message });
-  }
-};
 
-// Hàm tạo tin nhắn
+
 const createMessage = async (senderId, receiverId, messageData) => {
   if (!senderId || !receiverId || !messageData) {
     throw new AppError('senderId, receiverId hoặc messageData không hợp lệ!', 400);
@@ -75,15 +35,15 @@ const createMessage = async (senderId, receiverId, messageData) => {
 
   // Kiểm tra quyền gửi tin nhắn
   const { canSend, isRestricted } = await canSendMessageToUser(senderId, receiverId);
-  if (!canSend) {
-    throw new AppError('Không có quyền gửi tin nhắn!', 403);
-  }
+  if (!canSend) throw new AppError('Không có quyền gửi tin nhắn!', 403);
 
   // Kiểm tra hoặc tạo hội thoại
-  const conversation = await dynamoDB.get({
-    TableName: 'Conversations',
-    Key: { userId: senderId, targetUserId: receiverId },
-  }).promise();
+  const conversation = await dynamoDB
+    .get({
+      TableName: 'Conversations',
+      Key: { userId: senderId, targetUserId: receiverId },
+    })
+    .promise();
   if (!conversation.Item) {
     await createConversation(senderId, receiverId);
   }
@@ -95,14 +55,15 @@ const createMessage = async (senderId, receiverId, messageData) => {
   ]);
 
   const now = Date.now();
-  const senderExpiresAt = senderAutoDelete !== 'never' && DAYS_TO_SECONDS[senderAutoDelete]
-    ? Math.floor(now / 1000) + DAYS_TO_SECONDS[senderAutoDelete]
-    : null;
-  const receiverExpiresAt = receiverAutoDelete !== 'never' && DAYS_TO_SECONDS[receiverAutoDelete]
-    ? Math.floor(now / 1000) + DAYS_TO_SECONDS[receiverAutoDelete]
-    : null;
+  const senderExpiresAt =
+    senderAutoDelete !== 'never' && DAYS_TO_SECONDS[senderAutoDelete]
+      ? Math.floor(now / 1000) + DAYS_TO_SECONDS[senderAutoDelete]
+      : null;
+  const receiverExpiresAt =
+    receiverAutoDelete !== 'never' && DAYS_TO_SECONDS[receiverAutoDelete]
+      ? Math.floor(now / 1000) + DAYS_TO_SECONDS[receiverAutoDelete]
+      : null;
 
-  // Tạo messageId và base message
   const messageId = uuidv4();
   const baseMessage = {
     messageId,
@@ -111,7 +72,6 @@ const createMessage = async (senderId, receiverId, messageData) => {
     type: messageData.type || null,
     content: messageData.content || null,
     mediaUrl: messageData.mediaUrl || null,
-    file: messageData.file || null,
     fileName: messageData.fileName || null,
     mimeType: messageData.mimeType || null,
     metadata: messageData.metadata || {},
@@ -121,134 +81,173 @@ const createMessage = async (senderId, receiverId, messageData) => {
   };
 
   const senderMessage = buildMessageRecord(baseMessage, senderId, senderExpiresAt);
-  let receiverMessage = senderId === receiverId ? null : buildMessageRecord(baseMessage, receiverId, receiverExpiresAt);
+  const receiverMessage =
+    senderId === receiverId ? null : buildMessageRecord(baseMessage, receiverId, receiverExpiresAt);
 
   io().to(senderId).emit('messageStatus', { messageId, status: MESSAGE_STATUSES.PENDING });
 
   let senderResult = null;
   let receiverResult = null;
-  let senderS3Key = null;
-  let receiverS3Key = null;
 
   try {
-    // Cập nhật trạng thái
-    io().to(senderId).emit('messageStatus', { messageId, status: MESSAGE_STATUSES.SENDING });
-    senderMessage.status = MESSAGE_STATUSES.SENDING;
-    if (receiverMessage) {
-      receiverMessage.status = MESSAGE_STATUSES.SENDING;
+    logger.info('Sending messages to DynamoDB', { messageId, senderId, receiverId });
+    // Gửi tin nhắn
+    [senderResult, receiverResult] = await Promise.all([
+      sendMessageCore(
+        { ...senderMessage, file: messageData.file, quality: messageData.quality },
+        'Messages',
+        process.env.BUCKET_NAME_Chat_Send
+      ),
+      receiverMessage
+        ? sendMessageCore(
+            { ...receiverMessage, file: messageData.file, quality: messageData.quality },
+            'Messages',
+            process.env.BUCKET_NAME_Chat_Send
+          )
+        : null,
+    ]);
+
+    if (!senderResult || (receiverMessage && !receiverResult)) {
+      throw new AppError('Không thể lưu tin nhắn vào DynamoDB', 500);
     }
 
-    // Lưu tin nhắn
-    const savePromises = [
-      sendMessageCore(senderMessage, 'Messages', process.env.BUCKET_NAME_Chat_Send).then(result => {
-        senderS3Key = result.mediaUrl?.startsWith(`s3://${process.env.BUCKET_NAME_Chat_Send}/`)
-          ? result.mediaUrl.split('/').slice(3).join('/')
-          : null;
-        return result;
-      }),
-    ];
-    if (receiverMessage) {
-      savePromises.push(
-        sendMessageCore(receiverMessage, 'Messages', process.env.BUCKET_NAME_Chat_Send).then(result => {
-          receiverS3Key = result.mediaUrl?.startsWith(`s3://${process.env.BUCKET_NAME_Chat_Send}/`)
-            ? result.mediaUrl.split('/').slice(3).join('/')
-            : null;
-          return result;
-        })
+    logger.info('Updating conversations', { messageId });
+    // Cập nhật hội thoại
+    await updateConversations(senderId, receiverId, messageId, baseMessage.timestamp, messageData.content);
+
+    // Xác định trạng thái ban đầu
+    const initialStatus = getInitialStatus(isRestricted, isUserOnline(receiverId), senderId === receiverId);
+
+    logger.info('Updating message status', { messageId, initialStatus });
+    // Cập nhật trạng thái
+    await Promise.all([
+      updateMessageStatus(messageId, senderId, initialStatus),
+      receiverMessage && updateMessageStatus(messageId, receiverId, initialStatus),
+    ]);
+
+    // Xử lý phiên âm nếu cần
+    if (messageData.type === 'voice' && messageData.metadata?.transcribe) {
+      logger.info('Adding transcribe job', { messageId });
+      await addTranscribeJob(
+        messageId,
+        senderId,
+        'Messages',
+        process.env.BUCKET_NAME_Chat_Send,
+        senderResult.mediaUrl,
+        `voice-${messageId}-${senderId}`
       );
     }
 
-    [senderResult, receiverResult] = await Promise.all(savePromises);
-
-    if (!senderResult || (receiverMessage && !receiverResult)) {
-      throw new AppError('Failed to save message to DynamoDB', 500);
+    // Gửi sự kiện socket
+    io().to(senderId).emit('receiveMessage', { ...senderMessage, status: initialStatus });
+    if (senderId !== receiverId && isUserOnline(receiverId) && !isRestricted) {
+      io().to(receiverId).emit('receiveMessage', { ...receiverMessage, status: initialStatus });
     }
 
-    // Cập nhật Conversations
-    const updateConversationPromises = [
-      dynamoDB.update({
+    logger.info('Message created successfully', { messageId });
+    return { ...baseMessage, status: initialStatus };
+  } catch (error) {
+    // Cleanup
+    await Promise.allSettled([
+      senderResult?.mediaUrl &&
+        deleteS3Object(
+          process.env.BUCKET_NAME_Chat_Send,
+          senderResult.mediaUrl.split('/').slice(3).join('/')
+        ),
+      receiverResult?.mediaUrl &&
+        deleteS3Object(
+          process.env.BUCKET_NAME_Chat_Send,
+          receiverResult.mediaUrl.split('/').slice(3).join('/')
+        ),
+      updateMessageStatus(messageId, senderId, MESSAGE_STATUSES.FAILED),
+      receiverResult && updateMessageStatus(messageId, receiverId, MESSAGE_STATUSES.FAILED),
+    ]);
+
+    io().to(senderId).emit('messageStatus', { messageId, status: MESSAGE_STATUSES.FAILED });
+    logger.error(`Error creating message`, { messageId, error: error.message, stack: error.stack });
+    throw new AppError(`Không thể gửi tin nhắn: ${error.message}`, 500);
+  }
+};
+
+const updateConversations = async (senderId, receiverId, messageId, timestamp, content) => {
+  const updatePromises = [
+    dynamoDB
+      .update({
         TableName: 'Conversations',
         Key: { userId: senderId, targetUserId: receiverId },
         UpdateExpression: 'SET lastMessage = :msg, updatedAt = :time',
         ExpressionAttributeValues: {
           ':msg': {
             messageId,
-            content: messageData.content || '',
-            createdAt: baseMessage.timestamp,
+            content: content || '',
+            createdAt: timestamp,
             ownerId: senderId,
           },
-          ':time': baseMessage.timestamp,
+          ':time': timestamp,
         },
-      }).promise(),
-    ];
-    if (senderId !== receiverId && !isRestricted) {
-      updateConversationPromises.push(
-        dynamoDB.update({
+      })
+      .promise(),
+  ];
+
+  if (senderId !== receiverId) {
+    updatePromises.push(
+      dynamoDB
+        .update({
           TableName: 'Conversations',
           Key: { userId: receiverId, targetUserId: senderId },
           UpdateExpression: 'SET lastMessage = :msg, updatedAt = :time',
           ExpressionAttributeValues: {
             ':msg': {
               messageId,
-              content: messageData.content || '',
-              createdAt: baseMessage.timestamp,
+              content: content || '',
+              createdAt: timestamp,
               ownerId: receiverId,
             },
-            ':time': baseMessage.timestamp,
+            ':time': timestamp,
           },
-        }).promise()
-      );
-    }
-    await Promise.all(updateConversationPromises);
+        })
+        .promise()
+    );
+  }
 
-    // Cập nhật trạng thái
-    const receiverOnline = senderId !== receiverId && isUserOnline(receiverId);
-    const initialStatus = senderId === receiverId
-      ? MESSAGE_STATUSES.SENT
-      : isRestricted
-      ? MESSAGE_STATUSES.RESTRICTED
-      : receiverOnline
-      ? MESSAGE_STATUSES.DELIVERED
-      : MESSAGE_STATUSES.SENT;
+  await Promise.all(updatePromises);
+};
 
-    // Chỉ emit một lần sau khi lưu xong
-    await Promise.all([
-      updateMessageStatus(messageId, senderId, initialStatus),
-      receiverMessage && updateMessageStatus(messageId, receiverId, initialStatus),
-    ]);
-    
+const buildMessageRecord = (baseMessage, ownerId, expiresAt) => ({
+  ...baseMessage,
+  ownerId,
+  expiresAt,
+});
 
-    // Xử lý transcription cho tin nhắn thoại
-    if (messageData.type === 'voice' && messageData.metadata?.transcribe) {
-      await transcribeQueue().add(
-        { messageId, senderId, receiverId, tableName: 'Messages', bucketName: process.env.BUCKET_NAME_Chat_Send },
-        { attempts: 5, backoff: { type: 'exponential', delay: 5000 } }
-      );
-      logger.info(`Added transcribe job`, { messageId });
-    }
-
-    // Phát sự kiện
-    io().to(senderId).emit('receiveMessage', { ...senderMessage, status: initialStatus });
-    if (senderId !== receiverId && receiverOnline && !isRestricted) {
-      io().to(receiverId).emit('receiveMessage', { ...receiverMessage, status: initialStatus });
-    }
-
-    return { ...baseMessage, status: initialStatus };
+const updateMessageStatus = async (messageId, ownerId, status, tableName = 'Messages') => {
+  try {
+    await dynamoDB
+      .update({
+        TableName: tableName,
+        Key: { messageId, ownerId },
+        UpdateExpression: 'SET #status = :status',
+        ExpressionAttributeNames: { '#status': 'status' },
+        ExpressionAttributeValues: { ':status': status },
+      })
+      .promise();
+    logger.info(`Updated message status`, { messageId, ownerId, status });
   } catch (error) {
-    logger.error(`Error creating message`, { messageId, error: error.message });
-
-    // Cleanup
-    await Promise.allSettled([
-      deleteS3Object(process.env.BUCKET_NAME_Chat_Send, senderS3Key),
-      deleteS3Object(process.env.BUCKET_NAME_Chat_Send, receiverS3Key),
-      senderResult && updateMessageStatus(messageId, senderId, MESSAGE_STATUSES.FAILED),
-      receiverResult && updateMessageStatus(messageId, receiverId, MESSAGE_STATUSES.FAILED),
-    ]);
-
-    io().to(senderId).emit('messageStatus', { messageId, status: MESSAGE_STATUSES.FAILED });
-    throw new AppError(`Failed to send message: ${error.message}`, 500);
+    logger.error(`Failed to update message status`, { messageId, ownerId, status, error: error.message });
+    throw new AppError(`Không thể cập nhật trạng thái tin nhắn: ${error.message}`, 500);
   }
 };
+
+const deleteS3Object = async (bucket, key) => {
+  if (!key) return;
+  try {
+    await s3.deleteObject({ Bucket: bucket, Key: key }).promise();
+    logger.info(`Deleted S3 object`, { bucket, key });
+  } catch (error) {
+    logger.error(`Failed to delete S3 object`, { bucket, key, error: error.message });
+  }
+};
+
+
 // Hàm thử lại tin nhắn
 const retryMessage = async (senderId, messageId) => {
   logger.info(`Retrying message`, { messageId, senderId });
@@ -286,19 +285,18 @@ const retryMessage = async (senderId, messageId) => {
     const receiverOnline = isUserOnline(savedMessage.receiverId);
     const newStatus = receiverOnline ? MESSAGE_STATUSES.DELIVERED : MESSAGE_STATUSES.SENT;
 
-    await Promise.all([
+    await Promise.all([ 
       updateMessageStatus(messageId, senderId, newStatus),
       updateMessageStatus(messageId, savedMessage.receiverId, newStatus),
     ]);
 
-    // Check if this message should become the last message
     const conversation = await dynamoDB.get({
       TableName: 'Conversations',
       Key: { userId: senderId, targetUserId: savedMessage.receiverId },
     }).promise();
 
     const lastMessageId = conversation.Item?.lastMessage?.messageId;
-    let shouldUpdateLastMessage = !lastMessageId; // No last message exists
+    let shouldUpdateLastMessage = !lastMessageId;
 
     if (lastMessageId) {
       const lastMessage = await dynamoDB.get({
@@ -344,7 +342,6 @@ const retryMessage = async (senderId, messageId) => {
     }
     io().to(senderId).emit('messageStatus', { messageId, status: newStatus });
 
-    // Remove from UserDeletedMessages if it was deleted
     if (deletedMessage.Item) {
       await dynamoDB.delete({
         TableName: 'UserDeletedMessages',
@@ -504,14 +501,6 @@ const getMessagesBetweenUsers = async (user1, user2) => {
   try {
     const now = Math.floor(Date.now() / 1000);
 
-    // Lấy danh sách messageId bị xóa
-    const { Items: deletedMessages = [] } = await dynamoDB.query({
-      TableName: 'UserDeletedMessages',
-      KeyConditionExpression: 'userId = :user1',
-      ExpressionAttributeValues: { ':user1': user1 },
-    }).promise();
-    const deletedMessageIds = new Set(deletedMessages.map(item => item.messageId));
-
     // Kiểm tra trạng thái bạn bè và cài đặt restrictStrangerMessages
     let isFriend = true;
     let restrictStrangerMessages = false;
@@ -563,17 +552,16 @@ const getMessagesBetweenUsers = async (user1, user2) => {
       ...(receiverResult ? receiverResult.Items || [] : []),
     ];
 
-    // Lọc tin nhắn
+    // Lọc tin nhắn: chỉ giữ những tin chưa expired, không bị xóa, thuộc user1
     const filteredMessages = allMessages.filter(
       msg =>
-        !deletedMessageIds.has(msg.messageId) &&
         (!msg.expiresAt || msg.expiresAt > now) &&
         msg.ownerId === user1 &&
-        // Không lấy tin restricted nếu user1 không phải người gửi
+        msg.status !== MESSAGE_STATUSES.DELETE &&
         (msg.status !== MESSAGE_STATUSES.RESTRICTED || msg.senderId === user1)
     );
 
-    // Loại bỏ trùng lặp và sắp xếp
+    // Loại bỏ trùng và sắp xếp
     const uniqueMessages = Array.from(
       new Map(filteredMessages.map(msg => [`${msg.messageId}:${msg.ownerId}`, msg])).values()
     ).sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
@@ -585,49 +573,110 @@ const getMessagesBetweenUsers = async (user1, user2) => {
   }
 };
 
-// Hàm chuyển tiếp tin nhắn
+
 const forwardMessage = async (senderId, messageId, targetReceiverId) => {
   logger.info(`Forwarding message`, { senderId, messageId, targetReceiverId });
 
+  // Kiểm tra quyền gửi tin nhắn
   const { canSend, isRestricted } = await canSendMessageToUser(senderId, targetReceiverId, true);
-  if (!canSend) {
-    throw new AppError('Không có quyền gửi tin nhắn!', 403);
-  }
+  if (!canSend) throw new AppError('Không có quyền gửi tin nhắn!', 403);
 
-  // Lấy tin nhắn gốc
-  let originalMessage = await dynamoDB.get({
-    TableName: 'Messages',
-    Key: { messageId, ownerId: senderId },
-  }).promise().then(res => res.Item);
+  // Tìm tin nhắn gốc
+  let originalMessage = null;
 
-  if (!originalMessage) {
-    const tempMessage = await dynamoDB.query({
+  // Query 1: Check if senderId matches using SenderIdMessageIdIndex
+  logger.info('Querying SenderIdMessageIdIndex', { senderId, messageId });
+  const senderQuery = await dynamoDB
+    .query({
       TableName: 'Messages',
-      IndexName: 'ReceiverSenderIndex',
-      KeyConditionExpression: 'receiverId = :senderId AND senderId = :senderId',
-      FilterExpression: 'messageId = :messageId',
+      IndexName: 'SenderIdMessageIdIndex',
+      KeyConditionExpression: 'senderId = :senderId AND messageId = :messageId',
       ExpressionAttributeValues: {
         ':senderId': senderId,
         ':messageId': messageId,
       },
       Limit: 1,
-    }).promise();
-    originalMessage = tempMessage.Items?.[0];
+    })
+    .promise();
+
+  if (senderQuery.Items?.[0]) {
+    logger.info('Message found in SenderIdMessageIdIndex', { messageId });
+    originalMessage = senderQuery.Items[0];
+  } else {
+    // Query 2: Check if receiverId matches using ReceiverSenderIndex
+    logger.info('Querying ReceiverSenderIndex', { receiverId: senderId, messageId });
+    const receiverQuery = await dynamoDB
+      .query({
+        TableName: 'Messages',
+        IndexName: 'ReceiverSenderIndex',
+        KeyConditionExpression: 'receiverId = :receiverId',
+        FilterExpression: 'messageId = :messageId',
+        ExpressionAttributeValues: {
+          ':receiverId': senderId, // senderId is used as receiverId here
+          ':messageId': messageId,
+        },
+        Limit: 1,
+      })
+      .promise();
+
+    if (receiverQuery.Items?.[0]) {
+      logger.info('Message found in ReceiverSenderIndex', { messageId });
+      originalMessage = receiverQuery.Items[0];
+    } else {
+      logger.warn('Message not found in either index', { senderId, messageId });
+    }
   }
 
-  if (!originalMessage) throw new AppError('Không tìm thấy tin nhắn', 404);
-  if (originalMessage.status === MESSAGE_STATUSES.RECALLED) {
-    throw new AppError('Không thể chuyển tiếp tin nhắn đã thu hồi!', 400);
+  // Fallback: Direct query on primary key
+  if (!originalMessage) {
+    logger.info('Attempting direct query on primary key', { messageId });
+    const directQuery = await dynamoDB
+      .query({
+        TableName: 'Messages',
+        KeyConditionExpression: 'messageId = :messageId',
+        ExpressionAttributeValues: {
+          ':messageId': messageId,
+        },
+      })
+      .promise();
+
+    logger.info('Direct query result', {
+      items: directQuery.Items?.length || 0,
+      records: directQuery.Items?.map(item => ({
+        ownerId: item.ownerId,
+        senderId: item.senderId,
+        receiverId: item.receiverId,
+        status: item.status,
+      })),
+    });
+
+    // Find a record where senderId or receiverId matches
+    originalMessage = directQuery.Items?.find(
+      item => item.senderId === senderId || item.receiverId === senderId
+    );
+
+    if (!originalMessage) {
+      throw new AppError(
+        `Không tìm thấy tin nhắn với messageId: ${messageId} cho senderId: ${senderId}`,
+        404
+      );
+    }
+  }
+
+  if (originalMessage.status === MESSAGE_STATUSES.RECALLED || originalMessage.status === MESSAGE_STATUSES.DELETE) {
+    throw new AppError('Không thể chuyển tiếp tin nhắn đã thu hồi hoặc đã xóa!', 400);
   }
   if (originalMessage.senderId !== senderId && originalMessage.receiverId !== senderId) {
-    throw new AppError('Unauthorized to forward this message', 403);
+    throw new AppError('Không có quyền chuyển tiếp tin nhắn này', 403);
   }
 
   // Kiểm tra hoặc tạo hội thoại
-  const conversation = await dynamoDB.get({
-    TableName: 'Conversations',
-    Key: { userId: senderId, targetUserId: targetReceiverId },
-  }).promise();
+  const conversation = await dynamoDB
+    .get({
+      TableName: 'Conversations',
+      Key: { userId: senderId, targetUserId: targetReceiverId },
+    })
+    .promise();
   if (!conversation.Item) {
     await createConversation(senderId, targetReceiverId);
   }
@@ -639,12 +688,14 @@ const forwardMessage = async (senderId, messageId, targetReceiverId) => {
   ]);
 
   const now = Date.now();
-  const senderExpiresAt = senderAutoDelete !== 'never' && DAYS_TO_SECONDS[senderAutoDelete]
-    ? Math.floor(now / 1000) + DAYS_TO_SECONDS[senderAutoDelete]
-    : null;
-  const receiverExpiresAt = receiverAutoDelete !== 'never' && DAYS_TO_SECONDS[receiverAutoDelete]
-    ? Math.floor(now / 1000) + DAYS_TO_SECONDS[receiverAutoDelete]
-    : null;
+  const senderExpiresAt =
+    senderAutoDelete !== 'never' && DAYS_TO_SECONDS[senderAutoDelete]
+      ? Math.floor(now / 1000) + DAYS_TO_SECONDS[senderAutoDelete]
+      : null;
+  const receiverExpiresAt =
+    receiverAutoDelete !== 'never' && DAYS_TO_SECONDS[receiverAutoDelete]
+      ? Math.floor(now / 1000) + DAYS_TO_SECONDS[receiverAutoDelete]
+      : null;
 
   const newMessageId = uuidv4();
   let newMediaUrl = originalMessage.mediaUrl;
@@ -654,41 +705,7 @@ const forwardMessage = async (senderId, messageId, targetReceiverId) => {
   if (newMediaUrl && newMediaUrl.startsWith('s3://')) {
     const bucketName = process.env.BUCKET_NAME_Chat_Send;
     const originalKey = newMediaUrl.split('/').slice(3).join('/');
-    const mimeType = originalMessage.mimeType;
-
-    const mimeTypeMap = {
-      'image/jpeg': { type: 'image', folder: 'images', ext: 'jpg', maxSize: 10 * 1024 * 1024 },
-      'image/png': { type: ['image', 'sticker'], folder: 'images', ext: 'png', maxSize: 10 * 1024 * 1024 },
-      'image/heic': { type: 'image', folder: 'images', ext: 'heic', maxSize: 10 * 1024 * 1024 },
-      'image/gif': { type: ['gif', 'sticker'], folder: 'gifs', ext: 'gif', maxSize: 10 * 1024 * 1024 },
-      'video/mp4': { type: 'video', folder: 'videos', ext: 'mp4', maxSize: 1024 * 1024 * 1024 },
-      'audio/mpeg': { type: 'voice', folder: 'voice', ext: 'mp3', maxSize: 50 * 1024 * 1024 },
-      'audio/wav': { type: 'voice', folder: 'voice', ext: 'wav', maxSize: 50 * 1024 * 1024 },
-      'audio/mp4': { type: 'voice', folder: 'voice', ext: 'm4a', maxSize: 50 * 1024 * 1024 },
-      'application/pdf': { type: 'file', folder: 'files', ext: 'pdf', maxSize: 1024 * 1024 * 1024 },
-      'application/zip': { type: 'file', folder: 'files', ext: 'zip', maxSize: 1024 * 1024 * 1024 },
-      'application/x-rar-compressed': { type: 'file', folder: 'files', ext: 'rar', maxSize: 1024 * 1024 * 1024 },
-      'application/vnd.rar': { type: 'file', folder: 'files', ext: 'rar', maxSize: 1024 * 1024 * 1024 },
-      'text/plain': { type: 'file', folder: 'files', ext: 'txt', maxSize: 1024 * 1024 * 1024 },
-      'image/webp': { type: ['image', 'sticker', 'gif'], folder: 'images', ext: 'webp', maxSize: 10 * 1024 * 1024 },
-    };
-
-    const mimeInfo = mimeTypeMap[mimeType];
-    if (!mimeInfo) throw new AppError(`Unsupported MIME type: ${mimeType}`, 400);
-
-    newS3Key = `${mimeInfo.folder}/${newMessageId}.${mimeInfo.ext}`;
-    try {
-      await s3.copyObject({
-        Bucket: bucketName,
-        CopySource: `${bucketName}/${originalKey}`,
-        Key: newS3Key,
-        ContentType: mimeType,
-      }).promise();
-      newMediaUrl = `s3://${bucketName}/${newS3Key}`;
-    } catch (error) {
-      logger.error(`Error copying S3 file`, { error: error.message });
-      throw new AppError(`Failed to copy S3 file: ${error.message}`, 500);
-    }
+    ({ mediaUrl: newMediaUrl, s3Key: newS3Key } = await copyS3File(bucketName, originalKey, newMessageId, originalMessage.mimeType));
   }
 
   const baseMessage = {
@@ -712,65 +729,34 @@ const forwardMessage = async (senderId, messageId, targetReceiverId) => {
   const receiverMessage = buildMessageRecord(baseMessage, targetReceiverId, receiverExpiresAt);
 
   try {
+    // Gửi tin nhắn và cập nhật hội thoại
     await Promise.all([
       sendMessageCore(senderMessage, 'Messages', process.env.BUCKET_NAME_Chat_Send),
       sendMessageCore(receiverMessage, 'Messages', process.env.BUCKET_NAME_Chat_Send),
+      updateConversations(senderId, targetReceiverId, newMessageId, baseMessage.timestamp, baseMessage.content),
     ]);
 
-    // Cập nhật Conversations
-    await Promise.all([
-      dynamoDB.update({
-        TableName: 'Conversations',
-        Key: { userId: senderId, targetUserId: targetReceiverId },
-        UpdateExpression: 'SET lastMessage = :msg, updatedAt = :time',
-        ExpressionAttributeValues: {
-          ':msg': {
-            messageId: newMessageId,
-            content: baseMessage.content || '',
-            createdAt: baseMessage.timestamp,
-            ownerId: senderId,
-          },
-          ':time': baseMessage.timestamp,
-        },
-      }).promise(),
-      dynamoDB.update({
-        TableName: 'Conversations',
-        Key: { userId: targetReceiverId, targetUserId: senderId },
-        UpdateExpression: 'SET lastMessage = :msg, updatedAt = :time',
-        ExpressionAttributeValues: {
-          ':msg': {
-            messageId: newMessageId,
-            content: baseMessage.content || '',
-            createdAt: baseMessage.timestamp,
-            ownerId: targetReceiverId,
-          },
-          ':time': baseMessage.timestamp,
-        },
-      }).promise(),
-    ]);
+    // Xác định trạng thái ban đầu
+    const initialStatus = getInitialStatus(isRestricted, isUserOnline(targetReceiverId), false);
 
-    const receiverOnline = isUserOnline(targetReceiverId);
-    const initialStatus = isRestricted
-      ? MESSAGE_STATUSES.RESTRICTED
-      : receiverOnline
-      ? MESSAGE_STATUSES.DELIVERED
-      : MESSAGE_STATUSES.SENT;
-
+    // Cập nhật trạng thái
     await Promise.all([
       updateMessageStatus(newMessageId, senderId, initialStatus),
-      updateMessageStatus(newMessageId, targetReceiverId, isRestricted ? MESSAGE_STATUSES.RESTRICTED : initialStatus),
+      updateMessageStatus(newMessageId, targetReceiverId, initialStatus),
     ]);
 
+    // Gửi sự kiện socket
+    io().to(senderId).emit('receiveMessage', { ...senderMessage, status: initialStatus });
     if (!isRestricted) {
       io().to(targetReceiverId).emit('receiveMessage', { ...receiverMessage, status: initialStatus });
     }
-    io().to(senderId).emit('receiveMessage', { ...senderMessage, status: initialStatus });
 
+    logger.info('Message forwarded successfully', { newMessageId });
     return { ...baseMessage, status: initialStatus };
   } catch (error) {
     await deleteS3Object(process.env.BUCKET_NAME_Chat_Send, newS3Key);
-    logger.error(`Error forwarding message`, { messageId, error: error.message });
-    throw new AppError(`Failed to forward message: ${error.message}`, 500);
+    logger.error(`Error forwarding message`, { messageId: newMessageId, error: error.message, stack: error.stack });
+    throw new AppError(`Không thể chuyển tiếp tin nhắn: ${error.message}`, 500);
   }
 };
 
@@ -986,569 +972,169 @@ const getPinnedMessages = async (userId, otherUserId) => {
   }
 };
 
-// Hàm đặt nhắc nhở
-const setReminder = async (userId, messageId, reminder, scope = 'both', reminderContent, repeat = 'none', daysOfWeek) => {
-  logger.info('Setting reminder for message:', { messageId, userId, reminder, scope, reminderContent, repeat, daysOfWeek });
-
-  if (reminder && new Date(reminder) <= new Date()) {
-    throw new AppError('Thời gian nhắc nhở phải ở tương lai!', 400);
-  }
-  if (!['onlyMe', 'both'].includes(scope)) {
-    throw new AppError('Phạm vi nhắc nhở phải là "onlyMe" hoặc "both"!', 400);
-  }
-  const validRepeatTypes = ['none', 'daily', 'weekly', 'multipleDaysWeekly', 'monthly', 'yearly'];
-  if (!validRepeatTypes.includes(repeat)) {
-    throw new AppError('Loại lặp lại không hợp lệ!', 400);
-  }
-  if (repeat === 'multipleDaysWeekly') {
-    if (!Array.isArray(daysOfWeek) || !daysOfWeek.length) {
-      throw new AppError('daysOfWeek phải là mảng không rỗng!', 400);
-    }
-    if (!daysOfWeek.every(day => Number.isInteger(day) && day >= 1 && day <= 7)) {
-      throw new AppError('daysOfWeek phải chứa số từ 1 đến 7!', 400);
-    }
-  } else if (daysOfWeek) {
-    throw new AppError('daysOfWeek chỉ dùng cho multipleDaysWeekly!', 400);
-  }
-
-  const message = await dynamoDB.get({
-    TableName: 'Messages',
-    Key: { messageId, ownerId: userId },
-  }).promise();
-
-  if (!message.Item) throw new AppError('Tin nhắn không tồn tại!', 404);
-  if (message.Item.status === MESSAGE_STATUSES.RECALLED) {
-    throw new AppError('Tin nhắn đã bị thu hồi!', 400);
-  }
-  if (message.Item.senderId !== userId && message.Item.receiverId !== userId) {
-    throw new AppError('Bạn không có quyền đặt nhắc nhở!', 403);
-  }
-
-  const otherUserId = message.Item.senderId === userId ? message.Item.receiverId : message.Item.senderId;
-  const finalReminderContent =
-    reminderContent ||
-    (message.Item.type === 'text' && message.Item.content ? message.Item.content : `Nhắc nhở cho tin nhắn ${messageId}`);
-
-  let updateExpression = 'SET reminder = :r, reminderScope = :s, reminderContent = :rc, repeatType = :rt';
-  let expressionAttributeValues = {
-    ':r': reminder,
-    ':s': scope,
-    ':rc': finalReminderContent,
-    ':rt': repeat,
-  };
-
-  if (repeat === 'multipleDaysWeekly' && daysOfWeek) {
-    updateExpression += ', daysOfWeek = :dow';
-    expressionAttributeValues[':dow'] = daysOfWeek;
-  } else {
-    updateExpression += ' REMOVE daysOfWeek';
-  }
-
-  await dynamoDB.update({
-    TableName: 'Messages',
-    Key: { messageId, ownerId: userId },
-    UpdateExpression: updateExpression,
-    ExpressionAttributeValues: expressionAttributeValues,
-  }).promise();
-
-  const reminderData = {
-    messageId,
-    reminder,
-    scope,
-    reminderContent: finalReminderContent,
-    repeatType: repeat,
-    daysOfWeek: repeat === 'multipleDaysWeekly' ? daysOfWeek : undefined,
-    setBy: userId,
-  };
-  io().to(userId).emit('reminderSet', reminderData);
-  if (scope === 'both') {
-    io().to(otherUserId).emit('reminderSet', reminderData);
-  }
-
-  return { success: true, message: 'Đã đặt nhắc nhở!' };
-};
-
-// Hàm xóa nhắc nhở
-const unsetReminder = async (userId, messageId) => {
-  logger.info('Unsetting reminder for message:', { messageId, userId });
-
-  const message = await dynamoDB.get({
-    TableName: 'Messages',
-    Key: { messageId, ownerId: userId },
-  }).promise();
-
-  if (!message.Item) throw new AppError('Tin nhắn không tồn tại!', 404);
-  if (!message.Item.reminder) {
-    throw new AppError('Tin nhắn này chưa có nhắc nhở!', 400);
-  }
-  if (message.Item.senderId !== userId && message.Item.receiverId !== userId) {
-    throw new AppError('Bạn không có quyền xóa nhắc nhở!', 403);
-  }
-
-  const otherUserId = message.Item.senderId === userId ? message.Item.receiverId : message.Item.senderId;
-  const scope = message.Item.reminderScope || 'both';
-
-  await dynamoDB.update({
-    TableName: 'Messages',
-    Key: { messageId, ownerId: userId },
-    UpdateExpression: 'REMOVE reminder, reminderScope, reminderContent, repeatType, daysOfWeek',
-  }).promise();
-
-  io().to(userId).emit('reminderUnset', { messageId, unsetBy: userId });
-  if (scope === 'both') {
-    io().to(otherUserId).emit('reminderUnset', { messageId, unsetBy: userId });
-  }
-
-  return { success: true, message: 'Đã xóa nhắc nhở!' };
-};
-
-// Hàm lấy nhắc nhở giữa hai người dùng
-const getRemindersBetweenUsers = async (userId, otherUserId) => {
-  logger.info('Getting reminders between users:', { userId, otherUserId });
-
-  const now = new Date().toISOString();
-
-  const userReminders = await dynamoDB.query({
-    TableName: 'Messages',
-    IndexName: 'OwnerReminderIndex',
-    KeyConditionExpression: 'ownerId = :userId',
-    FilterExpression: 'reminder >= :now AND (senderId = :otherUserId OR receiverId = :otherUserId)',
-    ExpressionAttributeValues: {
-      ':userId': userId,
-      ':otherUserId': otherUserId,
-      ':now': now,
-    },
-  }).promise();
-
-  const otherUserReminders = await dynamoDB.query({
-    TableName: 'Messages',
-    IndexName: 'OwnerReminderIndex',
-    KeyConditionExpression: 'ownerId = :otherUserId',
-    FilterExpression: 'reminder >= :now AND reminderScope = :both AND (senderId = :userId OR receiverId = :userId)',
-    ExpressionAttributeValues: {
-      ':otherUserId': otherUserId,
-      ':userId': userId,
-      ':both': 'both',
-      ':now': now,
-    },
-  }).promise();
-
-  const reminders = [
-    ...(userReminders.Items || []).map(msg => ({
-      messageId: msg.messageId,
-      reminder: msg.reminder,
-      scope: msg.reminderScope,
-      reminderContent: msg.reminderContent,
-      repeatType: msg.repeatType,
-      daysOfWeek: msg.daysOfWeek,
-      setBy: msg.ownerId,
-    })),
-    ...(otherUserReminders.Items || []).map(msg => ({
-      messageId: msg.messageId,
-      reminder: msg.reminder,
-      scope: msg.reminderScope,
-      reminderContent: msg.reminderContent,
-      repeatType: msg.repeatType,
-      daysOfWeek: msg.daysOfWeek,
-      setBy: msg.ownerId,
-    })),
-  ];
-
-  return { success: true, reminders };
-};
-
-// Hàm kiểm tra và thông báo nhắc nhở
-const checkAndNotifyReminders = async () => {
+const deleteMessage = async (userId, messageId) => {
   try {
-    const now = new Date();
-    const ownerIds = await getActiveOwnerIds(); // Sử dụng hàm có sẵn
+    logger.info('Deleting message:', { messageId, userId });
 
-    for (const ownerId of ownerIds) {
-      try {
-        const params = {
-          TableName: 'Messages',
-          IndexName: 'OwnerReminderIndex', // Sửa thành OwnerReminderIndex
-          KeyConditionExpression: 'ownerId = :ownerId AND reminder <= :now',
-          ExpressionAttributeValues: {
-            ':ownerId': ownerId,
-            ':now': now.toISOString(),
-          },
-        };
-
-        const { Items: messages } = await dynamoDB.query(params).promise();
-
-        for (const msg of messages || []) {
-          try {
-            const { repeatType, daysOfWeek, reminder, reminderContent } = msg;
-            let newReminder = null;
-
-            if (repeatType && repeatType !== 'none') {
-              const reminderDate = new Date(reminder);
-              switch (repeatType) {
-                case 'daily':
-                  newReminder = new Date(reminderDate.setDate(reminderDate.getDate() + 1)).toISOString();
-                  break;
-                case 'weekly':
-                  newReminder = new Date(reminderDate.setDate(reminderDate.getDate() + 7)).toISOString();
-                  break;
-                case 'multipleDaysWeekly':
-                  const currentDay = now.getDay() || 7;
-                  const nextDay = daysOfWeek.find(day => day > currentDay) || daysOfWeek[0];
-                  const daysToAdd = nextDay > currentDay ? nextDay - currentDay : 7 - currentDay + nextDay;
-                  newReminder = new Date(reminderDate.setDate(reminderDate.getDate() + daysToAdd)).toISOString();
-                  break;
-                case 'monthly':
-                  newReminder = new Date(reminderDate.setMonth(reminderDate.getMonth() + 1)).toISOString();
-                  break;
-                case 'yearly':
-                  newReminder = new Date(reminderDate.setFullYear(reminderDate.getFullYear() + 1)).toISOString();
-                  break;
-                default:
-                  logger.warn(`Loại lặp lại không xác định: ${repeatType}`, { messageId: msg.messageId });
-              }
-            }
-
-            const ownerOnline = await isUserOnline(msg.ownerId);
-            if (ownerOnline) {
-              io().to(msg.ownerId).emit('reminderTriggered', {
-                messageId: msg.messageId,
-                reminderContent: reminderContent || `Nhắc nhở cho tin nhắn ${msg.messageId}`,
-              });
-            } else {
-              await dynamoDB.put({
-                TableName: 'Notifications',
-                Item: {
-                  notificationId: uuidv4(),
-                  userId: msg.ownerId,
-                  type: 'reminder',
-                  messageId: msg.messageId,
-                  content: reminderContent || `Nhắc nhở cho tin nhắn ${msg.messageId}`,
-                  timestamp: now.toISOString(),
-                },
-              }).promise();
-            }
-
-            if (msg.reminderScope === 'both') {
-              const otherUserId = msg.senderId === msg.ownerId ? msg.receiverId : msg.senderId;
-              const otherOnline = await isUserOnline(otherUserId);
-              if (otherOnline) {
-                io().to(otherUserId).emit('reminderTriggered', {
-                  messageId: msg.messageId,
-                  reminderContent: reminderContent || `Nhắc nhở cho tin nhắn ${msg.messageId}`,
-                });
-              } else {
-                await dynamoDB.put({
-                  TableName: 'Notifications',
-                  Item: {
-                    notificationId: uuidv4(),
-                    userId: otherUserId,
-                    type: 'reminder',
-                    messageId: msg.messageId,
-                    content: reminderContent || `Nhắc nhở cho tin nhắn ${msg.messageId}`,
-                    timestamp: now.toISOString(),
-                  },
-                }).promise();
-              }
-            }
-
-            if (newReminder) {
-              await dynamoDB.update({
-                TableName: 'Messages',
-                Key: { messageId: msg.messageId, ownerId: msg.ownerId },
-                UpdateExpression: 'SET reminder = :r',
-                ExpressionAttributeValues: { ':r': newReminder },
-              }).promise();
-            } else {
-              await dynamoDB.update({
-                TableName: 'Messages',
-                Key: { messageId: msg.messageId, ownerId: msg.ownerId },
-                UpdateExpression: 'REMOVE reminder, reminderScope, reminderContent, repeatType, daysOfWeek',
-              }).promise();
-            }
-
-            await dynamoDB.put({
-              TableName: 'ReminderLogs',
-              Item: {
-                logId: uuidv4(),
-                messageId: msg.messageId,
-                userId: msg.ownerId,
-                reminder,
-                reminderContent: reminderContent || `Nhắc nhở cho tin nhắn ${msg.messageId}`,
-                timestamp: now.toISOString(),
-              },
-            }).promise();
-          } catch (error) {
-            logger.error(`Lỗi khi xử lý nhắc nhở cho tin nhắn ${msg.messageId}`, {
-              ownerId: msg.ownerId,
-              error: error.message,
-            });
-            continue;
-          }
-        }
-      } catch (error) {
-        logger.error(`Lỗi khi truy vấn nhắc nhở cho owner ${ownerId}`, {
-          error: error.message,
-          code: error.code,
-          requestId: error.requestId,
-        });
-        continue;
-      }
-    }
-  } catch (error) {
-    logger.error(`Lỗi trong checkAndNotifyReminders`, {
-      error: error.message,
-      code: error.code,
-      requestId: error.requestId,
-    });
-    throw error;
-  }
-};
-// Hàm lấy lịch sử nhắc nhở
-const getReminderHistory = async (userId, otherUserId) => {
-  logger.info('Getting reminder history between users:', { userId, otherUserId });
-
-  const logs = await dynamoDB.scan({
-    TableName: 'ReminderLogs',
-    FilterExpression: 'userId = :userId',
-    ExpressionAttributeValues: { ':userId': userId },
-  }).promise();
-
-  const history = [];
-  for (const log of logs.Items || []) {
-    const message = await dynamoDB.get({
+    // Lấy tin nhắn của user hiện tại
+    const messageRes = await dynamoDB.get({
       TableName: 'Messages',
-      Key: { messageId: log.messageId, ownerId: userId },
+      Key: { messageId, ownerId: userId },
     }).promise();
 
-    if (
-      message.Item &&
-      ((message.Item.senderId === userId && message.Item.receiverId === otherUserId) ||
-        (message.Item.senderId === otherUserId && message.Item.receiverId === userId))
-    ) {
-      history.push({
-        logId: log.logId,
-        messageId: log.messageId,
-        reminder: log.reminder,
-        reminderContent: log.reminderContent,
-        timestamp: log.timestamp,
-      });
+    const message = messageRes.Item;
+    if (!message) throw new AppError('Tin nhắn không tồn tại!', 404);
+    if (message.senderId !== userId && message.receiverId !== userId) {
+      throw new AppError('Bạn không thuộc hội thoại này!', 403);
     }
-  }
 
-  return { success: true, history };
-};
+    const otherUserId = message.senderId === userId ? message.receiverId : message.senderId;
 
-// Hàm chỉnh sửa nhắc nhở
-const editReminder = async (userId, messageId, reminder, scope, reminderContent, repeat, daysOfWeek) => {
-  logger.info('Editing reminder for message:', { messageId, userId, reminder, scope, reminderContent, repeat, daysOfWeek });
+    // Cập nhật status = 'delete' và thêm thời gian xóa cho user hiện tại
+    await dynamoDB.update({
+      TableName: 'Messages',
+      Key: { messageId, ownerId: userId },
+      UpdateExpression: 'SET #status = :deleted, deletedAt = :deletedAt',
+      ExpressionAttributeNames: { '#status': 'status' },
+      ExpressionAttributeValues: {
+        ':deleted': MESSAGE_STATUSES.DELETE,
+        ':deletedAt': new Date().toISOString(),
+      },
+    }).promise();
 
-  if (reminder && new Date(reminder) <= new Date()) {
-    throw new AppError('Thời gian nhắc nhở phải ở tương lai!', 400);
-  }
-  if (scope && !['onlyMe', 'both'].includes(scope)) {
-    throw new AppError('Phạm vi nhắc nhở phải là "onlyMe" hoặc "both"!', 400);
-  }
-  const validRepeatTypes = ['none', 'daily', 'weekly', 'multipleDaysWeekly', 'monthly', 'yearly'];
-  if (repeat && !validRepeatTypes.includes(repeat)) {
-    throw new AppError('Loại lặp lại không hợp lệ!', 400);
-  }
-  if (repeat === 'multipleDaysWeekly') {
-    if (!Array.isArray(daysOfWeek) || !daysOfWeek.length) {
-      throw new AppError('daysOfWeek phải là mảng không rỗng!', 400);
-    }
-    if (!daysOfWeek.every(day => Number.isInteger(day) && day >= 1 && day <= 7)) {
-      throw new AppError('daysOfWeek phải chứa số từ 1 đến 7!', 400);
-    }
-  } else if (daysOfWeek && repeat !== 'multipleDaysWeekly') {
-    throw new AppError('daysOfWeek chỉ dùng cho multipleDaysWeekly!', 400);
-  }
+    // Lấy hội thoại để kiểm tra lastMessage
+    const conversationRes = await dynamoDB.get({
+      TableName: 'Conversations',
+      Key: { userId, targetUserId: otherUserId },
+    }).promise();
 
-  const message = await dynamoDB.get({
-    TableName: 'Messages',
-    Key: { messageId, ownerId: userId },
-  }).promise();
+    const isLastMessage = conversationRes.Item?.lastMessage?.messageId === messageId;
 
-  if (!message.Item) throw new AppError('Tin nhắn không tồn tại!', 404);
-  if (!message.Item.reminder) {
-    throw new AppError('Tin nhắn chưa có nhắc nhở!', 400);
-  }
-  if (message.Item.senderId !== userId && message.Item.receiverId !== userId) {
-    throw new AppError('Bạn không có quyền chỉnh sửa nhắc nhở!', 403);
-  }
+    if (isLastMessage) {
+      // Tìm message hợp lệ mới nhất thay thế
+      const [sentMessages, receivedMessages] = await Promise.all([
+        dynamoDB.query({
+          TableName: 'Messages',
+          IndexName: 'SenderReceiverIndex',
+          KeyConditionExpression: 'senderId = :userId AND receiverId = :otherUserId',
+          ExpressionAttributeValues: {
+            ':userId': userId,
+            ':otherUserId': otherUserId,
+          },
+          ScanIndexForward: false,
+          Limit: 10,
+        }).promise(),
+        dynamoDB.query({
+          TableName: 'Messages',
+          IndexName: 'ReceiverSenderIndex',
+          KeyConditionExpression: 'receiverId = :userId AND senderId = :otherUserId',
+          ExpressionAttributeValues: {
+            ':userId': userId,
+            ':otherUserId': otherUserId,
+          },
+          ScanIndexForward: false,
+          Limit: 10,
+        }).promise(),
+      ]);
 
-  const otherUserId = message.Item.senderId === userId ? message.Item.receiverId : message.Item.senderId;
-  const finalReminderContent =
-    reminderContent !== undefined
-      ? reminderContent ||
-        (message.Item.type === 'text' && message.Item.content ? message.Item.content : `Nhắc nhở cho tin nhắn ${messageId}`)
-      : message.Item.reminderContent;
-
-  let updateExpression = 'SET reminder = :r';
-  const expressionAttributeValues = { ':r': reminder };
-
-  if (scope) {
-    updateExpression += ', reminderScope = :s';
-    expressionAttributeValues[':s'] = scope;
-  }
-  if (reminderContent !== undefined) {
-    updateExpression += ', reminderContent = :rc';
-    expressionAttributeValues[':rc'] = finalReminderContent;
-  }
-  if (repeat) {
-    updateExpression += ', repeatType = :rt';
-    expressionAttributeValues[':rt'] = repeat;
-  }
-  if (repeat === 'multipleDaysWeekly' && daysOfWeek) {
-    updateExpression += ', daysOfWeek = :dow';
-    expressionAttributeValues[':dow'] = daysOfWeek;
-  } else if (repeat && repeat !== 'multipleDaysWeekly') {
-    updateExpression += ' REMOVE daysOfWeek';
-  }
-
-  await dynamoDB.update({
-    TableName: 'Messages',
-    Key: { messageId, ownerId: userId },
-    UpdateExpression: updateExpression,
-    ExpressionAttributeValues: expressionAttributeValues,
-  }).promise();
-
-  const finalScope = scope || message.Item.reminderScope || 'both';
-  const finalRepeat = repeat || message.Item.repeatType || 'none';
-  const finalDaysOfWeek =
-    repeat === 'multipleDaysWeekly' ? daysOfWeek : repeat && repeat !== 'multipleDaysWeekly' ? undefined : message.Item.daysOfWeek;
-
-  const reminderData = {
-    messageId,
-    reminder,
-    scope: finalScope,
-    reminderContent: finalReminderContent,
-    repeatType: finalRepeat,
-    daysOfWeek: finalDaysOfWeek,
-    setBy: userId,
-  };
-  io().to(userId).emit('reminderEdited', reminderData);
-  if (finalScope === 'both') {
-    io().to(otherUserId).emit('reminderEdited', reminderData);
-  }
-
-  return { success: true, message: 'Đã chỉnh sửa nhắc nhở!' };
-};
-
-// Hàm xóa tin nhắn chỉ với bạn
-const deleteMessage = async (userId, messageId) => {
-  logger.info('Deleting message:', { messageId, userId });
-
-  const message = await dynamoDB.get({
-    TableName: 'Messages',
-    Key: { messageId, ownerId: userId },
-  }).promise();
-
-  if (!message.Item) throw new AppError('Tin nhắn không tồn tại!', 404);
-  if (message.Item.senderId !== userId && message.Item.receiverId !== userId) {
-    throw new AppError('Bạn không thuộc hội thoại này!', 403);
-  }
-
-  const otherUserId = message.Item.senderId === userId ? message.Item.receiverId : message.Item.senderId;
-
-  // Check if the message is the last message in the conversation
-  const conversation = await dynamoDB.get({
-    TableName: 'Conversations',
-    Key: { userId, targetUserId: otherUserId },
-  }).promise();
-
-  const isLastMessage = conversation.Item?.lastMessage?.messageId === messageId;
-
-  // Mark message as deleted
-  await dynamoDB.put({
-    TableName: 'UserDeletedMessages',
-    Item: { userId, messageId, timestamp: new Date().toISOString() },
-  }).promise();
-
-  // If it's the last message, find the previous valid message
-  if (isLastMessage) {
-    const [sentMessages, receivedMessages] = await Promise.all([
-      dynamoDB.query({
-        TableName: 'Messages',
-        IndexName: 'SenderReceiverIndex',
-        KeyConditionExpression: 'senderId = :userId AND receiverId = :otherUserId',
-        ExpressionAttributeValues: { ':userId': userId, ':otherUserId': otherUserId },
-        ScanIndexForward: false,
-        Limit: 10, // Limit to avoid excessive scanning
-      }).promise(),
-      dynamoDB.query({
-        TableName: 'Messages',
-        IndexName: 'ReceiverSenderIndex',
-        KeyConditionExpression: 'receiverId = :userId AND senderId = :otherUserId',
-        ExpressionAttributeValues: { ':userId': userId, ':otherUserId': otherUserId },
-        ScanIndexForward: false,
-        Limit: 10,
-      }).promise(),
-    ]);
-
-    const allMessages = [...(sentMessages.Items || []), ...(receivedMessages.Items || [])]
-      .filter(
-        msg =>
+      const allMessages = [...(sentMessages.Items || []), ...(receivedMessages.Items || [])]
+        .filter(msg =>
           msg.messageId !== messageId &&
           msg.ownerId === userId &&
           msg.status !== MESSAGE_STATUSES.RECALLED &&
-          msg.status !== MESSAGE_STATUSES.FAILED
-      )
-      .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+          msg.status !== MESSAGE_STATUSES.FAILED &&
+          msg.status !== MESSAGE_STATUSES.DELETE
+        )
+        .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
 
-    const previousMessage = allMessages[0];
+      const previousMessage = allMessages[0];
 
-    // Update Conversations with the previous message or null
-    await dynamoDB.update({
-      TableName: 'Conversations',
-      Key: { userId, targetUserId: otherUserId },
-      UpdateExpression: 'SET lastMessage = :msg, updatedAt = :time',
-      ExpressionAttributeValues: {
-        ':msg': previousMessage
-          ? {
-              messageId: previousMessage.messageId,
-              content: previousMessage.content || '',
-              createdAt: previousMessage.timestamp,
-            }
-          : null,
-        ':time': new Date().toISOString(),
-      },
-    }).promise();
+      await dynamoDB.update({
+        TableName: 'Conversations',
+        Key: { userId, targetUserId: otherUserId },
+        UpdateExpression: 'SET lastMessage = :msg, updatedAt = :time',
+        ExpressionAttributeValues: {
+          ':msg': previousMessage
+            ? {
+                messageId: previousMessage.messageId,
+                content: previousMessage.content || '',
+                createdAt: previousMessage.timestamp,
+              }
+            : null,
+          ':time': new Date().toISOString(),
+        },
+      }).promise();
+    }
+
+    // Gửi sự kiện socket
+    io().to(userId).emit('messageDeleted', { messageId });
+
+    return { success: true, message: 'Tin nhắn đã được xóa chỉ với bạn!' };
+  } catch (err) {
+    logger.error('Lỗi khi xoá tin nhắn:', {
+      messageId,
+      userId,
+      error: err.message,
+      stack: err.stack,
+    });
+    throw new AppError('Không thể xoá tin nhắn. Vui lòng thử lại sau!', 500);
   }
-
-  io().to(userId).emit('messageDeleted', { messageId });
-  return { success: true, message: 'Tin nhắn đã được xóa chỉ với bạn!' };
 };
-
 // Hàm khôi phục tin nhắn
 const restoreMessage = async (userId, messageId) => {
-  logger.info('Restoring message:', { messageId, userId });
+  try {
+    logger.info('Restoring message:', { messageId, userId });
 
-  const message = await dynamoDB.get({
-    TableName: 'Messages',
-    Key: { messageId, ownerId: userId },
-  }).promise();
+    // Lấy tin nhắn của user hiện tại
+    const messageRes = await dynamoDB.get({
+      TableName: 'Messages',
+      Key: { messageId, ownerId: userId },
+    }).promise();
 
-  if (!message.Item) throw new AppError('Tin nhắn không tồn tại!', 404);
-  if (message.Item.senderId !== userId && message.Item.receiverId !== userId) {
-    throw new AppError('Bạn không có quyền khôi phục tin nhắn này!', 403);
+    const message = messageRes.Item;
+    if (!message) throw new AppError('Tin nhắn không tồn tại!', 404);
+    if (message.senderId !== userId && message.receiverId !== userId) {
+      throw new AppError('Bạn không có quyền khôi phục tin nhắn này!', 403);
+    }
+
+    // Kiểm tra xem tin nhắn có bị xóa và thời gian xóa chưa quá 1 phút
+    if (message.status !== MESSAGE_STATUSES.DELETE) {
+      throw new AppError('Tin nhắn này không bị xóa!', 400);
+    }
+
+    const deletedAt = new Date(message.deletedAt);
+    const currentTime = new Date();
+    const timeDifference = currentTime - deletedAt;
+
+    if (timeDifference > 60000) {  // 1 phút = 60000 ms
+      throw new AppError('Bạn chỉ có thể khôi phục tin nhắn trong vòng 1 phút sau khi xóa!', 400);
+    }
+
+    // Khôi phục trạng thái của tin nhắn
+    await dynamoDB.update({
+      TableName: 'Messages',
+      Key: { messageId, ownerId: userId },
+      UpdateExpression: 'SET #status = :active, deletedAt = :deletedAt',
+      ExpressionAttributeNames: { '#status': 'status' },
+      ExpressionAttributeValues: {
+        ':active': MESSAGE_STATUSES.SENT,  // hoặc trạng thái ban đầu như SENT
+        ':deletedAt': null,  // Xóa giá trị của deletedAt khi khôi phục
+      },
+    }).promise();
+
+    // Gửi sự kiện socket cho người dùng
+    io().to(userId).emit('messageRestored', { messageId });
+
+    return { success: true, message: 'Tin nhắn đã được khôi phục!' };
+  } catch (err) {
+    logger.error('Lỗi khi khôi phục tin nhắn:', {
+      messageId,
+      userId,
+      error: err.message,
+      stack: err.stack,
+    });
+    throw new AppError('Không thể khôi phục tin nhắn. Vui lòng thử lại sau!', 500);
   }
-
-  const deletedMessage = await dynamoDB.get({
-    TableName: 'UserDeletedMessages',
-    Key: { userId, messageId },
-  }).promise();
-
-  if (!deletedMessage.Item) {
-    throw new AppError('Tin nhắn không được đánh dấu xóa!', 400);
-  }
-
-  await dynamoDB.delete({
-    TableName: 'UserDeletedMessages',
-    Key: { userId, messageId },
-  }).promise();
-
-  io().to(userId).emit('messageRestored', { messageId });
-  return { success: true, message: 'Tin nhắn đã được khôi phục!' };
 };
 
 // Hàm cập nhật trạng thái khi kết nối
@@ -1636,6 +1222,7 @@ const getConversationSummary = async (userId, options = {}) => {
         if (
           messageResult.Item &&
           messageResult.Item.ownerId === userId &&
+          messageResult.Item.status !== MESSAGE_STATUSES.DELETE &&
           (messageResult.Item.status !== MESSAGE_STATUSES.RESTRICTED || messageResult.Item.senderId === userId) &&
           (!restrictStrangerMessages || isFriend || messageResult.Item.senderId === userId)
         ) {
@@ -1675,6 +1262,7 @@ const getConversationSummary = async (userId, options = {}) => {
           ...(sentMessages.Items || []).filter(msg => msg.ownerId === userId),
         ].filter(
           msg =>
+            msg.status !== MESSAGE_STATUSES.DELETE &&
             (msg.status !== MESSAGE_STATUSES.RESTRICTED || msg.senderId === userId) &&
             (!restrictStrangerMessages || isFriend || msg.senderId === userId)
         );
@@ -1751,6 +1339,7 @@ const getConversationSummary = async (userId, options = {}) => {
     throw new AppError('Failed to fetch conversation summary', 500);
   }
 };
+
 // Hàm kiểm tra quyền gửi tin nhắn
 const canSendMessageToUser = async (senderId, receiverId, isForward = false) => {
   logger.info('Checking canSendMessageToUser:', { senderId, receiverId, isForward });
@@ -1819,12 +1408,6 @@ module.exports = {
   pinMessage,
   unpinMessage,
   getPinnedMessages,
-  setReminder,
-  unsetReminder,
-  getRemindersBetweenUsers,
-  checkAndNotifyReminders,
-  getReminderHistory,
-  editReminder,
   deleteMessage,
   restoreMessage,
   retryMessage,

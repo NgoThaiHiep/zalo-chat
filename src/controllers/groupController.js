@@ -1,4 +1,5 @@
-const GroupService = require('../services/group.service');
+const groupService = require('../services/group.service');
+const logger = require('../config/logger');
 const multer = require('multer');
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -7,8 +8,8 @@ const upload = multer({
     const allowedMimeTypes = [
       'image/jpeg', 'image/png', 'image/heic', 'image/gif',
       'video/mp4',
-      'audio/mpeg', 'audio/wav','audio/mp4',
-      'application/pdf', 'application/zip', 'application/x-rar-compressed', 'application/vnd.rar', 'text/plain'
+      'audio/mpeg', 'audio/wav', 'audio/mp4',
+      'application/pdf', 'application/zip', 'application/x-rar-compressed', 'application/vnd.rar', 'text/plain',
     ];
     if (allowedMimeTypes.includes(file.mimetype)) {
       cb(null, true);
@@ -19,267 +20,409 @@ const upload = multer({
 });
 
 const createGroupController = async (req, res) => {
-  try {
-    const { name, members } = req.body;
-    const createdBy = req.user.id;
-    if (!name) {
-      return res.status(400).json({ success: false, message: 'Tên nhóm không được để trống!' });
-    }
-    const newGroup = await GroupService.createGroup(name, createdBy, members);
-    res.status(201).json({ success: true, group: newGroup });
-  } catch (error) {
-    res.status(500).json({ message: 'Lỗi server', error: error.message });
-  }
-};
-
-const joinGroupController = async (req, res) => {
-  try {
-    const { groupId } = req.params;
-    const userId = req.user.id;
-    if (!groupId) {
-      return res.status(400).json({ success: false, message: 'groupId không hợp lệ!' });
-    }
-    const result = await GroupService.joinGroup(groupId, userId);
-    res.json({ success: true, message: 'Tham gia nhóm thành công!', group: result });
-  } catch (error) {
-    const statusCode = error.message.includes('Nhóm không tồn tại') ? 404 : 500;
-    res.status(statusCode).json({ message: 'Lỗi server', error: error.message });
-  }
-};
-
-const leaveGroupController = async (req, res) => {
     try {
-        const { groupId } = req.params;
-        const userId = req.user.id;
-
-        if (!groupId) {
-            return res.status(400).json({ success: false, message: "groupId không hợp lệ!" });
-        }
-
-        const result = await GroupService.leaveGroup(groupId, userId);
-        return res.status(200).json({ 
-            success: true, 
-            message: result.message, 
-            groupId: result.groupId, 
-            newAdmin: result.newAdmin 
-        });
+      const { name, members, initialRoles } = req.body;
+      const createdBy = req.user.id; // Lấy từ middleware xác thực
+      const newGroup = await groupService.createGroup(name, createdBy, members, initialRoles);
+      res.status(201).json({
+        success: true,
+        message: 'Tạo nhóm thành công!',
+        data: newGroup,
+      });
     } catch (error) {
-        console.error(`Error leaving group (groupId: ${req.params.groupId}, userId: ${req.user.id}):`, error.message);
-        const statusCode = error.message.includes("Nhóm không tồn tại") ? 404 :
-                          error.message.includes("Bạn không phải là thành viên") ? 403 :
-                          error.message.includes("Nhóm đã bị xóa") ? 410 : // Nếu cần xử lý thêm trường hợp nhóm bị xóa
-                          500;
-        return res.status(statusCode).json({ success: false, message: error.message });
+      logger.error('Lỗi khi tạo nhóm', { error: error.message });
+      res.status(error.statusCode || 500).json({
+        success: false,
+        message: error.message || 'Lỗi server khi tạo nhóm',
+      });
     }
-};
-
-const kickMemberController = async (req, res) => {
+  };
+  
+  const updateGroupInfoController = async (req, res) => {
     try {
-        const { groupId } = req.params;
-        const adminUserId = req.user.id;
-        const { targetUserId } = req.body;
-
-        console.log("Controller - groupId:", groupId);
-        console.log("Controller - adminUserId:", adminUserId);
-        console.log("Controller - targetUserId:", targetUserId);
-
-        if (!groupId) {
-            return res.status(400).json({ success: false, message: "groupId không hợp lệ!" });
-        }
-        if (!targetUserId) {
-            return res.status(400).json({ success: false, message: "targetUserId không hợp lệ!" });
-        }
-
-        const result = await GroupService.kickMember(groupId, adminUserId, targetUserId);
-        return res.status(200).json({ 
-            success: true, 
-            message: result.message, 
-            groupId: result.groupId, 
-            newAdmin: result.newAdmin 
-        });
+      const { groupId } = req.params;
+      const userId = req.user.id;
+      const updateData = req.body;
+      const result = await groupService.updateGroupInfo(groupId, userId, updateData);
+      res.status(200).json({
+        success: true,
+        message: 'Cập nhật thông tin nhóm thành công!',
+        data: result,
+      });
     } catch (error) {
-        console.error(`Error kicking member (groupId: ${req.params.groupId}, adminUserId: ${req.user.id}):`, error.message);
-        const statusCode = error.message.includes("Nhóm không tồn tại") ? 404 :
-                          error.message.includes("Bạn không phải là thành viên") ? 403 :
-                          error.message.includes("Bạn không có quyền") ? 403 :
-                          error.message.includes("Thành viên cần踢") ? 404 :
-                          error.message.includes("Bạn không thể tự踢") ? 400 :
-                          error.message.includes("Không thể踢 khi nhóm chỉ có một thành viên") ? 400 : 500;
-        return res.status(statusCode).json({ success: false, message: error.message });
+      logger.error('Lỗi khi cập nhật thông tin nhóm', { error: error.message });
+      res.status(error.statusCode || 500).json({
+        success: false,
+        message: error.message || 'Lỗi server khi cập nhật thông tin nhóm',
+      });
     }
-};
-
-const deleteGroupController = async (req, res) => {
+  };
+  
+  const joinGroupController = async (req, res) => {
     try {
-        const { groupId } = req.params;
-        const adminUserId = req.user.id;
-
-        console.log("Controller - groupId:", groupId);
-        console.log("Controller - adminUserId:", adminUserId);
-
-        if (!groupId) {
-            return res.status(400).json({ success: false, message: "groupId không hợp lệ!" });
-        }
-
-        const result = await GroupService.deleteGroup(groupId, adminUserId);
-        return res.status(200).json({ 
-            success: true, 
-            message: result.message, 
-            groupId: result.groupId 
-        });
+      const { groupId } = req.params;
+      const userId = req.user.id;
+      const result = await groupService.joinGroup(groupId, userId);
+      res.status(200).json({
+        success: true,
+        message: result.message,
+        data: result,
+      });
     } catch (error) {
-        console.error(`Error deleting group (groupId: ${req.params.groupId}, adminUserId: ${req.user.id}):`, error.message);
-        const statusCode = error.message.includes("Nhóm không tồn tại") ? 404 :
-                          error.message.includes("Bạn không phải là thành viên") ? 403 :
-                          error.message.includes("Bạn không có quyền") ? 403 : 500;
-        return res.status(statusCode).json({ success: false, message: error.message });
+      logger.error('Lỗi khi tham gia nhóm', { error: error.message });
+      res.status(error.statusCode || 500).json({
+        success: false,
+        message: error.message || 'Lỗi server khi tham gia nhóm',
+      });
     }
-};
-/**
- * 📌 Lấy danh sách nhóm của user
- */
-const getUserGroupsController = async (req, res) => {
+  };
+  
+  const addMemberToGroupController = async (req, res) => {
     try {
-        const userId = req.user.id;
-        const groups = await GroupService.getUserGroups(userId);
-        res.json({ success: true, groups });
+      const { groupId } = req.params;
+      const { newUserId } = req.body;
+      const inviterId = req.user.id;
+      const result = await groupService.addMemberToGroup(groupId, inviterId, newUserId);
+      res.status(200).json({
+        success: true,
+        message: result.message,
+        data: result,
+      });
     } catch (error) {
-        res.status(500).json({ message: "Lỗi server", error: error.message });
+      logger.error('Lỗi khi thêm thành viên vào nhóm', { error: error.message });
+      res.status(error.statusCode || 500).json({
+        success: false,
+        message: error.message || 'Lỗi server khi thêm thành viên vào nhóm',
+      });
     }
-};
-
-/**
- * Controller gửi tin nhắn trong nhóm
- */
-
-const sendGroupMessageController = async (req, res) => {
+  };
+  
+  const approveJoinRequestController = async (req, res) => {
+    try {
+      const { groupId, userId } = req.params;
+      const { approve } = req.body;
+      const adminUserId = req.user.id;
+      const result = await groupService.approveJoinRequest(groupId, adminUserId, userId, approve);
+      res.status(200).json({
+        success: true,
+        message: result.message,
+        data: result,
+      });
+    } catch (error) {
+      logger.error('Lỗi khi phê duyệt yêu cầu tham gia nhóm', { error: error.message });
+      res.status(error.statusCode || 500).json({
+        success: false,
+        message: error.message || 'Lỗi server khi phê duyệt yêu cầu tham gia nhóm',
+      });
+    }
+  };
+  
+  const getGroupInfoController = async (req, res) => {
+    try {
+      const { groupId } = req.params;
+      const userId = req.user.id;
+      const groupInfo = await groupService.getGroupInfo(groupId, userId);
+      res.status(200).json({
+        success: true,
+        message: 'Lấy thông tin nhóm thành công!',
+        data: groupInfo,
+      });
+    } catch (error) {
+      logger.error('Lỗi khi lấy thông tin nhóm', { error: error.message });
+      res.status(error.statusCode || 500).json({
+        success: false,
+        message: error.message || 'Lỗi server khi lấy thông tin nhóm',
+      });
+    }
+  };
+  
+  const leaveGroupController = async (req, res) => {
+    try {
+      const { groupId } = req.params;
+      const userId = req.user.id;
+      const result = await groupService.leaveGroup(groupId, userId);
+      res.status(200).json({
+        success: true,
+        message: result.message,
+        data: result,
+      });
+    } catch (error) {
+      logger.error('Lỗi khi rời nhóm', { error: error.message });
+      res.status(error.statusCode || 500).json({
+        success: false,
+        message: error.message || 'Lỗi server khi rời nhóm',
+      });
+    }
+  };
+  
+  const deleteGroupController = async (req, res) => {
+    try {
+      const { groupId } = req.params;
+      const adminUserId = req.user.id;
+      const result = await groupService.deleteGroup(groupId, adminUserId);
+      res.status(200).json({
+        success: true,
+        message: result.message,
+        data: result,
+      });
+    } catch (error) {
+      logger.error('Lỗi khi xóa nhóm', { error: error.message });
+      res.status(error.statusCode || 500).json({
+        success: false,
+        message: error.message || 'Lỗi server khi xóa nhóm',
+      });
+    }
+  };
+  
+  const kickMemberController = async (req, res) => {
+    try {
+      const { groupId, targetUserId } = req.params;
+      const adminUserId = req.user.id;
+      const result = await groupService.kickMember(groupId, adminUserId, targetUserId);
+      res.status(200).json({
+        success: true,
+        message: result.message,
+        data: result,
+      });
+    } catch (error) {
+      logger.error('Lỗi khi đá thành viên', { error: error.message });
+      res.status(error.statusCode || 500).json({
+        success: false,
+        message: error.message || 'Lỗi server khi đá thành viên',
+      });
+    }
+  };
+  
+  const sendGroupMessageController = async (req, res) => {
     try {
       const { groupId } = req.params;
       const senderId = req.user.id;
       const { type, content, isAnonymous, isSecret, quality, replyToMessageId, metadata } = req.body;
-      const file = req.file;
+      const file = req.file; // Lấy file từ req.file (do multer xử lý)
   
+      // Tạo messageData với đầy đủ thông tin, bao gồm file
       const messageData = {
         type,
         content,
-        file: file ? file.buffer : null,
-        fileName: file ? file.originalname : null,
-        mimeType: file ? file.mimetype : null,
-        metadata: typeof metadata === 'string' ? JSON.parse(metadata) : metadata,
+        file: file ? file.buffer : null, // Dữ liệu nhị phân của file
+        fileName: file ? file.originalname : null, // Tên file gốc
+        mimeType: file ? file.mimetype : null, // MIME type của file
+        metadata: typeof metadata === 'string' ? JSON.parse(metadata) : metadata, // Xử lý metadata nếu có
         isAnonymous: isAnonymous === true || isAnonymous === 'true',
         isSecret: isSecret === true || isSecret === 'true',
         quality,
         replyToMessageId,
       };
   
-      const result = await GroupService.sendGroupMessage(groupId, senderId, messageData);
-      res.status(200).json({ success: true, message: 'Gửi tin nhắn thành công!', data: result });
+      logger.info('Gửi tin nhắn nhóm', { groupId, senderId, messageData });
+  
+      const message = await groupService.sendGroupMessage(groupId, senderId, messageData);
+      res.status(200).json({
+        success: true,
+        message: 'Gửi tin nhắn nhóm thành công!',
+        data: message,
+      });
     } catch (error) {
-      const statusCode = error.message.includes('không hợp lệ') ? 400 : error.message.includes('Nhóm không tồn tại') ? 404 : 500;
-      res.status(statusCode).json({ success: false, message: error.message });
+      logger.error('Lỗi khi gửi tin nhắn nhóm', { error: error.message });
+      res.status(error.statusCode || 500).json({
+        success: false,
+        message: error.message || 'Lỗi server khi gửi tin nhắn nhóm',
+      });
     }
   };
-const forwardGroupMessageController = async (req, res) => {
+  const forwardGroupMessageController = async (req, res) => {
     try {
-        const { groupId } = req.params;
-        const senderId = req.user.id;
-        const { messageId, targetGroupId } = req.body;
-
-        const result = await GroupService.forwardGroupMessage(groupId, senderId, { messageId, targetGroupId });
-        res.status(200).json({ success: true, message: "Chuyển tiếp thành công!", data: result });
+      const { groupId } = req.params;
+      const senderId = req.user.id;
+      const messageData = req.body;
+      const message = await groupService.forwardGroupMessage(groupId, senderId, messageData);
+      res.status(200).json({
+        success: true,
+        message: 'Chuyển tiếp tin nhắn nhóm thành công!',
+        data: message,
+      });
     } catch (error) {
-        res.status(500).json({ success: false, message: error.message });
+      logger.error('Lỗi khi chuyển tiếp tin nhắn nhóm', { error: error.message });
+      res.status(error.statusCode || 500).json({
+        success: false,
+        message: error.message || 'Lỗi server khi chuyển tiếp tin nhắn nhóm',
+      });
     }
-};
-
-const recallGroupMessageController = async (req, res) => {
+  };
+  
+  const recallGroupMessageController = async (req, res) => {
     try {
-        const { groupId, messageId } = req.params;
-        const senderId = req.user.id;
-
-        const result = await GroupService.recallGroupMessage(groupId, senderId, messageId);
-        res.status(200).json(result);
+      const { groupId, messageId } = req.params;
+      const { recallType } = req.body;
+      const senderId = req.user.id;
+      const result = await groupService.recallGroupMessage(groupId, senderId, messageId, recallType);
+      res.status(200).json({
+        success: true,
+        message: result.message,
+        data: result,
+      });
     } catch (error) {
-        res.status(403).json({ success: false, message: error.message });
+      logger.error('Lỗi khi thu hồi tin nhắn nhóm', { error: error.message });
+      res.status(error.statusCode || 500).json({
+        success: false,
+        message: error.message || 'Lỗi server khi thu hồi tin nhắn nhóm',
+      });
     }
-};
-
-const pinGroupMessageController = async (req, res) => {
+  };
+  
+  const pinGroupMessageController = async (req, res) => {
     try {
-        const { groupId } = req.params;
-        const senderId = req.user.id;
-        const { messageId } = req.body;
-
-        const result = await GroupService.pinGroupMessage(groupId, senderId, messageId);
-        res.status(200).json(result);
+      const { groupId, messageId } = req.params;
+      const senderId = req.user.id;
+      const result = await groupService.pinGroupMessage(groupId, senderId, messageId);
+      res.status(200).json({
+        success: true,
+        message: result.message,
+        data: result,
+      });
     } catch (error) {
-        res.status(403).json({ success: false, message: error.message });
+      logger.error('Lỗi khi ghim tin nhắn nhóm', { error: error.message });
+      res.status(error.statusCode || 500).json({
+        success: false,
+        message: error.message || 'Lỗi server khi ghim tin nhắn nhóm',
+      });
     }
-};
-
-const setReminderController = async (req, res) => {
+  };
+  
+  const deleteGroupMessageController = async (req, res) => {
     try {
-        const { groupId, messageId } = req.params;
-        const senderId = req.user.id;
-        const { reminder } = req.body;
-
-        const result = await GroupService.setReminder(groupId, senderId, messageId, reminder);
-        res.status(200).json(result);
+      const { groupId, messageId } = req.params;
+      const { deleteType } = req.body;
+      const senderId = req.user.id;
+      const result = await groupService.deleteGroupMessage(groupId, senderId, messageId, deleteType);
+      res.status(200).json({
+        success: true,
+        message: result.message,
+        data: result,
+      });
     } catch (error) {
-        res.status(403).json({ success: false, message: error.message });
+      logger.error('Lỗi khi xóa tin nhắn nhóm', { error: error.message });
+      res.status(error.statusCode || 500).json({
+        success: false,
+        message: error.message || 'Lỗi server khi xóa tin nhắn nhóm',
+      });
     }
-};
-
-const deleteGroupMessageController = async (req, res) => {
+  };
+  
+  const restoreGroupMessageController = async (req, res) => {
     try {
-        const { groupId, messageId } = req.params;
-        const senderId = req.user.id;
-        const { deleteType } = req.body; // 'everyone' hoặc 'self', mặc định 'everyone'
-
-        const result = await GroupService.deleteGroupMessage(groupId, senderId, messageId, deleteType);
-        res.status(200).json(result);
+      const { groupId, messageId } = req.params;
+      const senderId = req.user.id;
+      const result = await groupService.restoreGroupMessage(groupId, senderId, messageId);
+      res.status(200).json({
+        success: true,
+        message: result.message,
+        data: result,
+      });
     } catch (error) {
-        res.status(403).json({ success: false, message: error.message });
+      logger.error('Lỗi khi khôi phục tin nhắn nhóm', { error: error.message });
+      res.status(error.statusCode || 500).json({
+        success: false,
+        message: error.message || 'Lỗi server khi khôi phục tin nhắn nhóm',
+      });
     }
-};
-
-const restoreGroupMessageController = async (req, res) => {
+  };
+  
+  const getGroupMembersController = async (req, res) => {
     try {
-        const { groupId, messageId } = req.params;
-        const senderId = req.user.id;
-
-        const result = await GroupService.restoreGroupMessage(groupId, senderId, messageId);
-        res.status(200).json(result);
+      const { groupId } = req.params;
+      const userId = req.user.id;
+      const members = await groupService.getGroupMembers(groupId, userId);
+      res.status(200).json({
+        success: true,
+        message: 'Lấy danh sách thành viên nhóm thành công!',
+        data: members,
+      });
     } catch (error) {
-        res.status(403).json({ success: false, message: error.message });
+      logger.error('Lỗi khi lấy danh sách thành viên nhóm', { error: error.message });
+      res.status(error.statusCode || 500).json({
+        success: false,
+        message: error.message || 'Lỗi server khi lấy danh sách thành viên nhóm',
+      });
     }
-};
-
-const getGroupMessagesController = async (req, res) => {
+  };
+  
+  const updateCommunitySettingsController = async (req, res) => {
     try {
-        const { groupId } = req.params;
-        const userId = req.user.id;
-        const { limit, lastKey } = req.query;
-
-        if (!groupId) {
-            return res.status(400).json({ success: false, message: "groupId không hợp lệ!" });
-        }
-
-        const result = await GroupService.getGroupMessages(groupId, userId, limit, lastKey ? JSON.parse(lastKey) : null);
-        return res.status(200).json({ 
-            success: true, 
-            message: "Lấy danh sách tin nhắn thành công!",
-            data: result.messages,
-            lastEvaluatedKey: result.lastEvaluatedKey
-        });
+      const { groupId } = req.params;
+      const adminUserId = req.user.id;
+      const settings = req.body;
+      const result = await groupService.updateCommunitySettings(groupId, adminUserId, settings);
+      res.status(200).json({
+        success: true,
+        message: result.message,
+        data: result,
+      });
     } catch (error) {
-        console.error(`Error getting group messages (groupId: ${req.params.groupId}, userId: ${req.user.id}):`, error.message);
-        const statusCode = error.message.includes("Nhóm không tồn tại") ? 404 :
-                          error.message.includes("Bạn không phải thành viên") ? 403 :
-                          error.message.includes("không hợp lệ") ? 400 : 500;
-        return res.status(statusCode).json({ success: false, message: error.message });
+      logger.error('Lỗi khi cập nhật cài đặt cộng đồng', { error: error.message });
+      res.status(error.statusCode || 500).json({
+        success: false,
+        message: error.message || 'Lỗi server khi cập nhật cài đặt cộng đồng',
+      });
     }
-};
+  };
+  
+  const generateGroupLinkController = async (req, res) => {
+    try {
+      const { groupId } = req.params;
+      const userId = req.user.id;
+      const result = await groupService.generateGroupLink(groupId, userId);
+      res.status(200).json({
+        success: true,
+        message: result.message,
+        data: result,
+      });
+    } catch (error) {
+      logger.error('Lỗi khi tạo link nhóm', { error: error.message });
+      res.status(error.statusCode || 500).json({
+        success: false,
+        message: error.message || 'Lỗi server khi tạo link nhóm',
+      });
+    }
+  };
+  
+  const getUserGroupsController= async (req, res) => {
+    try {
+      const userId = req.user.id;
+      const groups = await groupService.getUserGroups(userId);
+      res.status(200).json({
+        success: true,
+        message: 'Lấy danh sách nhóm thành công!',
+        data: groups,
+      });
+    } catch (error) {
+      logger.error('Lỗi khi lấy danh sách nhóm', { error: error.message });
+      res.status(error.statusCode || 500).json({
+        success: false,
+        message: error.message || 'Lỗi server khi lấy danh sách nhóm',
+      });
+    }
+  };
+  
+  const getGroupMessagesController = async (req, res) => {
+    try {
+      const { groupId } = req.params;
+      const userId = req.user.id;
+      const { limit, lastEvaluatedKey } = req.query;
+      const messages = await groupService.getGroupMessages(groupId, userId, limit, lastEvaluatedKey);
+      res.status(200).json({
+        success: true,
+        message: 'Lấy tin nhắn nhóm thành công!',
+        data: messages,
+      });
+    } catch (error) {
+      logger.error('Lỗi khi lấy tin nhắn nhóm', { error: error.message });
+      res.status(error.statusCode || 500).json({
+        success: false,
+        message: error.message || 'Lỗi server khi lấy tin nhắn nhóm',
+      });
+    }
+  };
 
 module.exports = {
     createGroupController,
@@ -293,7 +436,13 @@ module.exports = {
     forwardGroupMessageController,
     recallGroupMessageController,
     pinGroupMessageController,
-    setReminderController,
+    getGroupMembersController,
+    updateGroupInfoController,
+    updateCommunitySettingsController,
+    generateGroupLinkController,
+    approveJoinRequestController,
+    addMemberToGroupController,
+    getGroupInfoController,
     deleteGroupMessageController,
     restoreGroupMessageController,
   };

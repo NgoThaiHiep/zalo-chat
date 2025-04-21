@@ -86,36 +86,36 @@ const getMessagesBetweenController = async (req, res) => {
   }
 };
 
-const getConversationSummaryController = async (req, res) => {
-  try {
-    const userId = req.user.id;
-    const { minimal = 'false' } = req.query; // Lấy minimal từ query param
+// const getConversationSummaryController = async (req, res) => {
+//   try {
+//     const userId = req.user.id;
+//     const { minimal = 'false' } = req.query; // Lấy minimal từ query param
 
-    console.log('Lấy tóm tắt hội thoại cho:', { userId, minimal });
+//     console.log('Lấy tóm tắt hội thoại cho:', { userId, minimal });
 
-    const result = await MessageService.getConversationSummary(userId, { minimal: minimal === 'true' });
+//     const result = await MessageService.getConversationSummary(userId, { minimal: minimal === 'true' });
 
-    if (!result.success) {
-      return res.status(500).json({
-        success: false,
-        message: result.error || 'Lỗi khi lấy tóm tắt hội thoại',
-      });
-    }
+//     if (!result.success) {
+//       return res.status(500).json({
+//         success: false,
+//         message: result.error || 'Lỗi khi lấy tóm tắt hội thoại',
+//       });
+//     }
 
-    res.status(200).json({
-      success: true,
-      message: minimal === 'true' ? 'Lấy danh sách người nhắn thành công' : 'Lấy tóm tắt hội thoại thành công',
-      data: result.data,
-    });
-  } catch (error) {
-    console.error('Lỗi trong getConversationSummaryController:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Lỗi server',
-      error: error.message,
-    });
-  }
-};
+//     res.status(200).json({
+//       success: true,
+//       message: minimal === 'true' ? 'Lấy danh sách người nhắn thành công' : 'Lấy tóm tắt hội thoại thành công',
+//       data: result.data,
+//     });
+//   } catch (error) {
+//     console.error('Lỗi trong getConversationSummaryController:', error);
+//     res.status(500).json({
+//       success: false,
+//       message: 'Lỗi server',
+//       error: error.message,
+//     });
+//   }
+// };
 
 const forwardMessageController = async (req, res) => {
   try {
@@ -208,110 +208,7 @@ const getPinnedMessagesController = async (req, res) => {
   }
 };
 
-const setReminderController = async (req, res) => {
-  try {
-    const { messageId } = req.params;
-    const { reminder, scope, reminderContent, repeat, daysOfWeek } = req.body;
-    const userId = req.user.id;
 
-    if (!messageId || !reminder) {
-      return res.status(400).json({ success: false, message: 'messageId và reminder là bắt buộc!' });
-    }
-
-    const result = await MessageService.setReminder(userId, messageId, reminder, scope, reminderContent, repeat, daysOfWeek);
-    res.status(200).json({ success: true, ...result });
-  } catch (error) {
-    console.error('Error in setReminderController:', error);
-    const status = error.message.includes('không tồn tại') ? 404 :
-                   error.message.includes('quyền') ? 403 :
-                   error.message.includes('thu hồi') || 
-                   error.message.includes('tương lai') || 
-                   error.message.includes('phạm vi') || 
-                   error.message.includes('lặp lại') || 
-                   error.message.includes('daysOfWeek') ? 400 : 500;
-    res.status(status).json({ success: false, message: error.message });
-  }
-};
-
-const unsetReminderController = async (req, res) => {
-  try {
-    const { messageId } = req.params;
-    const userId = req.user.id;
-
-    if (!messageId) {
-      return res.status(400).json({ success: false, message: 'messageId là bắt buộc!' });
-    }
-
-    const result = await MessageService.unsetReminder(userId, messageId);
-    res.status(200).json({ success: true, ...result });
-  } catch (error) {
-    console.error('Error in unsetReminderController:', error);
-    const status = error.message.includes('không tồn tại') ? 404 :
-                   error.message.includes('quyền') || 
-                   error.message.includes('chưa có nhắc nhở') ? 400 : 500;
-    res.status(status).json({ success: false, message: error.message });
-  }
-};
-
-const getRemindersBetweenUsersController = async (req, res) => {
-  try {
-    const { otherUserId } = req.params;
-    const userId = req.user.id;
-
-    if (!otherUserId) {
-      return res.status(400).json({ success: false, message: 'otherUserId là bắt buộc!' });
-    }
-
-    const result = await MessageService.getRemindersBetweenUsers(userId, otherUserId);
-    res.status(200).json({ success: true, ...result });
-  } catch (error) {
-    console.error('Error in getRemindersBetweenUsersController:', error);
-    res.status(500).json({ success: false, message: error.message });
-  }
-};
-
-const getReminderHistoryController = async (req, res) => {
-  try {
-    const { otherUserId } = req.params;
-    const userId = req.user.id;
-
-    if (!otherUserId) {
-      return res.status(400).json({ success: false, message: 'otherUserId là bắt buộc!' });
-    }
-
-    const result = await MessageService.getReminderHistory(userId, otherUserId);
-    res.status(200).json({ success: true, ...result });
-  } catch (error) {
-    console.error('Error in getReminderHistoryController:', error);
-    res.status(500).json({ success: false, message: error.message });
-  }
-};
-
-const editReminderController = async (req, res) => {
-  try {
-    const { messageId } = req.params;
-    const { reminder, scope, reminderContent, repeat, daysOfWeek } = req.body;
-    const userId = req.user.id;
-
-    if (!messageId || !reminder) {
-      return res.status(400).json({ success: false, message: 'messageId và reminder là bắt buộc!' });
-    }
-
-    const result = await MessageService.editReminder(userId, messageId, reminder, scope, reminderContent, repeat, daysOfWeek);
-    res.status(200).json({ success: true, ...result });
-  } catch (error) {
-    console.error('Error in editReminderController:', error);
-    const status = error.message.includes('không tồn tại') ? 404 :
-                   error.message.includes('quyền') ? 403 :
-                   error.message.includes('thu hồi') || 
-                   error.message.includes('tương lai') || 
-                   error.message.includes('phạm vi') || 
-                   error.message.includes('lặp lại') || 
-                   error.message.includes('daysOfWeek') || 
-                   error.message.includes('chưa có nhắc nhở') ? 400 : 500;
-    res.status(status).json({ success: false, message: error.message });
-  }
-};
 
 const deleteMessageController = async (req, res) => {
   try {
@@ -415,17 +312,12 @@ const checkBlockStatusController = async (req, res) => {
 module.exports = {
   sendMessageController: [upload.single('file'), sendMessageController],
   getMessagesBetweenController,
-  getConversationSummaryController,
+  // getConversationSummaryController,
   forwardMessageController,
   recallMessageController,
   pinMessageController,
   unpinMessageController,
   getPinnedMessagesController,
-  setReminderController,
-  unsetReminderController,
-  getRemindersBetweenUsersController,
-  getReminderHistoryController,
-  editReminderController,
   deleteMessageController,
   restoreMessageController,
   retryMessageController,

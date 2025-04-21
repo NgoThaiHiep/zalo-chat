@@ -12,26 +12,78 @@ const {
   forwardGroupMessageController,
   recallGroupMessageController,
   pinGroupMessageController,
-  setReminderController,
+  getGroupMembersController,
+  updateGroupInfoController,
+  updateCommunitySettingsController,
+  generateGroupLinkController,
+  approveJoinRequestController,
+  addMemberToGroupController,
+  getGroupInfoController,
   deleteGroupMessageController,
   restoreGroupMessageController,
 } = require('../controllers/groupController');
 
 const router = express.Router();
 
-router.post('/create', authMiddleware, createGroupController);
-router.post('/:groupId/join', authMiddleware, joinGroupController);
-router.post('/:groupId/leave', authMiddleware, leaveGroupController);
-router.post('/:groupId/kick', authMiddleware, kickMemberController);
-router.delete('/:groupId', authMiddleware, deleteGroupController);
-router.get('/list', authMiddleware, getUserGroupsController);
-router.post('/:groupId/messages', authMiddleware, sendGroupMessageController);
-router.post('/:groupId/forward', authMiddleware, forwardGroupMessageController);
-router.patch('/:groupId/messages/:messageId/recall', authMiddleware, recallGroupMessageController);
-router.patch('/:groupId/pin', authMiddleware, pinGroupMessageController);
-router.patch('/:groupId/messages/:messageId/remind', authMiddleware, setReminderController);
-router.delete('/:groupId/messages/:messageId', authMiddleware, deleteGroupMessageController);
-router.patch('/:groupId/messages/:messageId/restore', authMiddleware, restoreGroupMessageController);
-router.get('/:groupId/messages', authMiddleware, getGroupMessagesController);
+router.use(authMiddleware);
+// Tạo nhóm mới
+router.post('/create', createGroupController);
+
+// Cập nhật thông tin nhóm
+router.put('/:groupId', updateGroupInfoController);
+
+// Tham gia nhóm
+router.post('/join/:groupId', joinGroupController);
+
+// Thêm thành viên vào nhóm
+router.post('/members/:groupId', addMemberToGroupController);
+
+// Phê duyệt yêu cầu tham gia nhóm
+router.put('/requests/:groupId/:userId', approveJoinRequestController);
+
+// Lấy thông tin nhóm
+router.get('/:groupId', getGroupInfoController);
+
+// Rời nhóm
+router.delete('/leave/:groupId', leaveGroupController);
+
+// Xóa nhóm
+router.delete('/:groupId', deleteGroupController);
+
+// Đá thành viên khỏi nhóm
+router.delete('/members/:groupId/:targetUserId', kickMemberController);
+
+// Gửi tin nhắn nhóm
+router.post('/messages/:groupId', sendGroupMessageController);
+
+// Chuyển tiếp tin nhắn nhóm
+router.post('/messages/forward/:groupId', forwardGroupMessageController);
+
+// Thu hồi tin nhắn nhóm
+router.put('/recall/messages/:groupId/:messageId', recallGroupMessageController);
+
+// Ghim tin nhắn nhóm
+router.put('/pin/messages/:groupId/:messageId', pinGroupMessageController);
+
+// Xóa tin nhắn nhóm
+router.delete('/messages/:groupId/:messageId', deleteGroupMessageController);
+
+// Khôi phục tin nhắn nhóm
+router.put('/restore/messages/:groupId/:messageId', restoreGroupMessageController);
+
+// Lấy danh sách thành viên nhóm
+router.get('/members/:groupId', getGroupMembersController);
+
+// Cập nhật cài đặt cộng đồng
+router.put('/settings/:groupId', updateCommunitySettingsController);
+
+// Tạo link tham gia nhóm
+router.get('/link/:groupId', generateGroupLinkController);
+
+// Lấy danh sách nhóm của người dùng
+router.get('/listGroup', getUserGroupsController);
+
+// Lấy tin nhắn nhóm
+router.get('/messages/:groupId', getGroupMessagesController);
 
 module.exports = router;

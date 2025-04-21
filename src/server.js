@@ -4,7 +4,7 @@ const { initializeDatabase } = require('./config/database');
 const logger = require('./config/logger');
 const { initializeSocket } = require('./socket');
 const initializeChatSocket = require('./sockets/chat.socket');
-const { initializeFriendSocket } = require('./sockets/friend.socket');
+const  initializeFriendSocket  = require('./sockets/friend.socket');
 const { initializeConversationSocket } = require('./sockets/conversation.socket');
 const initializeSearchSocket = require('./sockets/search.socket');
 

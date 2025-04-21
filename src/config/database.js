@@ -311,14 +311,6 @@ const initializeDatabase = async () => {
           Projection: { ProjectionType: 'ALL' },
         },
         {
-          IndexName: 'ReceiverStatusIndex',
-          KeySchema: [
-            { AttributeName: 'receiverId', KeyType: 'HASH' },
-            { AttributeName: 'status', KeyType: 'RANGE' },
-          ],
-          Projection: { ProjectionType: 'ALL' },
-        },
-        {
           IndexName: 'OwnerReminderIndex',
           KeySchema: [
             { AttributeName: 'ownerId', KeyType: 'HASH' },
@@ -366,29 +358,7 @@ const initializeDatabase = async () => {
     await createTableIfNotExists('Groups', groupsTableParams);
     await updateTableWithNewGSI('Groups', groupsTableParams);
 
-    // 4. Tạo bảng UserDeletedMessages
-    const userDeletedMessagesTableParams = {
-      TableName: 'UserDeletedMessages',
-      AttributeDefinitions: [
-        { AttributeName: 'userId', AttributeType: 'S' },
-        { AttributeName: 'messageId', AttributeType: 'S' },
-      ],
-      KeySchema: [
-        { AttributeName: 'userId', KeyType: 'HASH' },
-        { AttributeName: 'messageId', KeyType: 'RANGE' },
-      ],
-      GlobalSecondaryIndexes: [
-        {
-          IndexName: 'UserIdIndex',
-          KeySchema: [{ AttributeName: 'userId', KeyType: 'HASH' }],
-          Projection: { ProjectionType: 'ALL' },
-        },
-      ],
-      BillingMode: 'PAY_PER_REQUEST',
-    };
-    await createTableIfNotExists('UserDeletedMessages', userDeletedMessagesTableParams);
-    await updateTableWithNewGSI('UserDeletedMessages', userDeletedMessagesTableParams);
-
+  
     // 5. Tạo bảng GroupMembers
     const groupMembersTableParams = {
       TableName: 'GroupMembers',
@@ -401,12 +371,15 @@ const initializeDatabase = async () => {
         { AttributeName: 'userId', KeyType: 'RANGE' },
       ],
       GlobalSecondaryIndexes: [
-        {
-          IndexName: 'UserIdIndex',
-          KeySchema: [{ AttributeName: 'userId', KeyType: 'HASH' }],
-          Projection: { ProjectionType: 'ALL' },
-        },
-      ],
+            {
+              IndexName: 'userId-index',
+              KeySchema: [
+                { AttributeName: 'userId', KeyType: 'HASH' },
+                { AttributeName: 'groupId', KeyType: 'RANGE' },
+              ],
+              Projection: { ProjectionType: 'ALL' },
+            },
+          ],
       BillingMode: 'PAY_PER_REQUEST',
     };
     await createTableIfNotExists('GroupMembers', groupMembersTableParams);
@@ -426,7 +399,7 @@ const initializeDatabase = async () => {
       ],
       GlobalSecondaryIndexes: [
         {
-          IndexName: 'GroupIdMessageIdIndex',
+          IndexName: 'groupId-messageId-index',
           KeySchema: [
             { AttributeName: 'groupId', KeyType: 'HASH' },
             { AttributeName: 'messageId', KeyType: 'RANGE' },
@@ -442,7 +415,12 @@ const initializeDatabase = async () => {
           Projection: { ProjectionType: 'ALL' },
         },
       ],
+
       BillingMode: 'PAY_PER_REQUEST',
+      StreamSpecification: {
+      StreamEnabled: true,
+      StreamViewType: 'NEW_AND_OLD_IMAGES',
+    },
     };
     await createTableIfNotExists('GroupMessages', groupMessagesTableParams);
     await updateTableWithNewGSI('GroupMessages', groupMessagesTableParams);

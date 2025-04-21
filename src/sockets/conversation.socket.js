@@ -18,10 +18,7 @@ module.exports = (io) => {
   io.on('connection', (socket) => {
     logger.info('[CONVERSATION_SOCKET] Client connected', { socketId: socket.id, userId: socket.userId });
 
-    socket.on('joinReminderRoom', () => {
-      logger.info('[CONVERSATION_SOCKET] User joined reminder room', { userId: socket.userId });
-    });
-
+   
     socket.on('hideConversation', async ({ hiddenUserId, password }, callback) => {
       try {
         if (!hiddenUserId || !password || typeof hiddenUserId !== 'string') {

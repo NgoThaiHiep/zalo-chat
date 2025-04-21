@@ -210,6 +210,43 @@ const getPinnedConversationsController = async (req, res) => {
       next(error);
     }
   };
+  const getConversationSummaryController = async (req, res) => {
+    const userId = req.user.id;
+    const { minimal = 'false' } = req.query;
+  
+    try {
+      if (!userId) {
+        return res.status(400).json({
+          success: false,
+          message: 'Thiếu thông tin user',
+        });
+      }
+  
+      const isMinimal = minimal === 'true';
+      const result = await ConversationService.getConversationSummary(userId, { minimal: isMinimal });
+  
+      if (!result.success) {
+        return res.status(500).json({
+          success: false,
+          message: result.error || 'Lỗi khi lấy tóm tắt hội thoại',
+        });
+      }
+  
+      return res.status(200).json({
+        success: true,
+        message: isMinimal ? 'Lấy danh sách người nhắn thành công' : 'Lấy tóm tắt hội thoại thành công',
+        data: result.data,
+      });
+    } catch (error) {
+      console.error('Lỗi trong getConversationSummaryController:', error);
+  
+      return res.status(500).json({
+        success: false,
+        message: 'Lỗi server',
+        error: error.message || 'Đã xảy ra lỗi không xác định',
+      });
+    }
+  };
 module.exports = {
     setAutoDeleteSettingController,
     getAutoDeleteSettingController,
@@ -225,4 +262,5 @@ module.exports = {
     getPinnedConversationsController,
     createConversationController,
     getConversationController,
+    getConversationSummaryController,
 }

@@ -9,7 +9,7 @@ const { verifyToken } = require('./services/auth.service');
 
 let ioInstance;
 let transcribeQueue;
-let reminderQueue;
+
 
 const initializeSocket = (server) => {
   ioInstance = new Server(server, {
@@ -41,9 +41,7 @@ const initializeSocket = (server) => {
     redis: { client: redisClient },
   });
 
-  reminderQueue = new Queue('reminder-queue', {
-    redis: { client: redisClient },
-  });
+
 
   // Process transcription jobs
   transcribeQueue.process(async (job) => {
@@ -81,8 +79,5 @@ module.exports = {
     if (!transcribeQueue) throw new Error('Transcribe queue chưa được khởi tạo');
     return transcribeQueue;
   },
-  reminderQueue: () => {
-    if (!reminderQueue) throw new Error('Reminder queue chưa được khởi tạo');
-    return reminderQueue;
-  },
+
 };

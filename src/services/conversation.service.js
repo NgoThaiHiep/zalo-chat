@@ -5,8 +5,11 @@ const bcrypt = require('bcrypt');
 const logger = require('../config/logger');
 const { v4: uuidv4 } = require('uuid');
 const { AppError } = require('../utils/errorHandler');
-
-// Hàm hỗ trợ kiểm tra hội thoại tồn tại
+const {MESSAGE_STATUSES} = require('../config/constants');
+const FriendService = require('../services/friend.service');
+const { getUserGroups } = require('../services/group.service');
+const groupMessage = require('../services/group.service')
+ // Hàm hỗ trợ kiểm tra hội thoại tồn tại
 const checkConversationExists = async (userId, targetUserId) => {
   const result = await dynamoDB.get({
     TableName: 'Conversations',
@@ -656,19 +659,23 @@ const createConversation = async (userId, targetUserId) => {
   const now = new Date().toISOString();
   const conversationId = uuidv4();
 
-  const [userSettings, targetSettings] = await Promise.all([
-    dynamoDB.get({
+  // Check if targetUserId is a groupId (assume groupIds are stored in Groups table)
+  const isGroup = await dynamoDB.get({
+    TableName: 'Groups',
+    Key: { groupId: targetUserId },
+  }).promise().then(res => !!res.Item);
+
+  let userRestrict = false;
+  if (!isGroup) {
+    const userSettings = await dynamoDB.get({
       TableName: 'Users',
       Key: { userId },
-    }).promise(),
-    dynamoDB.get({
-      TableName: 'Users',
-      Key: { userId: targetUserId },
-    }).promise(),
-  ]);
-
-  const userRestrict = userSettings.Item?.restrictStrangerMessages || false;
-  const targetRestrict = targetSettings.Item?.restrictStrangerMessages || false;
+    }).promise();
+    if (!userSettings.Item) {
+      throw new AppError('Người dùng không tồn tại!', 404);
+    }
+    userRestrict = userSettings.Item.restrictStrangerMessages || false;
+  }
 
   const createConversationRecord = (user, target, restrict) => ({
     userId: user,
@@ -683,37 +690,19 @@ const createConversation = async (userId, targetUserId) => {
       mute: false,
       block: false,
       restrictStrangers: restrict,
+      isGroup: !!isGroup,
     },
   });
 
   try {
-    if (userId === targetUserId) {
-      const conversation = createConversationRecord(userId, targetUserId, userRestrict);
-      await dynamoDB.put({
-        TableName: 'Conversations',
-        Item: conversation,
-        ConditionExpression: 'attribute_not_exists(userId) AND attribute_not_exists(targetUserId)',
-      }).promise();
-      logger.info('Self-conversation created successfully', { conversationId, userId });
-      return { success: true, conversationId };
-    } else {
-      const userConversation = createConversationRecord(userId, targetUserId, userRestrict);
-      const targetConversation = createConversationRecord(targetUserId, userId, targetRestrict);
-      await Promise.all([
-        dynamoDB.put({
-          TableName: 'Conversations',
-          Item: userConversation,
-          ConditionExpression: 'attribute_not_exists(userId) AND attribute_not_exists(targetUserId)',
-        }).promise(),
-        dynamoDB.put({
-          TableName: 'Conversations',
-          Item: targetConversation,
-          ConditionExpression: 'attribute_not_exists(userId) AND attribute_not_exists(targetUserId)',
-        }).promise(),
-      ]);
-      logger.info('Conversation created successfully', { conversationId, userId, targetUserId });
-      return { success: true, conversationId };
-    }
+    const conversation = createConversationRecord(userId, targetUserId, userRestrict);
+    await dynamoDB.put({
+      TableName: 'Conversations',
+      Item: conversation,
+      ConditionExpression: 'attribute_not_exists(userId) AND attribute_not_exists(targetUserId)',
+    }).promise();
+    logger.info('Conversation created successfully', { conversationId, userId, targetUserId });
+    return { success: true, conversationId };
   } catch (error) {
     if (error.code === 'ConditionalCheckFailedException') {
       logger.warn('Conversation already exists', { userId, targetUserId });
@@ -837,6 +826,281 @@ const setAutoDeleteSetting = async (userId, targetUserId, autoDeleteAfter) => {
   return { success: true, message: `Cài đặt tự động xóa đã được đặt thành ${autoDeleteAfter}` };
 };
 
+const getConversationSummary = async (userId, options = {}) => {
+  const { minimal = false } = options;
+
+  try {
+    // 1. Lấy danh sách hội thoại cá nhân và nhóm từ bảng Conversations
+    const result = await dynamoDB.query({
+      TableName: 'Conversations',
+      KeyConditionExpression: 'userId = :userId',
+      ExpressionAttributeValues: { ':userId': userId },
+    }).promise();
+
+    const conversations = result.Items || [];
+    if (!conversations.length && minimal) {
+      // Nếu không có hội thoại và ở chế độ minimal, vẫn cần lấy nhóm
+      const groups = await getUserGroups(userId);
+      const groupSummaries = groups.map(group => ({
+        groupId: group.groupId,
+        name: group.name,
+        avatar: group.avatar,
+        memberCount: group.members.length,
+        createdAt: group.createdAt,
+        userRole: group.roles[userId],
+      }));
+
+      return {
+        success: true,
+        data: {
+          conversationCount: 0,
+          conversations: [],
+          groups: groupSummaries,
+        },
+      };
+    }
+
+    const hiddenConversations = (await getHiddenConversations(userId)).hiddenConversations || [];
+    const mutedConversations = (await getMutedConversations(userId)).mutedConversations || [];
+    const pinnedConversations = (await getPinnedConversations(userId)).pinnedConversations || [];
+
+    const conversationList = [];
+    const groupSummaries = [];
+
+    // 2. Xử lý danh sách hội thoại (cá nhân và nhóm)
+    for (const conv of conversations) {
+      const targetUserId = conv.targetUserId;
+      const isGroup = conv.settings?.isGroup || false;
+
+      // Bỏ qua hội thoại bị ẩn
+      if (hiddenConversations.some(hc => hc.hiddenUserId === targetUserId)) {
+        continue;
+      }
+
+      if (isGroup) {
+        // Xử lý hội thoại nhóm
+        const groupResult = await dynamoDB.get({ TableName: 'Groups', Key: { groupId: targetUserId } }).promise();
+        if (!groupResult.Item) {
+          logger.warn('Nhóm không tồn tại trong Conversations', { userId, targetUserId });
+          continue;
+        }
+
+        const group = groupResult.Item;
+        const lastMessage = minimal ? null : conv.lastMessage;
+
+        if (minimal) {
+          groupSummaries.push({
+            groupId: group.groupId,
+            name: group.name,
+            avatar: group.avatar,
+            memberCount: group.members.length,
+            createdAt: group.createdAt,
+            userRole: group.roles[userId],
+          });
+        } else {
+          groupSummaries.push({
+            groupId: group.groupId,
+            name: group.name,
+            avatar: group.avatar,
+            memberCount: group.members.length,
+            createdAt: group.createdAt,
+            userRole: group.roles[userId],
+            lastMessage: lastMessage
+              ? {
+                  messageId: lastMessage.messageId,
+                  senderId: lastMessage.senderId,
+                  type: lastMessage.type,
+                  content: lastMessage.content,
+                  timestamp: lastMessage.timestamp,
+                  isRecalled: lastMessage.isRecalled || false,
+                }
+              : null,
+          });
+        }
+      } else {
+        // Xử lý hội thoại cá nhân
+        let restrictStrangerMessages = false;
+        let isFriend = true;
+        if (userId !== targetUserId) {
+          const receiverResult = await dynamoDB.get({
+            TableName: 'Users',
+            Key: { userId: targetUserId },
+          }).promise();
+          restrictStrangerMessages = receiverResult.Item?.settings?.restrictStrangerMessages || false;
+
+          if (restrictStrangerMessages) {
+            const friendResult = await dynamoDB.get({
+              TableName: 'Friends',
+              Key: { userId: targetUserId, friendId: userId },
+            }).promise();
+            isFriend = !!friendResult.Item;
+          }
+        }
+
+        // Lấy tin nhắn cuối cùng từ Conversations
+        let lastMessageFull = null;
+        if (!minimal && conv.lastMessage?.messageId) {
+          const messageResult = await dynamoDB.get({
+            TableName: 'Messages',
+            Key: { messageId: conv.lastMessage.messageId, ownerId: userId },
+          }).promise();
+          if (
+            messageResult.Item &&
+            messageResult.Item.ownerId === userId &&
+            messageResult.Item.status !== MESSAGE_STATUSES.DELETE &&
+            (messageResult.Item.status !== MESSAGE_STATUSES.RESTRICTED || messageResult.Item.senderId === userId) &&
+            (!restrictStrangerMessages || isFriend || messageResult.Item.senderId === userId)
+          ) {
+            lastMessageFull = messageResult.Item;
+          }
+        }
+
+        // Nếu không có tin nhắn cuối hợp lệ, tìm trong các tin nhắn gần đây
+        if (!lastMessageFull && userId !== targetUserId && !minimal) {
+          const [recentMessages, sentMessages] = await Promise.all([
+            dynamoDB.query({
+              TableName: 'Messages',
+              IndexName: 'ReceiverSenderIndex',
+              KeyConditionExpression: 'receiverId = :userId AND senderId = :targetUserId',
+              ExpressionAttributeValues: {
+                ':userId': userId,
+                ':targetUserId': targetUserId,
+              },
+              ScanIndexForward: false,
+              Limit: 1,
+            }).promise(),
+            dynamoDB.query({
+              TableName: 'Messages',
+              IndexName: 'SenderReceiverIndex',
+              KeyConditionExpression: 'senderId = :userId AND receiverId = :targetUserId',
+              ExpressionAttributeValues: {
+                ':userId': userId,
+                ':targetUserId': targetUserId,
+              },
+              ScanIndexForward: false,
+              Limit: 1,
+            }).promise(),
+          ]);
+
+          const allMessages = [
+            ...(recentMessages.Items || []).filter(msg => msg.ownerId === userId),
+            ...(sentMessages.Items || []).filter(msg => msg.ownerId === userId),
+          ].filter(
+            msg =>
+              msg.status !== MESSAGE_STATUSES.DELETE &&
+              (msg.status !== MESSAGE_STATUSES.RESTRICTED || msg.senderId === userId) &&
+              (!restrictStrangerMessages || isFriend || msg.senderId === userId)
+          );
+
+          if (allMessages.length > 0) {
+            lastMessageFull = allMessages.reduce((latest, msg) =>
+              !latest || new Date(msg.timestamp) > new Date(latest.timestamp) ? msg : latest
+            );
+
+            // Cập nhật lastMessage trong Conversations nếu tìm thấy tin nhắn mới
+            if (lastMessageFull) {
+              const lastMessageData = {
+                messageId: lastMessageFull.messageId,
+                content: lastMessageFull.content || (lastMessageFull.type === 'image' ? '[Hình ảnh]' : `[${lastMessageFull.type}]`),
+                timestamp: lastMessageFull.timestamp,
+                senderId: lastMessageFull.senderId,
+                type: lastMessageFull.type,
+              };
+
+              await dynamoDB.update({
+                TableName: 'Conversations',
+                Key: { userId, targetUserId },
+                UpdateExpression: 'SET lastMessage = :lastMessage, updatedAt = :updatedAt',
+                ExpressionAttributeValues: {
+                  ':lastMessage': lastMessageData,
+                  ':updatedAt': new Date().toISOString(),
+                },
+              }).promise();
+            }
+          }
+        }
+
+        // Chỉ bao gồm hội thoại nếu:
+        // - Là hội thoại với chính mình
+        // - Là bạn bè và có tin nhắn hợp lệ
+        // - Không hạn chế người lạ và có tin nhắn hợp lệ
+        if (
+          userId === targetUserId ||
+          (isFriend && lastMessageFull) ||
+          (!restrictStrangerMessages && lastMessageFull)
+        ) {
+          let name, phoneNumber,avatar;
+          if (targetUserId === userId) {
+            name = 'FileCloud';
+            const userResult = await dynamoDB.get({
+              TableName: 'Users',
+              Key: { userId },
+            }).promise();
+            phoneNumber = userResult.Item?.phoneNumber || null;
+            avatar = userResult.Item?.avatar || null;
+          } else {
+            try {
+              const userNameResult = await FriendService.getUserName(userId, targetUserId);
+              name = userNameResult.name;
+              phoneNumber = userNameResult.phoneNumber;
+              avatar = userNameResult.avatar || null;
+            } catch (error) {
+              logger.error(`Lỗi lấy thông tin cho ${targetUserId}:`, error);
+              name = targetUserId;
+              phoneNumber = null;
+              avatar = null;
+            }
+          }
+
+          const isMuted = mutedConversations.some(mc => mc.mutedUserId === targetUserId);
+          const isPinned = pinnedConversations.some(pc => pc.pinnedUserId === targetUserId);
+
+          conversationList.push({
+            otherUserId: targetUserId,
+            displayName: name,
+            phoneNumber,
+            avatar,
+            isSelf: targetUserId === userId,
+            lastMessage: minimal ? null : lastMessageFull,
+            isMuted,
+            isPinned,
+          });
+        }
+      }
+    }
+
+    // 3. Sắp xếp danh sách hội thoại
+    if (!minimal) {
+      conversationList.sort((a, b) => {
+        if (a.isPinned && !b.isPinned) return -1;
+        if (!a.isPinned && b.isPinned) return 1;
+        if (!a.lastMessage || !b.lastMessage) return 0;
+        return new Date(b.lastMessage.timestamp) - new Date(a.lastMessage.timestamp);
+      });
+
+      groupSummaries.sort((a, b) => {
+        if (a.lastMessage && !b.lastMessage) return -1;
+        if (!a.lastMessage && b.lastMessage) return 1;
+        if (!a.lastMessage && !b.lastMessage) {
+          return new Date(b.createdAt) - new Date(a.createdAt);
+        }
+        return new Date(b.lastMessage.timestamp) - new Date(a.lastMessage.timestamp);
+      });
+    }
+
+    return {
+      success: true,
+      data: {
+        conversationCount: conversationList.length,
+        conversations: conversationList,
+        groups: groupSummaries,
+      },
+    };
+  } catch (error) {
+    logger.error('Error in getConversationSummary:', error);
+    throw new AppError('Failed to fetch conversation summary', 500);
+  }
+};
 module.exports = {
   hideConversation,
   unhideConversation,
@@ -853,4 +1117,5 @@ module.exports = {
   checkConversationExists,
   getConversation,
   createConversation,
+  getConversationSummary,
 };

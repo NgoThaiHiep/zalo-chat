@@ -7,16 +7,16 @@ const { verifyOTP, deleteOTP, getUserByPhoneNumber } = require('./otp.services')
 const { io } = require('../socket');
 require('dotenv').config();
 const {normalizePhoneNumber} = require('../utils/utils')
-
-
+const logger = require('../config/logger');
+const {redisClient} = require('../config/redis'); // Import Redis client
 // Kiểm tra người dùng online/offline
 const isUserOnline = async (userId) => {
   try {
-    const status = await redisClient.get(`online:${userId}`);
-    return status === 'true';
+    const onlineStatus = await redisClient.get(`user:online:${userId}`);
+    return !!onlineStatus; // True if user is online, false otherwise
   } catch (error) {
     logger.error('[isUserOnline] Error checking online status', { userId, error: error.message });
-    return false; // Mặc định offline nếu lỗi
+    return false; // Fallback to offline on error
   }
 };
 
