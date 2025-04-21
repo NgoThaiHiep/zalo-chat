@@ -590,7 +590,7 @@ const joinGroup = async (groupId, userId) => {
   }
 
   await addMemberCore(groupId, userId, group);
-  return { message: `Bạn đã tham gia nhóm thành công!`, groupId };
+  return { message: `${userName} đã tham gia nhóm!`, groupId };
 };
 
 const addMemberToGroup = async (groupId, inviterId, newUserId) => {
@@ -960,7 +960,7 @@ const updateLastMessageForGroup = async (groupId, message = null) => {
     const group = groupResult.Item;
     const members = group.members;
 
-    // Nếu không có message được cung cấp, lấy tin nhắn cuối cùng từ GroupMessages
+    // Nếu không có message được cung cấp, lấy tin nhắn cuối cùng hợp lệ từ GroupMessages
     let lastMessage = message;
     if (!lastMessage) {
       const messagesResult = await dynamoDB.query({
@@ -969,10 +969,13 @@ const updateLastMessageForGroup = async (groupId, message = null) => {
         KeyConditionExpression: 'groupId = :groupId',
         ExpressionAttributeValues: { ':groupId': groupId },
         ScanIndexForward: false, // Lấy tin nhắn mới nhất
-        Limit: 1,
+        Limit: 10, // Lấy tối đa 10 tin nhắn để tìm tin nhắn hợp lệ
       }).promise();
 
-      lastMessage = messagesResult.Items?.[0] || null;
+      // Tìm tin nhắn hợp lệ (không bị xóa hoặc thu hồi)
+      lastMessage = (messagesResult.Items || []).find(
+        msg => msg.status !== MESSAGE_STATUSES.DELETE && msg.status !== MESSAGE_STATUSES.RECALLED
+      ) || null;
     }
 
     // Chuẩn bị dữ liệu lastMessage
@@ -980,9 +983,10 @@ const updateLastMessageForGroup = async (groupId, message = null) => {
       ? {
           messageId: lastMessage.messageId,
           content: lastMessage.content || (lastMessage.type === 'image' ? '[Hình ảnh]' : `[${lastMessage.type}]`),
-          timestamp: lastMessage.timestamp,
+          createdAt: lastMessage.timestamp, // Đồng bộ với getConversationSummary
           senderId: lastMessage.senderId,
           type: lastMessage.type,
+          isRecalled: lastMessage.status === MESSAGE_STATUSES.RECALLED, // Thêm trường isRecalled
         }
       : null;
 

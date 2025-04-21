@@ -113,7 +113,11 @@ const createMessage = async (senderId, receiverId, messageData) => {
 
     logger.info('Updating conversations', { messageId });
     // Cập nhật hội thoại
-    await updateConversations(senderId, receiverId, messageId, baseMessage.timestamp, messageData.content);
+    await updateConversations(senderId, receiverId, messageId, baseMessage.timestamp, {
+      content: baseMessage.content,
+      senderId: baseMessage.senderId,
+      type: baseMessage.type,
+    });
 
     // Xác định trạng thái ban đầu
     const initialStatus = getInitialStatus(isRestricted, isUserOnline(receiverId), senderId === receiverId);
@@ -169,7 +173,18 @@ const createMessage = async (senderId, receiverId, messageData) => {
   }
 };
 
-const updateConversations = async (senderId, receiverId, messageId, timestamp, content) => {
+const updateConversations = async (senderId, receiverId, messageId, timestamp, messageData) => {
+  const { content, senderId: msgSenderId, type, isRecalled = false } = messageData;
+
+  const lastMessageData = {
+    messageId,
+    content: content || (type === 'image' ? '[Hình ảnh]' : `[${type}]`),
+    createdAt: timestamp,
+    senderId: msgSenderId,
+    type,
+    isRecalled,
+  };
+
   const updatePromises = [
     dynamoDB
       .update({
@@ -177,12 +192,7 @@ const updateConversations = async (senderId, receiverId, messageId, timestamp, c
         Key: { userId: senderId, targetUserId: receiverId },
         UpdateExpression: 'SET lastMessage = :msg, updatedAt = :time',
         ExpressionAttributeValues: {
-          ':msg': {
-            messageId,
-            content: content || '',
-            createdAt: timestamp,
-            ownerId: senderId,
-          },
+          ':msg': lastMessageData,
           ':time': timestamp,
         },
       })
@@ -197,12 +207,7 @@ const updateConversations = async (senderId, receiverId, messageId, timestamp, c
           Key: { userId: receiverId, targetUserId: senderId },
           UpdateExpression: 'SET lastMessage = :msg, updatedAt = :time',
           ExpressionAttributeValues: {
-            ':msg': {
-              messageId,
-              content: content || '',
-              createdAt: timestamp,
-              ownerId: receiverId,
-            },
+            ':msg': lastMessageData,
             ':time': timestamp,
           },
         })
@@ -262,7 +267,6 @@ const retryMessage = async (senderId, messageId) => {
   if (message.status !== MESSAGE_STATUSES.FAILED) throw new AppError('Message is not in failed state', 400);
   if (message.status === MESSAGE_STATUSES.RECALLED) throw new AppError('Cannot retry recalled message', 400);
 
-  // Check if the message was deleted and within 60 seconds
   const deletedMessage = await dynamoDB.get({
     TableName: 'UserDeletedMessages',
     Key: { userId: senderId, messageId },
@@ -285,7 +289,7 @@ const retryMessage = async (senderId, messageId) => {
     const receiverOnline = isUserOnline(savedMessage.receiverId);
     const newStatus = receiverOnline ? MESSAGE_STATUSES.DELIVERED : MESSAGE_STATUSES.SENT;
 
-    await Promise.all([ 
+    await Promise.all([
       updateMessageStatus(messageId, senderId, newStatus),
       updateMessageStatus(messageId, savedMessage.receiverId, newStatus),
     ]);
@@ -303,21 +307,29 @@ const retryMessage = async (senderId, messageId) => {
         TableName: 'Messages',
         Key: { messageId: lastMessageId, ownerId: senderId },
       }).promise();
-      shouldUpdateLastMessage = !lastMessage.Item || new Date(savedMessage.timestamp) > new Date(lastMessage.Item.timestamp);
+      shouldUpdateLastMessage =
+        !lastMessage.Item || new Date(savedMessage.timestamp) > new Date(lastMessage.Item.timestamp);
     }
 
     if (shouldUpdateLastMessage) {
+      const lastMessageData = {
+        messageId: savedMessage.messageId,
+        content:
+          savedMessage.content ||
+          (savedMessage.type === 'image' ? '[Hình ảnh]' : `[${savedMessage.type}]`),
+        createdAt: savedMessage.timestamp,
+        senderId: savedMessage.senderId,
+        type: savedMessage.type,
+        isRecalled: false,
+      };
+
       await Promise.all([
         dynamoDB.update({
           TableName: 'Conversations',
           Key: { userId: senderId, targetUserId: savedMessage.receiverId },
           UpdateExpression: 'SET lastMessage = :msg, updatedAt = :time',
           ExpressionAttributeValues: {
-            ':msg': {
-              messageId: savedMessage.messageId,
-              content: savedMessage.content || '',
-              createdAt: savedMessage.timestamp,
-            },
+            ':msg': lastMessageData,
             ':time': new Date().toISOString(),
           },
         }).promise(),
@@ -326,11 +338,7 @@ const retryMessage = async (senderId, messageId) => {
           Key: { userId: savedMessage.receiverId, targetUserId: senderId },
           UpdateExpression: 'SET lastMessage = :msg, updatedAt = :time',
           ExpressionAttributeValues: {
-            ':msg': {
-              messageId: savedMessage.messageId,
-              content: savedMessage.content || '',
-              createdAt: savedMessage.timestamp,
-            },
+            ':msg': lastMessageData,
             ':time': new Date().toISOString(),
           },
         }).promise(),
@@ -425,19 +433,16 @@ const recallMessage = async (userId, messageId) => {
   if (timeDiffHours > 24) throw new AppError('Cannot recall message after 24 hours', 400);
 
   try {
-    // Cập nhật trạng thái tin nhắn thành RECALLED cho cả người gửi và người nhận
     await Promise.all([
       updateMessageStatus(messageId, message.senderId, MESSAGE_STATUSES.RECALLED),
       updateMessageStatus(messageId, message.receiverId, MESSAGE_STATUSES.RECALLED),
     ]);
 
-    // Xóa media nếu có
     if (message.mediaUrl) {
       const key = message.mediaUrl.split('/').slice(3).join('/');
       await deleteS3Object(process.env.BUCKET_NAME_Chat_Send, key);
     }
 
-    // Kiểm tra xem tin nhắn có phải là tin nhắn cuối cùng không
     const [senderConv, receiverConv] = await Promise.all([
       dynamoDB.get({
         TableName: 'Conversations',
@@ -452,15 +457,16 @@ const recallMessage = async (userId, messageId) => {
     const isLastMessageSender = senderConv.Item?.lastMessage?.messageId === messageId;
     const isLastMessageReceiver = receiverConv.Item?.lastMessage?.messageId === messageId;
 
-    // Nếu là tin nhắn cuối cùng, sử dụng chính dữ liệu của tin nhắn đó
     if (isLastMessageSender || isLastMessageReceiver) {
       const lastMessageUpdate = {
         messageId: message.messageId,
-        content: message.content || '',
+        content: message.content || (message.type === 'image' ? '[Hình ảnh]' : `[${message.type}]`),
         createdAt: message.timestamp,
+        senderId: message.senderId,
+        type: message.type,
+        isRecalled: true,
       };
 
-      // Cập nhật Conversations cho cả hai người dùng
       await Promise.all([
         isLastMessageSender &&
           dynamoDB.update({
@@ -976,7 +982,6 @@ const deleteMessage = async (userId, messageId) => {
   try {
     logger.info('Deleting message:', { messageId, userId });
 
-    // Lấy tin nhắn của user hiện tại
     const messageRes = await dynamoDB.get({
       TableName: 'Messages',
       Key: { messageId, ownerId: userId },
@@ -990,7 +995,6 @@ const deleteMessage = async (userId, messageId) => {
 
     const otherUserId = message.senderId === userId ? message.receiverId : message.senderId;
 
-    // Cập nhật status = 'delete' và thêm thời gian xóa cho user hiện tại
     await dynamoDB.update({
       TableName: 'Messages',
       Key: { messageId, ownerId: userId },
@@ -1002,7 +1006,6 @@ const deleteMessage = async (userId, messageId) => {
       },
     }).promise();
 
-    // Lấy hội thoại để kiểm tra lastMessage
     const conversationRes = await dynamoDB.get({
       TableName: 'Conversations',
       Key: { userId, targetUserId: otherUserId },
@@ -1011,7 +1014,6 @@ const deleteMessage = async (userId, messageId) => {
     const isLastMessage = conversationRes.Item?.lastMessage?.messageId === messageId;
 
     if (isLastMessage) {
-      // Tìm message hợp lệ mới nhất thay thế
       const [sentMessages, receivedMessages] = await Promise.all([
         dynamoDB.query({
           TableName: 'Messages',
@@ -1038,12 +1040,13 @@ const deleteMessage = async (userId, messageId) => {
       ]);
 
       const allMessages = [...(sentMessages.Items || []), ...(receivedMessages.Items || [])]
-        .filter(msg =>
-          msg.messageId !== messageId &&
-          msg.ownerId === userId &&
-          msg.status !== MESSAGE_STATUSES.RECALLED &&
-          msg.status !== MESSAGE_STATUSES.FAILED &&
-          msg.status !== MESSAGE_STATUSES.DELETE
+        .filter(
+          msg =>
+            msg.messageId !== messageId &&
+            msg.ownerId === userId &&
+            msg.status !== MESSAGE_STATUSES.RECALLED &&
+            msg.status !== MESSAGE_STATUSES.FAILED &&
+            msg.status !== MESSAGE_STATUSES.DELETE
         )
         .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
 
@@ -1057,8 +1060,13 @@ const deleteMessage = async (userId, messageId) => {
           ':msg': previousMessage
             ? {
                 messageId: previousMessage.messageId,
-                content: previousMessage.content || '',
+                content:
+                  previousMessage.content ||
+                  (previousMessage.type === 'image' ? '[Hình ảnh]' : `[${previousMessage.type}]`),
                 createdAt: previousMessage.timestamp,
+                senderId: previousMessage.senderId,
+                type: previousMessage.type,
+                isRecalled: previousMessage.status === MESSAGE_STATUSES.RECALLED,
               }
             : null,
           ':time': new Date().toISOString(),
@@ -1066,7 +1074,6 @@ const deleteMessage = async (userId, messageId) => {
       }).promise();
     }
 
-    // Gửi sự kiện socket
     io().to(userId).emit('messageDeleted', { messageId });
 
     return { success: true, message: 'Tin nhắn đã được xóa chỉ với bạn!' };
@@ -1085,7 +1092,6 @@ const restoreMessage = async (userId, messageId) => {
   try {
     logger.info('Restoring message:', { messageId, userId });
 
-    // Lấy tin nhắn của user hiện tại
     const messageRes = await dynamoDB.get({
       TableName: 'Messages',
       Key: { messageId, ownerId: userId },
@@ -1097,7 +1103,6 @@ const restoreMessage = async (userId, messageId) => {
       throw new AppError('Bạn không có quyền khôi phục tin nhắn này!', 403);
     }
 
-    // Kiểm tra xem tin nhắn có bị xóa và thời gian xóa chưa quá 1 phút
     if (message.status !== MESSAGE_STATUSES.DELETE) {
       throw new AppError('Tin nhắn này không bị xóa!', 400);
     }
@@ -1106,23 +1111,47 @@ const restoreMessage = async (userId, messageId) => {
     const currentTime = new Date();
     const timeDifference = currentTime - deletedAt;
 
-    if (timeDifference > 60000) {  // 1 phút = 60000 ms
+    if (timeDifference > 60000) {
       throw new AppError('Bạn chỉ có thể khôi phục tin nhắn trong vòng 1 phút sau khi xóa!', 400);
     }
 
-    // Khôi phục trạng thái của tin nhắn
     await dynamoDB.update({
       TableName: 'Messages',
       Key: { messageId, ownerId: userId },
       UpdateExpression: 'SET #status = :active, deletedAt = :deletedAt',
       ExpressionAttributeNames: { '#status': 'status' },
       ExpressionAttributeValues: {
-        ':active': MESSAGE_STATUSES.SENT,  // hoặc trạng thái ban đầu như SENT
-        ':deletedAt': null,  // Xóa giá trị của deletedAt khi khôi phục
+        ':active': MESSAGE_STATUSES.SENT,
+        ':deletedAt': null,
       },
     }).promise();
 
-    // Gửi sự kiện socket cho người dùng
+    const otherUserId = message.senderId === userId ? message.receiverId : message.senderId;
+    const conversationRes = await dynamoDB.get({
+      TableName: 'Conversations',
+      Key: { userId, targetUserId: otherUserId },
+    }).promise();
+
+    const lastMessage = conversationRes.Item?.lastMessage;
+    if (lastMessage?.messageId === messageId) {
+      await dynamoDB.update({
+        TableName: 'Conversations',
+        Key: { userId, targetUserId: otherUserId },
+        UpdateExpression: 'SET lastMessage = :msg, updatedAt = :time',
+        ExpressionAttributeValues: {
+          ':msg': {
+            messageId: message.messageId,
+            content: message.content || (message.type === 'image' ? '[Hình ảnh]' : `[${message.type}]`),
+            createdAt: message.timestamp,
+            senderId: message.senderId,
+            type: message.type,
+            isRecalled: false,
+          },
+          ':time': new Date().toISOString(),
+        },
+      }).promise();
+    }
+
     io().to(userId).emit('messageRestored', { messageId });
 
     return { success: true, message: 'Tin nhắn đã được khôi phục!' };

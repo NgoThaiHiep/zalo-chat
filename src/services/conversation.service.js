@@ -730,6 +730,37 @@ const getAutoDeleteSetting = async (userId, targetUserId) => {
   }
 };
 
+const getDisplayInfo = async (userId, targetUserId) => {
+  if (userId === targetUserId) {
+    const userResult = await dynamoDB.get({
+      TableName: 'Users',
+      Key: { userId },
+    }).promise();
+
+    return {
+      displayName: 'FileCloud',
+      phoneNumber: userResult.Item?.phoneNumber || null,
+      avatar: userResult.Item?.avatar || null,
+    };
+  }
+
+  try {
+    const userNameResult = await FriendService.getUserName(userId, targetUserId);
+    return {
+      displayName: userNameResult.name,
+      phoneNumber: userNameResult.phoneNumber,
+      avatar: userNameResult.avatar || null,
+    };
+  } catch (error) {
+    logger.error(`Lỗi lấy thông tin cho ${targetUserId}:`, error);
+    return {
+      displayName: targetUserId,
+      phoneNumber: null,
+      avatar: null,
+    };
+  }
+};
+
 const getConversation = async (userId, targetUserId) => {
   if (!userId || !targetUserId) {
     logger.error('Invalid userId or targetUserId', { userId, targetUserId });
@@ -839,12 +870,11 @@ const getConversationSummary = async (userId, options = {}) => {
 
     const conversations = result.Items || [];
     if (!conversations.length && minimal) {
-      // Nếu không có hội thoại và ở chế độ minimal, vẫn cần lấy nhóm
       const groups = await getUserGroups(userId);
       const groupSummaries = groups.map(group => ({
         groupId: group.groupId,
         name: group.name,
-        avatar: group.avatar,
+        avatar: group.avatar || null, // Thêm kiểm tra null
         memberCount: group.members.length,
         createdAt: group.createdAt,
         userRole: group.roles[userId],
@@ -867,6 +897,29 @@ const getConversationSummary = async (userId, options = {}) => {
     const conversationList = [];
     const groupSummaries = [];
 
+    // Chuẩn bị batchGet để lấy thông tin người dùng và nhóm
+    const userIdsToFetch = new Set();
+    const groupIdsToFetch = new Set();
+    conversations.forEach(conv => {
+      const targetUserId = conv.targetUserId;
+      const isGroup = conv.settings?.isGroup || false;
+      if (!hiddenConversations.some(hc => hc.hiddenUserId === targetUserId)) {
+        if (isGroup) {
+          groupIdsToFetch.add(targetUserId);
+        } else {
+          userIdsToFetch.add(targetUserId);
+        }
+      }
+    });
+
+    // BatchGet cho Users
+    const usersData = await batchGetUsers(Array.from(userIdsToFetch));
+    const userMap = new Map(usersData.map(user => [user.userId, user]));
+
+    // BatchGet cho Groups
+    const groupsData = await batchGetGroups(Array.from(groupIdsToFetch));
+    const groupMap = new Map(groupsData.map(group => [group.groupId, group]));
+
     // 2. Xử lý danh sách hội thoại (cá nhân và nhóm)
     for (const conv of conversations) {
       const targetUserId = conv.targetUserId;
@@ -879,20 +932,19 @@ const getConversationSummary = async (userId, options = {}) => {
 
       if (isGroup) {
         // Xử lý hội thoại nhóm
-        const groupResult = await dynamoDB.get({ TableName: 'Groups', Key: { groupId: targetUserId } }).promise();
-        if (!groupResult.Item) {
+        const group = groupMap.get(targetUserId);
+        if (!group) {
           logger.warn('Nhóm không tồn tại trong Conversations', { userId, targetUserId });
           continue;
         }
 
-        const group = groupResult.Item;
         const lastMessage = minimal ? null : conv.lastMessage;
 
         if (minimal) {
           groupSummaries.push({
             groupId: group.groupId,
             name: group.name,
-            avatar: group.avatar,
+            avatar: group.avatar || null, // Thêm kiểm tra null
             memberCount: group.members.length,
             createdAt: group.createdAt,
             userRole: group.roles[userId],
@@ -901,7 +953,7 @@ const getConversationSummary = async (userId, options = {}) => {
           groupSummaries.push({
             groupId: group.groupId,
             name: group.name,
-            avatar: group.avatar,
+            avatar: group.avatar || null, // Thêm kiểm tra null
             memberCount: group.members.length,
             createdAt: group.createdAt,
             userRole: group.roles[userId],
@@ -911,7 +963,7 @@ const getConversationSummary = async (userId, options = {}) => {
                   senderId: lastMessage.senderId,
                   type: lastMessage.type,
                   content: lastMessage.content,
-                  timestamp: lastMessage.timestamp,
+                  timestamp: lastMessage.createdAt,
                   isRecalled: lastMessage.isRecalled || false,
                 }
               : null,
@@ -922,11 +974,8 @@ const getConversationSummary = async (userId, options = {}) => {
         let restrictStrangerMessages = false;
         let isFriend = true;
         if (userId !== targetUserId) {
-          const receiverResult = await dynamoDB.get({
-            TableName: 'Users',
-            Key: { userId: targetUserId },
-          }).promise();
-          restrictStrangerMessages = receiverResult.Item?.settings?.restrictStrangerMessages || false;
+          const targetUser = userMap.get(targetUserId);
+          restrictStrangerMessages = targetUser?.settings?.restrictStrangerMessages || false;
 
           if (restrictStrangerMessages) {
             const friendResult = await dynamoDB.get({
@@ -937,118 +986,30 @@ const getConversationSummary = async (userId, options = {}) => {
           }
         }
 
-        // Lấy tin nhắn cuối cùng từ Conversations
-        let lastMessageFull = null;
-        if (!minimal && conv.lastMessage?.messageId) {
-          const messageResult = await dynamoDB.get({
-            TableName: 'Messages',
-            Key: { messageId: conv.lastMessage.messageId, ownerId: userId },
-          }).promise();
-          if (
-            messageResult.Item &&
-            messageResult.Item.ownerId === userId &&
-            messageResult.Item.status !== MESSAGE_STATUSES.DELETE &&
-            (messageResult.Item.status !== MESSAGE_STATUSES.RESTRICTED || messageResult.Item.senderId === userId) &&
-            (!restrictStrangerMessages || isFriend || messageResult.Item.senderId === userId)
-          ) {
-            lastMessageFull = messageResult.Item;
-          }
-        }
+        const lastMessage = minimal ? null : conv.lastMessage;
 
-        // Nếu không có tin nhắn cuối hợp lệ, tìm trong các tin nhắn gần đây
-        if (!lastMessageFull && userId !== targetUserId && !minimal) {
-          const [recentMessages, sentMessages] = await Promise.all([
-            dynamoDB.query({
-              TableName: 'Messages',
-              IndexName: 'ReceiverSenderIndex',
-              KeyConditionExpression: 'receiverId = :userId AND senderId = :targetUserId',
-              ExpressionAttributeValues: {
-                ':userId': userId,
-                ':targetUserId': targetUserId,
-              },
-              ScanIndexForward: false,
-              Limit: 1,
-            }).promise(),
-            dynamoDB.query({
-              TableName: 'Messages',
-              IndexName: 'SenderReceiverIndex',
-              KeyConditionExpression: 'senderId = :userId AND receiverId = :targetUserId',
-              ExpressionAttributeValues: {
-                ':userId': userId,
-                ':targetUserId': targetUserId,
-              },
-              ScanIndexForward: false,
-              Limit: 1,
-            }).promise(),
-          ]);
-
-          const allMessages = [
-            ...(recentMessages.Items || []).filter(msg => msg.ownerId === userId),
-            ...(sentMessages.Items || []).filter(msg => msg.ownerId === userId),
-          ].filter(
-            msg =>
-              msg.status !== MESSAGE_STATUSES.DELETE &&
-              (msg.status !== MESSAGE_STATUSES.RESTRICTED || msg.senderId === userId) &&
-              (!restrictStrangerMessages || isFriend || msg.senderId === userId)
-          );
-
-          if (allMessages.length > 0) {
-            lastMessageFull = allMessages.reduce((latest, msg) =>
-              !latest || new Date(msg.timestamp) > new Date(latest.timestamp) ? msg : latest
-            );
-
-            // Cập nhật lastMessage trong Conversations nếu tìm thấy tin nhắn mới
-            if (lastMessageFull) {
-              const lastMessageData = {
-                messageId: lastMessageFull.messageId,
-                content: lastMessageFull.content || (lastMessageFull.type === 'image' ? '[Hình ảnh]' : `[${lastMessageFull.type}]`),
-                timestamp: lastMessageFull.timestamp,
-                senderId: lastMessageFull.senderId,
-                type: lastMessageFull.type,
-              };
-
-              await dynamoDB.update({
-                TableName: 'Conversations',
-                Key: { userId, targetUserId },
-                UpdateExpression: 'SET lastMessage = :lastMessage, updatedAt = :updatedAt',
-                ExpressionAttributeValues: {
-                  ':lastMessage': lastMessageData,
-                  ':updatedAt': new Date().toISOString(),
-                },
-              }).promise();
-            }
-          }
-        }
-
-        // Chỉ bao gồm hội thoại nếu:
-        // - Là hội thoại với chính mình
-        // - Là bạn bè và có tin nhắn hợp lệ
-        // - Không hạn chế người lạ và có tin nhắn hợp lệ
         if (
           userId === targetUserId ||
-          (isFriend && lastMessageFull) ||
-          (!restrictStrangerMessages && lastMessageFull)
+          (isFriend && lastMessage) ||
+          (!restrictStrangerMessages && lastMessage)
         ) {
-          let name, phoneNumber,avatar;
+          let name, phoneNumber, avatar;
+          const targetUser = userMap.get(targetUserId);
           if (targetUserId === userId) {
             name = 'FileCloud';
-            const userResult = await dynamoDB.get({
-              TableName: 'Users',
-              Key: { userId },
-            }).promise();
-            phoneNumber = userResult.Item?.phoneNumber || null;
-            avatar = userResult.Item?.avatar || null;
+            phoneNumber = targetUser?.phoneNumber || null;
+            avatar = targetUser?.avatar || null;
           } else {
             try {
               const userNameResult = await FriendService.getUserName(userId, targetUserId);
               name = userNameResult.name;
               phoneNumber = userNameResult.phoneNumber;
-              avatar = userNameResult.avatar || null;
+              avatar = userNameResult.avatar || targetUser?.avatar || null; // Ưu tiên avatar từ FriendService, nếu không có thì lấy từ targetUser
             } catch (error) {
               logger.error(`Lỗi lấy thông tin cho ${targetUserId}:`, error);
               name = targetUserId;
-              phoneNumber = null;
-              avatar = null;
+              phoneNumber = targetUser?.phoneNumber || null;
+              avatar = targetUser?.avatar || null; // Lấy trực tiếp từ targetUser nếu FriendService lỗi
             }
           }
 
@@ -1061,7 +1022,18 @@ const getConversationSummary = async (userId, options = {}) => {
             phoneNumber,
             avatar,
             isSelf: targetUserId === userId,
-            lastMessage: minimal ? null : lastMessageFull,
+            lastMessage: minimal
+              ? null
+              : lastMessage
+              ? {
+                  messageId: lastMessage.messageId,
+                  senderId: lastMessage.senderId,
+                  type: lastMessage.type,
+                  content: lastMessage.content,
+                  timestamp: lastMessage.createdAt,
+                  isRecalled: lastMessage.isRecalled || false,
+                }
+              : null,
             isMuted,
             isPinned,
           });
@@ -1100,6 +1072,32 @@ const getConversationSummary = async (userId, options = {}) => {
     logger.error('Error in getConversationSummary:', error);
     throw new AppError('Failed to fetch conversation summary', 500);
   }
+};
+
+// Hàm hỗ trợ batchGet cho Users
+const batchGetUsers = async (userIds) => {
+  if (!userIds.length) return [];
+  const keys = userIds.map(userId => ({ userId }));
+  const batchParams = {
+    RequestItems: {
+      Users: { Keys: keys },
+    },
+  };
+  const result = await dynamoDB.batchGet(batchParams).promise();
+  return result.Responses?.Users || [];
+};
+
+// Hàm hỗ trợ batchGet cho Groups
+const batchGetGroups = async (groupIds) => {
+  if (!groupIds.length) return [];
+  const keys = groupIds.map(groupId => ({ groupId }));
+  const batchParams = {
+    RequestItems: {
+      Groups: { Keys: keys },
+    },
+  };
+  const result = await dynamoDB.batchGet(batchParams).promise();
+  return result.Responses?.Groups || [];
 };
 module.exports = {
   hideConversation,
