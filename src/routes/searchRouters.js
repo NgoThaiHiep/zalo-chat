@@ -1,19 +1,21 @@
 const express = require('express');
 const router = express.Router();
 const {
-  searchAllController,
+  searchUsersByNameController,
+  searchFriendsByPhoneNumberController,
+  searchAllUsersByPhoneNumberController,
   searchMessagesBetweenUsersController,
-  searchUsersByNameAndPhoneController,
+  searchMessagesInGroupController,
+  searchAllController,
 } = require('../controllers/searchController');
-const {authMiddleware} = require('../middlewares/authMiddleware');
+const {authMiddleware} = require('../middlewares/authMiddleware'); // Assuming you have an auth middleware
 
-// Route tìm kiếm toàn bộ (người dùng và tin nhắn)
-router.get('/search', authMiddleware, searchAllController);
-
-// Route tìm kiếm tin nhắn giữa hai người dùng
-router.get('/search/messages', authMiddleware, searchMessagesBetweenUsersController);
-
-// Route tìm kiếm người dùng theo tên hoặc số điện thoại
-router.get('/search/users', authMiddleware, searchUsersByNameAndPhoneController);
+// Routes for search functionality
+router.get('/users/by-name', authMiddleware, searchUsersByNameController); // Search users by name
+router.get('/friends/by-phone', authMiddleware, searchFriendsByPhoneNumberController); // Search friends by phone
+router.get('/users/by-phone', authMiddleware, searchAllUsersByPhoneNumberController); // Search all users by phone
+router.get('/messages/1-1', authMiddleware, searchMessagesBetweenUsersController); // Search 1-1 messages
+router.get('/messages/group', authMiddleware, searchMessagesInGroupController); // Search group messages
+router.get('/all', authMiddleware, searchAllController); // Search all (users, 1-1 messages, group messages)
 
 module.exports = router;

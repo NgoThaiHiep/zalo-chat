@@ -10,6 +10,7 @@ const {
   sendGroupMessageController,
   getGroupMessagesController,
   forwardGroupMessageController,
+  forwardGroupMessageToUserController,
   recallGroupMessageController,
   pinGroupMessageController,
   getGroupMembersController,
@@ -57,7 +58,8 @@ router.delete('/members/:groupId/:targetUserId', kickMemberController);
 router.post('/messages/:groupId', sendGroupMessageController);
 
 // Chuyển tiếp tin nhắn nhóm
-router.post('/messages/forward/:groupId', forwardGroupMessageController);
+router.post('/forward-to-group', authMiddleware, forwardGroupMessageToUserController); // Chuyển tiếp tin nhắn từ nhóm đến người dùng
+router.post('/forward-to-group', authMiddleware, forwardGroupMessageController); // Chuyển tiếp tin nhắn đến nhóm
 
 // Thu hồi tin nhắn nhóm
 router.put('/recall/messages/:groupId/:messageId', recallGroupMessageController);

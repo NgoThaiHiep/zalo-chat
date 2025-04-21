@@ -9,6 +9,7 @@ const { copyS3File } = require('../utils/messageUtils');
 const { createConversation } = require('./conversation.service');
 const { MESSAGE_STATUSES } = require('../config/constants');
 const { getOwnProfile } = require('../services/auth.service');
+const { forwardMessageUnified } = require('./message.service');
 
 const TABLE_NAME = 'GroupMessages';
 const GROUP_TABLE = 'Groups';
@@ -969,7 +970,7 @@ const updateLastMessageForGroup = async (groupId, message = null) => {
         KeyConditionExpression: 'groupId = :groupId',
         ExpressionAttributeValues: { ':groupId': groupId },
         ScanIndexForward: false, // Lấy tin nhắn mới nhất
-        Limit: 10, // Lấy tối đa 10 tin nhắn để tìm tin nhắn hợp lệ
+        // Limit: 10, // Lấy tối đa 10 tin nhắn để tìm tin nhắn hợp lệ
       }).promise();
 
       // Tìm tin nhắn hợp lệ (không bị xóa hoặc thu hồi)
@@ -1014,57 +1015,14 @@ const updateLastMessageForGroup = async (groupId, message = null) => {
   }
 };
 
-const forwardGroupMessage = async (groupId, senderId, { messageId, targetGroupId }) => {
-  if (!groupId || !isValidUUID(groupId) || !senderId || !isValidUUID(senderId) || !messageId || !isValidUUID(messageId) || !targetGroupId || !isValidUUID(targetGroupId)) {
-    throw new AppError('Tham số không hợp lệ cho forwardGroupMessage', 400);
-  }
+// Hàm cho group-1
+const forwardGroupMessageToUser = async (senderId, messageId, sourceGroupId, targetReceiverId) => {
+  return await forwardMessageUnified(senderId, messageId, true, false, sourceGroupId, targetReceiverId);
+};
 
-  const sourceGroup = await dynamoDB.get({ TableName: GROUP_TABLE, Key: { groupId } }).promise();
-  if (!sourceGroup.Item || !sourceGroup.Item.members.includes(senderId)) {
-    throw new AppError('Bạn không phải thành viên nhóm gốc!', 403);
-  }
-
-  const originalMessage = await dynamoDB.get({ TableName: TABLE_NAME, Key: { groupId, messageId } }).promise();
-  if (!originalMessage.Item) {
-    throw new AppError('Tin nhắn gốc không tồn tại!', 404);
-  }
-
-  const targetGroup = await dynamoDB.get({ TableName: GROUP_TABLE, Key: { groupId: targetGroupId } }).promise();
-  if (!targetGroup.Item || !targetGroup.Item.members.includes(senderId)) {
-    throw new AppError('Nhóm đích không tồn tại hoặc bạn không phải thành viên!', 403);
-  }
-
-  let newMediaUrl = originalMessage.Item.mediaUrl;
-  let newS3Key = null;
-  if (newMediaUrl && newMediaUrl.startsWith('s3://')) {
-    const originalKey = newMediaUrl.split('/').slice(3).join('/');
-    const newMessageId = uuidv4();
-    ({ mediaUrl: newMediaUrl, s3Key: newS3Key } = await copyS3File(bucketName, originalKey, newMessageId, originalMessage.Item.mimeType));
-  }
-
-  const newMessage = {
-    groupId: targetGroupId,
-    messageId: uuidv4(),
-    senderId,
-    type: originalMessage.Item.type,
-    content: originalMessage.Item.content,
-    mediaUrl: newMediaUrl,
-    fileName: originalMessage.Item.fileName,
-    mimeType: originalMessage.Item.mimeType,
-    metadata: { ...originalMessage.Item.metadata, forwardedFrom: { groupId, messageId } },
-    isAnonymous: false,
-    isSecret: false,
-    quality: originalMessage.Item.quality,
-    timestamp: new Date().toISOString(),
-  };
-
-  const savedMessage = await sendMessageCore(newMessage, TABLE_NAME, bucketName);
-
-  // Cập nhật lastMessage cho nhóm đích
-  await updateLastMessageForGroup(targetGroupId, savedMessage);
-
-  io().to(targetGroupId).emit('groupMessage', savedMessage);
-  return savedMessage;
+// Hàm cho group-group
+const forwardGroupMessage = async (senderId, messageId, sourceGroupId, targetGroupId) => {
+  return await forwardMessageUnified(senderId, messageId, true, true, sourceGroupId, targetGroupId);
 };
 
 const recallGroupMessage = async (groupId, senderId, messageId, recallType = 'everyone') => {
@@ -1493,7 +1451,6 @@ module.exports = {
   deleteGroup,
   kickMember,
   sendGroupMessage,
-  forwardGroupMessage,
   recallGroupMessage,
   pinGroupMessage,
   deleteGroupMessage,
@@ -1503,4 +1460,6 @@ module.exports = {
   generateGroupLink,
   getUserGroups,
   getGroupMessages,
+  forwardGroupMessageToUser,
+  forwardGroupMessage,
 };

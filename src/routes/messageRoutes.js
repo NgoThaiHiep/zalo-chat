@@ -4,6 +4,7 @@ const {
   getMessagesBetweenController,
 
   forwardMessageController,
+  forwardMessageToGroupController,
   recallMessageController,
 
   pinMessageController,
@@ -32,6 +33,7 @@ router.get('/user/:userId', authMiddleware, getMessagesBetweenController); // L�
 
 // Nhóm: Chuyển tiếp và thu hồi tin nhắn
 router.post('/forward', authMiddleware, forwardMessageController); // Chuyển tiếp tin nhắn
+router.post('/forward-to-group', authMiddleware, forwardMessageToGroupController); // Chuyển tiếp tin nhắn đến nhóm
 router.patch('/recall/:messageId', authMiddleware, recallMessageController);// Thu hồi tin nhắn
 
 // Nhóm: Ghim tin nhắn

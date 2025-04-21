@@ -86,44 +86,15 @@ const getMessagesBetweenController = async (req, res) => {
   }
 };
 
-// const getConversationSummaryController = async (req, res) => {
-//   try {
-//     const userId = req.user.id;
-//     const { minimal = 'false' } = req.query; // Lấy minimal từ query param
-
-//     console.log('Lấy tóm tắt hội thoại cho:', { userId, minimal });
-
-//     const result = await MessageService.getConversationSummary(userId, { minimal: minimal === 'true' });
-
-//     if (!result.success) {
-//       return res.status(500).json({
-//         success: false,
-//         message: result.error || 'Lỗi khi lấy tóm tắt hội thoại',
-//       });
-//     }
-
-//     res.status(200).json({
-//       success: true,
-//       message: minimal === 'true' ? 'Lấy danh sách người nhắn thành công' : 'Lấy tóm tắt hội thoại thành công',
-//       data: result.data,
-//     });
-//   } catch (error) {
-//     console.error('Lỗi trong getConversationSummaryController:', error);
-//     res.status(500).json({
-//       success: false,
-//       message: 'Lỗi server',
-//       error: error.message,
-//     });
-//   }
-// };
 
 const forwardMessageController = async (req, res) => {
   try {
     const { messageId, targetReceiverId } = req.body;
-    const senderId = req.user.id;
+    const senderId = req.user.id; // Lấy senderId từ thông tin người dùng đã xác thực
     console.log('Sender ID:', senderId);
     console.log('Forward message request:', { senderId, messageId, targetReceiverId });
 
+    // Kiểm tra đầu vào
     if (!messageId || !targetReceiverId) {
       return res.status(400).json({ success: false, message: 'Thiếu messageId hoặc targetReceiverId' });
     }
@@ -132,10 +103,43 @@ const forwardMessageController = async (req, res) => {
     return res.status(200).json({ success: true, data: result });
   } catch (error) {
     console.error('Error in forwardMessageController:', error);
-    const statusCode = error.message.includes('là bắt buộc') || 
-                      error.message.includes('Thiếu') ? 400 : 
-                      error.message.includes('không tồn tại') || 
-                      error.message.includes('quyền') ? 403 : 500;
+    const statusCode =
+      error.message.includes('là bắt buộc') ||
+      error.message.includes('Thiếu') ||
+      error.message.includes('Tham số không hợp lệ')
+        ? 400
+        : error.message.includes('không tồn tại') || error.message.includes('quyền')
+        ? 403
+        : 500;
+    return res.status(statusCode).json({ success: false, message: error.message });
+  }
+};
+
+// Controller cho 1-group
+const forwardMessageToGroupController = async (req, res) => {
+  try {
+    const { messageId, targetGroupId } = req.body;
+    const senderId = req.user.id;
+    console.log('Sender ID:', senderId);
+    console.log('Forward message to group request:', { senderId, messageId, targetGroupId });
+
+    // Kiểm tra đầu vào
+    if (!messageId || !targetGroupId) {
+      return res.status(400).json({ success: false, message: 'Thiếu messageId hoặc targetGroupId' });
+    }
+
+    const result = await MessageService.forwardMessageToGroup(senderId, messageId, targetGroupId);
+    return res.status(200).json({ success: true, data: result });
+  } catch (error) {
+    console.error('Error in forwardMessageToGroupController:', error);
+    const statusCode =
+      error.message.includes('là bắt buộc') ||
+      error.message.includes('Thiếu') ||
+      error.message.includes('Tham số không hợp lệ')
+        ? 400
+        : error.message.includes('không tồn tại') || error.message.includes('quyền')
+        ? 403
+        : 500;
     return res.status(statusCode).json({ success: false, message: error.message });
   }
 };
@@ -314,6 +318,7 @@ module.exports = {
   getMessagesBetweenController,
   // getConversationSummaryController,
   forwardMessageController,
+  forwardMessageToGroupController,
   recallMessageController,
   pinMessageController,
   unpinMessageController,

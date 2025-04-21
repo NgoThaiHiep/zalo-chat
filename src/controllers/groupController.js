@@ -230,23 +230,86 @@ const createGroupController = async (req, res) => {
       });
     }
   };
+  const forwardGroupMessageToUserController = async (req, res) => {
+    try {
+      const { messageId, sourceGroupId, targetReceiverId } = req.body;
+      const senderId = req.user.id;
+      console.log('Sender ID:', senderId);
+      console.log('Forward group message to user request:', {
+        senderId,
+        messageId,
+        sourceGroupId,
+        targetReceiverId,
+      });
+  
+      // Kiểm tra đầu vào
+      if (!messageId || !sourceGroupId || !targetReceiverId) {
+        return res.status(400).json({
+          success: false,
+          message: 'Thiếu messageId, sourceGroupId hoặc targetReceiverId',
+        });
+      }
+  
+      const result = await groupService.forwardGroupMessageToUser(
+        senderId,
+        messageId,
+        sourceGroupId,
+        targetReceiverId
+      );
+      return res.status(200).json({ success: true, data: result });
+    } catch (error) {
+      console.error('Error in forwardGroupMessageToUserController:', error);
+      const statusCode =
+        error.message.includes('là bắt buộc') ||
+        error.message.includes('Thiếu') ||
+        error.message.includes('Tham số không hợp lệ')
+          ? 400
+          : error.message.includes('không tồn tại') || error.message.includes('quyền')
+          ? 403
+          : 500;
+      return res.status(statusCode).json({ success: false, message: error.message });
+    }
+  };
+  
+  // Controller cho group-group
   const forwardGroupMessageController = async (req, res) => {
     try {
-      const { groupId } = req.params;
+      const { messageId, sourceGroupId, targetGroupId } = req.body;
       const senderId = req.user.id;
-      const messageData = req.body;
-      const message = await groupService.forwardGroupMessage(groupId, senderId, messageData);
-      res.status(200).json({
-        success: true,
-        message: 'Chuyển tiếp tin nhắn nhóm thành công!',
-        data: message,
+      console.log('Sender ID:', senderId);
+      console.log('Forward group message request:', {
+        senderId,
+        messageId,
+        sourceGroupId,
+        targetGroupId,
       });
+  
+      // Kiểm tra đầu vào
+      if (!messageId || !sourceGroupId || !targetGroupId) {
+        return res.status(400).json({
+          success: false,
+          message: 'Thiếu messageId, sourceGroupId hoặc targetGroupId',
+        });
+      }
+  
+      const result = await groupService.forwardGroupMessage(
+        senderId,
+        messageId,
+        sourceGroupId,
+        targetGroupId
+      );
+      return res.status(200).json({ success: true, data: result });
     } catch (error) {
-      logger.error('Lỗi khi chuyển tiếp tin nhắn nhóm', { error: error.message });
-      res.status(error.statusCode || 500).json({
-        success: false,
-        message: error.message || 'Lỗi server khi chuyển tiếp tin nhắn nhóm',
-      });
+      console.error('Error in forwardGroupMessageController:', error);
+      const statusCode =
+        error.message.includes('là bắt buộc') ||
+        error.message.includes('Thiếu') ||
+        error.message.includes('Tham số không hợp lệ')
+          ? 400
+          : error.message.includes('không tồn tại') || error.message.includes('quyền')
+          ? 403
+          : 500;
+      return res.status(statusCode).json({ success: false, message: error.message });
     }
   };
   
@@ -433,6 +496,7 @@ module.exports = {
     getUserGroupsController,
     sendGroupMessageController: [upload.single('file'), sendGroupMessageController],
     getGroupMessagesController,
+    forwardGroupMessageToUserController,
     forwardGroupMessageController,
     recallGroupMessageController,
     pinGroupMessageController,
