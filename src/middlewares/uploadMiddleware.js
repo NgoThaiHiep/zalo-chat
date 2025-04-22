@@ -11,6 +11,6 @@ const uploadProfileImages = multer({
       cb(new Error('Định dạng file không hỗ trợ!'));
     }
   },
-}).fields([{ name: 'avatar', maxCount: 1 }, { name: 'coverPhoto', maxCount: 1 }]);
+}).fields([{ name: 'avatar', maxCount: 1 }, { name: 'coverPhoto', maxCount: 1 }]); // đảm bảo bạn có tên "avatar" ở đây
 
 module.exports = { uploadProfileImages };

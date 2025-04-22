@@ -1,29 +1,33 @@
 const express = require('express');
 const {authMiddleware ,checkOwnership} = require('../middlewares/authMiddleware');
 const {
+  assignMemberRoleController,
   createGroupController,
-  joinGroupController,
-  leaveGroupController,
-  kickMemberController,
-  deleteGroupController,
-  getUserGroupsController,
-  sendGroupMessageController,
-  getGroupMessagesController,
-  forwardGroupMessageController,
-  forwardGroupMessageToUserController,
-  recallGroupMessageController,
-  pinGroupMessageController,
-  getGroupMembersController,
-  updateGroupInfoController,
-  updateCommunitySettingsController,
-  generateGroupLinkController,
+  getGroupJoinRequestsController,
   approveJoinRequestController,
+  rejectJoinRequestController,
+  updateGroupInfoController,
+  joinGroupController,
   addMemberToGroupController,
   getGroupInfoController,
+  leaveGroupController,
+  deleteGroupController,
+  kickMemberController,
+  sendGroupMessageController,
+  recallGroupMessageController,
+  pinGroupMessageController,
   deleteGroupMessageController,
   restoreGroupMessageController,
+  getGroupMembersController,
+  updateCommunitySettingsController,
+  generateGroupLinkController,
+  getUserGroupsController,
+  getGroupMessagesController,
+  forwardGroupMessageToUserController,
+  forwardGroupMessageController,
+  upload,
 } = require('../controllers/groupController');
-
+const { uploadProfileImages } = require('../middlewares/uploadMiddleware');
 const router = express.Router();
 
 router.use(authMiddleware);
@@ -31,7 +35,8 @@ router.use(authMiddleware);
 router.post('/create', createGroupController);
 
 // Cập nhật thông tin nhóm
-router.put('/:groupId', updateGroupInfoController);
+router.put('/info/:groupId',  upload.single('avatar'),updateGroupInfoController );
+
 
 // Tham gia nhóm
 router.post('/join/:groupId', joinGroupController);
@@ -42,8 +47,14 @@ router.post('/members/:groupId', addMemberToGroupController);
 // Phê duyệt yêu cầu tham gia nhóm
 router.put('/requests/:groupId/:userId', approveJoinRequestController);
 
+// lấy danh sách yêu cầu tham gia nhóm
+router.get('/join-requests', authMiddleware, getGroupJoinRequestsController);
+
+// Từ chối yêu cầu tham gia nhóm
+router.post('/join-request/reject', authMiddleware, rejectJoinRequestController);
+
 // Lấy thông tin nhóm
-router.get('/:groupId', getGroupInfoController);
+router.get('/infoGroup/:groupId', getGroupInfoController);
 
 // Rời nhóm
 router.delete('/leave/:groupId', leaveGroupController);
@@ -53,6 +64,9 @@ router.delete('/:groupId', deleteGroupController);
 
 // Đá thành viên khỏi nhóm
 router.delete('/members/:groupId/:targetUserId', kickMemberController);
+
+// Cập nhật vai trò thành viên nhóm
+router.post('/assignRole', assignMemberRoleController);
 
 // Gửi tin nhắn nhóm
 router.post('/messages/:groupId', sendGroupMessageController);

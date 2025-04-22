@@ -18,6 +18,48 @@ const upload = multer({
     }
   },
 });
+const { uploadProfileImages } = require('../middlewares/uploadMiddleware');
+
+// Controller: Lấy danh sách yêu cầu tham gia nhóm
+const getGroupJoinRequestsController = async (req, res, next) => {
+  try {
+    const { groupId } = req.query;
+    const adminUserId = req.user.id;
+    const { status = 'pending', limit = 50, lastEvaluatedKey } = req.query;
+
+    const result = await groupService.getGroupJoinRequests(groupId, adminUserId, status, parseInt(limit), lastEvaluatedKey ? JSON.parse(lastEvaluatedKey) : null);
+    return res.status(200).json({
+      success: true,
+      data: result,
+    });
+  } catch (error) {
+    logger.error('Lỗi trong getGroupJoinRequestsController:', error.message);
+    next(error);
+  }
+};
+
+const assignMemberRoleController = async (req, res) => {
+  try {
+    const { groupId, userId: targetUserId, role } = req.body;
+    const requestingUserId = req.user.id; // Lấy từ authMiddleware
+
+    logger.info('Gán vai trò cho thành viên nhóm', { groupId, targetUserId, role, requestingUserId });
+
+    const result = await groupService.assignMemberRole(groupId, targetUserId, role, requestingUserId);
+
+    res.status(200).json({
+      success: true,
+      message: 'Gán vai trò thành công!',
+      data: result,
+    });
+  } catch (error) {
+    logger.error('Lỗi khi gán vai trò cho thành viên nhóm', { error: error.message });
+    res.status(error.statusCode || 500).json({
+      success: false,
+      message: error.message || 'Lỗi server khi gán vai trò',
+    });
+  }
+};
 
 const createGroupController = async (req, res) => {
     try {
@@ -36,27 +78,27 @@ const createGroupController = async (req, res) => {
         message: error.message || 'Lỗi server khi tạo nhóm',
       });
     }
-  };
-  
-  const updateGroupInfoController = async (req, res) => {
-    try {
-      const { groupId } = req.params;
-      const userId = req.user.id;
-      const updateData = req.body;
-      const result = await groupService.updateGroupInfo(groupId, userId, updateData);
-      res.status(200).json({
-        success: true,
-        message: 'Cập nhật thông tin nhóm thành công!',
-        data: result,
-      });
-    } catch (error) {
-      logger.error('Lỗi khi cập nhật thông tin nhóm', { error: error.message });
-      res.status(error.statusCode || 500).json({
-        success: false,
-        message: error.message || 'Lỗi server khi cập nhật thông tin nhóm',
-      });
-    }
-  };
+};
+// Controller: Cập nhật thông tin nhóm 
+
+const updateGroupInfoController = async (req, res, next) => {
+  try {
+    const userId = req.user.id; // hoặc req.auth.id tùy vào middleware
+    const { groupId } = req.params;
+    const { name } = req.body;
+    const avatarFile = req.file; // Multer upload.single('avatar') sẽ gán file vào đây
+
+    const result = await groupService.updateGroupInfo(groupId, userId, {
+      name,
+      avatarFile,
+    });
+
+    return res.status(200).json(result);
+  } catch (error) {
+    console.error('❌ Lỗi trong updateGroupInfoController:', error.message);
+    return next(error); // chuyển lỗi cho middleware xử lý lỗi chung
+  }
+};
   
   const joinGroupController = async (req, res) => {
     try {
@@ -97,26 +139,40 @@ const createGroupController = async (req, res) => {
     }
   };
   
-  const approveJoinRequestController = async (req, res) => {
-    try {
-      const { groupId, userId } = req.params;
-      const { approve } = req.body;
-      const adminUserId = req.user.id;
-      const result = await groupService.approveJoinRequest(groupId, adminUserId, userId, approve);
-      res.status(200).json({
-        success: true,
-        message: result.message,
-        data: result,
-      });
-    } catch (error) {
-      logger.error('Lỗi khi phê duyệt yêu cầu tham gia nhóm', { error: error.message });
-      res.status(error.statusCode || 500).json({
-        success: false,
-        message: error.message || 'Lỗi server khi phê duyệt yêu cầu tham gia nhóm',
-      });
-    }
-  };
-  
+// Controller: Phê duyệt yêu cầu tham gia nhóm
+const approveJoinRequestController = async (req, res, next) => {
+  try {
+    const { groupId, userId, approve, reason } = req.body;
+    const adminUserId = req.user.id;
+
+    const result = await groupService.approveJoinRequest(groupId, adminUserId, userId, approve, reason);
+    return res.status(200).json({
+      success: true,
+      data: result,
+    });
+  } catch (error) {
+    logger.error('Lỗi trong approveJoinRequestController:', error.message);
+    next(error);
+  }
+};
+
+// Controller: Từ chối yêu cầu tham gia nhóm
+const rejectJoinRequestController = async (req, res, next) => {
+  try {
+    const { groupId, userId, reason } = req.body;
+    const adminUserId = req.user.id;
+
+    const result = await groupService.rejectJoinRequest(groupId, adminUserId, userId, reason);
+    return res.status(200).json({
+      success: true,
+      data: result,
+    });
+  } catch (error) {
+    logger.error('Lỗi trong rejectJoinRequestController:', error.message);
+    next(error);
+  }
+};
+
   const getGroupInfoController = async (req, res) => {
     try {
       const { groupId } = req.params;
@@ -230,8 +286,11 @@ const createGroupController = async (req, res) => {
       });
     }
   };
+
+// Controller: Chuyển tiếp tin nhắn nhóm đến người dùng
   const forwardGroupMessageToUserController = async (req, res) => {
     try {
+      console.log('Request body:', req.body);
       const { messageId, sourceGroupId, targetReceiverId } = req.body;
       const senderId = req.user.id;
       console.log('Sender ID:', senderId);
@@ -270,10 +329,11 @@ const createGroupController = async (req, res) => {
       return res.status(statusCode).json({ success: false, message: error.message });
     }
   };
-  
-  // Controller cho group-group
+
+// Controller: Chuyển tiếp tin nhắn nhóm đến nhóm khác
   const forwardGroupMessageController = async (req, res) => {
     try {
+      console.log('Request body:', req.body);
       const { messageId, sourceGroupId, targetGroupId } = req.body;
       const senderId = req.user.id;
       console.log('Sender ID:', senderId);
@@ -312,7 +372,8 @@ const createGroupController = async (req, res) => {
       return res.status(statusCode).json({ success: false, message: error.message });
     }
   };
-  
+
+// Controller: Thu hồi tin nhắn nhóm
   const recallGroupMessageController = async (req, res) => {
     try {
       const { groupId, messageId } = req.params;
@@ -391,6 +452,7 @@ const createGroupController = async (req, res) => {
     }
   };
   
+// Controller: Lấy danh sách thành viên nhóm
   const getGroupMembersController = async (req, res) => {
     try {
       const { groupId } = req.params;
@@ -409,7 +471,7 @@ const createGroupController = async (req, res) => {
       });
     }
   };
-  
+// Controller: Cập nhật cài đặt cộng đồng
   const updateCommunitySettingsController = async (req, res) => {
     try {
       const { groupId } = req.params;
@@ -448,11 +510,12 @@ const createGroupController = async (req, res) => {
       });
     }
   };
-  
-  const getUserGroupsController= async (req, res) => {
+
+// Controller: Lấy danh sách nhóm của người dùng
+  const getUserGroupsController = async (req, res) => {
     try {
-      const userId = req.user.id;
-      logger.info('Lấy danh sách nhóm của người dùng', { userId });
+    
+      const userId = req.user.id; // Chuyển thành chuỗi và loại bỏ khoảng trắng
       const groups = await groupService.getUserGroups(userId);
       res.status(200).json({
         success: true,
@@ -467,7 +530,7 @@ const createGroupController = async (req, res) => {
       });
     }
   };
-  
+// Controller: Lấy danh sách tin nhắn nhóm
   const getGroupMessagesController = async (req, res) => {
     try {
       const { groupId } = req.params;
@@ -489,6 +552,7 @@ const createGroupController = async (req, res) => {
   };
 
 module.exports = {
+    assignMemberRoleController,
     createGroupController,
     joinGroupController,
     leaveGroupController,
@@ -506,8 +570,11 @@ module.exports = {
     updateCommunitySettingsController,
     generateGroupLinkController,
     approveJoinRequestController,
+    rejectJoinRequestController,
+    getGroupJoinRequestsController,
     addMemberToGroupController,
     getGroupInfoController,
     deleteGroupMessageController,
     restoreGroupMessageController,
+    upload,
   };

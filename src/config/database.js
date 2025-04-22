@@ -330,6 +330,7 @@ const initializeDatabase = async () => {
     await createTableIfNotExists('Messages', messagesTableParams);
     await updateTableWithNewGSI('Messages', messagesTableParams);
 
+
     // 3. Tạo bảng Groups
     const groupsTableParams = {
       TableName: 'Groups',
@@ -358,7 +359,31 @@ const initializeDatabase = async () => {
     await createTableIfNotExists('Groups', groupsTableParams);
     await updateTableWithNewGSI('Groups', groupsTableParams);
 
-  
+   const groupJoinRequestsTable = {
+      TableName: 'GroupJoinRequests',
+      KeySchema: [
+        { AttributeName: 'groupId', KeyType: 'HASH' }, // Partition Key
+        { AttributeName: 'userId', KeyType: 'RANGE' }, // Sort Key
+      ],
+      AttributeDefinitions: [
+        { AttributeName: 'groupId', AttributeType: 'S' },
+        { AttributeName: 'userId', AttributeType: 'S' },
+        { AttributeName: 'status', AttributeType: 'S' },
+      ],
+      GlobalSecondaryIndexes: [
+        {
+          IndexName: 'GroupStatusIndex',
+          KeySchema: [
+            { AttributeName: 'groupId', KeyType: 'HASH' },
+            { AttributeName: 'status', KeyType: 'RANGE' },
+          ],
+          Projection: { ProjectionType: 'ALL' },
+        },
+      ],
+      BillingMode: 'PAY_PER_REQUEST',
+    };
+    await createTableIfNotExists('GroupJoinRequests', groupJoinRequestsTable);
+    await updateTableWithNewGSI('GroupJoinRequests', groupJoinRequestsTable);
     // 5. Tạo bảng GroupMembers
     const groupMembersTableParams = {
       TableName: 'GroupMembers',

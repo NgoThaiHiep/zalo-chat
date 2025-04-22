@@ -586,15 +586,15 @@ const forwardMessageUnified = async (senderId, messageId, sourceIsGroup, targetI
     throw new AppError('Tham số không hợp lệ', 400);
   }
 
-  // Lấy tin nhắn gốc
   let originalMessage = null;
+
   if (sourceIsGroup) {
-    const sourceGroup = await dynamoDB.get({ TableName: 'Groups', Key: { groupId: sourceId } }).promise();
-    if (!sourceGroup.Item || !sourceGroup.Item.members.includes(senderId)) {
+    const group = await dynamoDB.get({ TableName: 'Groups', Key: { groupId: sourceId } }).promise();
+    if (!group.Item || !group.Item.members.includes(senderId)) {
       throw new AppError('Bạn không phải thành viên nhóm gốc!', 403);
     }
 
-    const messageResult = await dynamoDB.query({
+    const msgRes = await dynamoDB.query({
       TableName: 'GroupMessages',
       IndexName: 'groupId-messageId-index',
       KeyConditionExpression: 'groupId = :groupId AND messageId = :messageId',
@@ -605,11 +605,7 @@ const forwardMessageUnified = async (senderId, messageId, sourceIsGroup, targetI
       Limit: 1,
     }).promise();
 
-    if (!messageResult.Items || messageResult.Items.length === 0) {
-      throw new AppError('Tin nhắn gốc không tồn tại!', 404);
-    }
-
-    originalMessage = messageResult.Items[0];
+    originalMessage = msgRes.Items?.[0];
   } else {
     const senderQuery = await dynamoDB.query({
       TableName: 'Messages',
@@ -637,17 +633,15 @@ const forwardMessageUnified = async (senderId, messageId, sourceIsGroup, targetI
         Limit: 1,
       }).promise();
 
-      if (receiverQuery.Items?.[0]) {
-        originalMessage = receiverQuery.Items[0];
-      }
-    }
-
-    if (!originalMessage) {
-      throw new AppError(`Không tìm thấy tin nhắn với messageId: ${messageId}`, 404);
+      originalMessage = receiverQuery.Items?.[0];
     }
   }
 
-  if (originalMessage.status === MESSAGE_STATUSES.RECALLED || originalMessage.status === MESSAGE_STATUSES.DELETE) {
+  if (!originalMessage) {
+    throw new AppError(`Không tìm thấy tin nhắn với messageId: ${messageId}`, 404);
+  }
+
+  if ([MESSAGE_STATUSES.RECALLED, MESSAGE_STATUSES.DELETE].includes(originalMessage.status)) {
     throw new AppError('Không thể chuyển tiếp tin nhắn đã thu hồi hoặc đã xóa!', 400);
   }
 
@@ -658,10 +652,11 @@ const forwardMessageUnified = async (senderId, messageId, sourceIsGroup, targetI
   // Xác định đích
   let targetReceiverId = null;
   let targetGroupId = null;
+
   if (targetIsGroup) {
     targetGroupId = targetId;
-    const targetGroup = await dynamoDB.get({ TableName: 'Groups', Key: { groupId: targetGroupId } }).promise();
-    if (!targetGroup.Item || !targetGroup.Item.members.includes(senderId)) {
+    const group = await dynamoDB.get({ TableName: 'Groups', Key: { groupId: targetGroupId } }).promise();
+    if (!group.Item || !group.Item.members.includes(senderId)) {
       throw new AppError('Nhóm đích không tồn tại hoặc bạn không phải thành viên!', 403);
     }
   } else {
@@ -675,13 +670,10 @@ const forwardMessageUnified = async (senderId, messageId, sourceIsGroup, targetI
   let newS3Key = null;
   const newMessageId = uuidv4();
 
-  if (newMediaUrl && newMediaUrl.startsWith('s3://')) {
+  if (newMediaUrl?.startsWith('s3://')) {
     const originalKey = newMediaUrl.split('/').slice(3).join('/');
     const originalBucket = extractBucketFromMediaUrl(newMediaUrl);
-
-    if (!originalBucket) {
-      throw new AppError('Không thể xác định bucket từ mediaUrl!', 500);
-    }
+    if (!originalBucket) throw new AppError('Không thể xác định bucket từ mediaUrl!', 500);
 
     ({ mediaUrl: newMediaUrl, s3Key: newS3Key } = await copyS3File(
       originalBucket,
@@ -719,7 +711,6 @@ const forwardMessageUnified = async (senderId, messageId, sourceIsGroup, targetI
       process.env.BUCKET_NAME_GroupChat_Send
     );
 
-    // Update lastMessage cho từng thành viên trong nhóm
     const group = await dynamoDB.get({ TableName: 'Groups', Key: { groupId: targetGroupId } }).promise();
     const members = group.Item?.members || [];
 
@@ -746,14 +737,11 @@ const forwardMessageUnified = async (senderId, messageId, sourceIsGroup, targetI
       )
     );
   } else {
-    // Đích là người dùng
     result = await createMessage(senderId, targetReceiverId, messageData);
-    // createMessage đã tự gọi updateConversations
   }
 
   return result;
 };
-
 // Hàm cho 1-1
 const forwardMessage = async (senderId, messageId, targetReceiverId) => {
   return await forwardMessageUnified(senderId, messageId, false, false, null, targetReceiverId);
@@ -764,71 +752,6 @@ const forwardMessageToGroup = async (senderId, messageId, targetGroupId) => {
   return await forwardMessageUnified(senderId, messageId, false, true, null, targetGroupId);
 };
 
-const updateLastMessageForGroup = async (groupId, message = null) => {
-  try {
-    // Lấy thông tin nhóm để biết danh sách thành viên
-    const groupResult = await dynamoDB.get({ TableName: 'Groups', Key: { groupId } }).promise();
-    if (!groupResult.Item) {
-      logger.warn('Nhóm không tồn tại khi cập nhật lastMessage', { groupId });
-      return;
-    }
-
-    const group = groupResult.Item;
-    const members = group.members;
-
-    // Nếu không có message được cung cấp, lấy tin nhắn cuối cùng hợp lệ từ GroupMessages
-    let lastMessage = message;
-    if (!lastMessage) {
-      const messagesResult = await dynamoDB.query({
-        TableName: 'GroupMessages',
-        IndexName: 'GroupMessagesIndex',
-        KeyConditionExpression: 'groupId = :groupId',
-        ExpressionAttributeValues: { ':groupId': groupId },
-        ScanIndexForward: false, // Lấy tin nhắn mới nhất
-        // Limit: 10, // Lấy tối đa 10 tin nhắn để tìm tin nhắn hợp lệ
-      }).promise();
-
-      // Tìm tin nhắn hợp lệ (không bị xóa hoặc thu hồi)
-      lastMessage = (messagesResult.Items || []).find(
-        msg => msg.status !== MESSAGE_STATUSES.DELETE && msg.status !== MESSAGE_STATUSES.RECALLED
-      ) || null;
-    }
-
-    // Chuẩn bị dữ liệu lastMessage
-    const lastMessageData = lastMessage
-      ? {
-          messageId: lastMessage.messageId,
-          content: lastMessage.content || GET_DEFAULT_CONTENT_BY_TYPE[lastMessage.type],
-          createdAt: lastMessage.timestamp, // Đồng bộ với getConversationSummary
-          senderId: lastMessage.senderId,
-          type: lastMessage.type,
-          isRecalled: lastMessage.status === MESSAGE_STATUSES.RECALLED, // Thêm trường isRecalled
-        }
-      : null;
-
-    // Cập nhật Conversations cho từng thành viên
-    const updatePromises = members.map(async (memberId) => {
-      try {
-        await dynamoDB.update({
-          TableName: 'Conversations',
-          Key: { userId: memberId, targetUserId: groupId },
-          UpdateExpression: 'SET lastMessage = :lastMessage, updatedAt = :updatedAt',
-          ExpressionAttributeValues: {
-            ':lastMessage': lastMessageData,
-            ':updatedAt': new Date().toISOString(),
-          },
-        }).promise();
-      } catch (error) {
-        logger.error('Lỗi khi cập nhật lastMessage cho thành viên', { groupId, memberId, error: error.message });
-      }
-    });
-
-    await Promise.all(updatePromises);
-    logger.info('Cập nhật lastMessage thành công cho nhóm', { groupId, lastMessage: lastMessageData });
-  } catch (error) {
-    logger.error('Lỗi khi cập nhật lastMessage cho nhóm', { groupId, error: error.message });
-  }
-};
 // Hàm ghim tin nhắn
 const pinMessage = async (userId, messageId) => {
   logger.info('Pinning message:', { messageId, userId });
