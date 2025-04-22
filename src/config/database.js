@@ -493,6 +493,17 @@ const initializeDatabase = async () => {
         { AttributeName: 'userId', KeyType: 'HASH' },
         { AttributeName: 'targetUserId', KeyType: 'RANGE' },
       ],
+      GlobalSecondaryIndexes: [
+        {
+          IndexName: 'targetUserId-index',
+          KeySchema: [
+            { AttributeName: 'targetUserId', KeyType: 'HASH' }, // Partition key của GSI
+          ],
+          Projection: {
+            ProjectionType: 'ALL', // Bao gồm tất cả các thuộc tính trong GSI
+          },
+        },
+      ],
       BillingMode: 'PAY_PER_REQUEST',
     };
     await createTableIfNotExists('Conversations', conversationsTableParams);

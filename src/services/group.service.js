@@ -9,15 +9,19 @@ const { copyS3File } = require('../utils/messageUtils');
 const { createConversation } = require('./conversation.service');
 const { MESSAGE_STATUSES } = require('../config/constants');
 const { getOwnProfile } = require('../services/auth.service');
-const { forwardMessageUnified } = require('./message.service');
+const { forwardMessageUnified} = require('./message.service');
+console.log('Imported forwardMessageUnified:', forwardMessageUnified);
 
 const TABLE_NAME = 'GroupMessages';
 const GROUP_TABLE = 'Groups';
-const USER_DELETED_TABLE = 'UserDeletedMessages';
+
 const USER_RECALLS_TABLE = 'UserRecalls';
 const bucketName = process.env.BUCKET_NAME_GroupChat_Send;
 
-const isValidUUID = (id) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+const isValidUUID = (uuid) => {
+  if (typeof uuid !== 'string') return false;
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(uuid);
+};
 
 const retryQuery = async (params, maxRetries = 3, delay = 1000) => {
   for (let i = 0; i < maxRetries; i++) {
@@ -248,66 +252,6 @@ const removeMemberCore = async (groupId, userId, group, isKicked = false, adminU
 };
 
 // Hàm phụ trợ: Quản lý xóa/thu hồi tin nhắn
-const manageGroupMessage = async (groupId, senderId, messageId, action, scope = 'everyone') => {
-  if (!groupId || !isValidUUID(groupId) || !senderId || !isValidUUID(senderId) || !messageId || !isValidUUID(messageId)) {
-    throw new AppError('Tham số không hợp lệ', 400);
-  }
-  if (!['delete', 'recall'].includes(action) || !['everyone', 'self'].includes(scope)) {
-    throw new AppError('Hành động hoặc phạm vi không hợp lệ!', 400);
-  }
-
-  const result = await retryQuery({
-    TableName: TABLE_NAME,
-    IndexName: 'groupId-messageId-index',
-    KeyConditionExpression: 'groupId = :gId AND messageId = :mId',
-    ExpressionAttributeValues: { ':gId': groupId, ':mId': messageId },
-  });
-
-  if (!result.Items || result.Items.length === 0) {
-    throw new AppError('Tin nhắn không tồn tại!', 404);
-  }
-
-  const message = result.Items[0];
-  if (message.senderId !== senderId) {
-    throw new AppError(`Bạn không có quyền ${action === 'delete' ? 'xóa' : 'thu hồi'} tin nhắn này!`, 403);
-  }
-
-  if (action === 'recall') {
-    const messageTimestamp = new Date(message.timestamp).getTime();
-    const currentTimestamp = new Date().getTime();
-    const timeDiffHours = (currentTimestamp - messageTimestamp) / (1000 * 60 * 60);
-    if (timeDiffHours > 24) {
-      throw new AppError('Không thể thu hồi tin nhắn sau 24 giờ!', 400);
-    }
-  }
-
-  if (scope === 'everyone') {
-    if (action === 'delete') {
-      await dynamoDB.delete({ TableName: TABLE_NAME, Key: { groupId, timestamp: message.timestamp } }).promise();
-      if (message.mediaUrl) {
-        const key = message.mediaUrl.split('/').slice(3).join('/');
-        await s3.deleteObject({ Bucket: bucketName, Key: key }).promise().catch(err => {
-          logger.error('Lỗi khi xóa object S3:', { key, error: err.message });
-        });
-      }
-    } else {
-      await dynamoDB.update({
-        TableName: TABLE_NAME,
-        Key: { groupId, timestamp: message.timestamp },
-        UpdateExpression: 'SET isRecalled = :r',
-        ExpressionAttributeValues: { ':r': true },
-      }).promise();
-    }
-    io().to(groupId).emit(`groupMessage${action === 'delete' ? 'Deleted' : 'Recalled'}`, { groupId, messageId, scope });
-    return { success: true, message: `Tin nhắn đã được ${action === 'delete' ? 'xóa' : 'thu hồi'} với mọi người!` };
-  } else {
-    const table = action === 'delete' ? USER_DELETED_TABLE : USER_RECALLS_TABLE;
-    const data = { userId: senderId, messageId, groupId, timestamp: new Date().toISOString() };
-    await dynamoDB.put({ TableName: table, Item: data }).promise();
-    io().to(senderId).emit(`groupMessage${action === 'delete' ? 'Deleted' : 'Recalled'}`, { groupId, messageId, scope });
-    return { success: true, message: `Tin nhắn đã được ${action === 'delete' ? 'xóa' : 'thu hồi'} chỉ với bạn!` };
-  }
-};
 
 const createGroup = async (name, createdBy, members = [], initialRoles = {}) => {
   if (!name || typeof name !== 'string' || name.trim().length < 1 || name.trim().length > 50) {
@@ -1017,6 +961,7 @@ const updateLastMessageForGroup = async (groupId, message = null) => {
 
 // Hàm cho group-1
 const forwardGroupMessageToUser = async (senderId, messageId, sourceGroupId, targetReceiverId) => {
+  const { forwardMessageUnified } = require('./message.service');
   return await forwardMessageUnified(senderId, messageId, true, false, sourceGroupId, targetReceiverId);
 };
 
@@ -1025,67 +970,169 @@ const forwardGroupMessage = async (senderId, messageId, sourceGroupId, targetGro
   return await forwardMessageUnified(senderId, messageId, true, true, sourceGroupId, targetGroupId);
 };
 
-const recallGroupMessage = async (groupId, senderId, messageId, recallType = 'everyone') => {
-  const result = await manageGroupMessage(groupId, senderId, messageId, 'recall', recallType);
+const recallGroupMessage = async (groupId, senderId, messageId) => {
+  // Thực hiện hành động recall
+  const result = await manageGroupMessage(groupId, senderId, messageId, 'recall');
 
-  // Kiểm tra xem tin nhắn bị thu hồi có phải là lastMessage không
-  const groupResult = await dynamoDB.get({ TableName: 'Groups', Key: { groupId } }).promise();
-  if (!groupResult.Item) {
-    throw new AppError('Nhóm không tồn tại!', 404);
-  }
-  
-  const members = groupResult.Item.members;
-  let shouldUpdateLastMessage = false;
-
-  // Kiểm tra lastMessage của từng thành viên
-  for (const memberId of members) {
-    const conversation = await dynamoDB.get({
+  // Chỉ kiểm tra và cập nhật lastMessage nếu recall thành công và scope là 'everyone'
+  if (result.success && recallType === 'everyone') {
+    // Truy vấn tất cả Conversations của nhóm trong một lần
+    const conversations = await dynamoDB.query({
       TableName: 'Conversations',
-      Key: { userId: memberId, targetUserId: groupId },
+      IndexName: 'targetUserId-index', // Giả sử có index này
+      KeyConditionExpression: 'targetUserId = :groupId',
+      ExpressionAttributeValues: { ':groupId': groupId },
     }).promise();
-    
-    if (conversation.Item?.lastMessage?.messageId === messageId) {
-      shouldUpdateLastMessage = true;
-      break;
-    }
-  }
 
-  if (shouldUpdateLastMessage) {
-    await updateLastMessageForGroup(groupId);
+    // Kiểm tra xem tin nhắn có phải là lastMessage của bất kỳ thành viên nào không
+    const shouldUpdateLastMessage = conversations.Items?.some(
+      conv => conv.lastMessage?.messageId === messageId
+    );
+
+    if (shouldUpdateLastMessage) {
+      await updateLastMessageForGroup(groupId);
+    }
   }
 
   return result;
 };
 
-const deleteGroupMessage = async (groupId, senderId, messageId, deleteType = 'everyone') => {
-  const result = await manageGroupMessage(groupId, senderId, messageId, 'delete', deleteType);
+const deleteGroupMessage = async (groupId, senderId, messageId) => {
+  // Thực hiện hành động delete
+  const result = await manageGroupMessage(groupId, senderId, messageId, 'delete');
 
-  // Kiểm tra xem tin nhắn bị xóa có phải là lastMessage không
+  // Chỉ kiểm tra và cập nhật lastMessage nếu delete thành công và scope là 'everyone'
+  if (result.success && deleteType === 'everyone') {
+    // Truy vấn tất cả Conversations của nhóm trong một lần
+    const conversations = await dynamoDB.query({
+      TableName: 'Conversations',
+      IndexName: 'targetUserId-index', // Giả sử có index này
+      KeyConditionExpression: 'targetUserId = :groupId',
+      ExpressionAttributeValues: { ':groupId': groupId },
+    }).promise();
+
+    // Kiểm tra xem tin nhắn có phải là lastMessage của bất kỳ thành viên nào không
+    const shouldUpdateLastMessage = conversations.Items?.some(
+      conv => conv.lastMessage?.messageId === messageId
+    );
+
+    if (shouldUpdateLastMessage) {
+      await updateLastMessageForGroup(groupId);
+    }
+  }
+
+  return result;
+};
+
+const manageGroupMessage = async (groupId, senderId, messageId, action) => {
+  // Kiểm tra tham số đầu vào
+  if (!groupId || !isValidUUID(groupId) || !senderId || !isValidUUID(senderId) || !messageId || !isValidUUID(messageId)) {
+    throw new AppError('Tham số không hợp lệ', 400);
+  }
+  if (!['delete', 'recall'].includes(action) || !['everyone', 'self'].includes(scope)) {
+    throw new AppError('Hành động hoặc phạm vi không hợp lệ!', 400);
+  }
+
+  // Lấy thông tin nhóm để kiểm tra vai trò và thành viên
   const groupResult = await dynamoDB.get({ TableName: 'Groups', Key: { groupId } }).promise();
   if (!groupResult.Item) {
     throw new AppError('Nhóm không tồn tại!', 404);
   }
-  
-  const members = groupResult.Item.members;
-  let shouldUpdateLastMessage = false;
+  const group = groupResult.Item;
 
-  for (const memberId of members) {
-    const conversation = await dynamoDB.get({
-      TableName: 'Conversations',
-      Key: { userId: memberId, targetUserId: groupId },
-    }).promise();
-    
-    if (conversation.Item?.lastMessage?.messageId === messageId) {
-      shouldUpdateLastMessage = true;
-      break;
+  // Kiểm tra xem người dùng có phải là thành viên của nhóm không
+  if (!group.members.includes(senderId)) {
+    throw new AppError('Bạn không phải là thành viên của nhóm này!', 403);
+  }
+
+  const userRole = group.roles[senderId] || 'member';
+
+  // Lấy thông tin tin nhắn
+  const result = await retryQuery({
+    TableName: TABLE_NAME,
+    IndexName: 'groupId-messageId-index',
+    KeyConditionExpression: 'groupId = :gId AND messageId = :mId',
+    ExpressionAttributeValues: { ':gId': groupId, ':mId': messageId },
+  });
+
+  if (!result.Items || result.Items.length === 0) {
+    throw new AppError('Tin nhắn không tồn tại!', 404);
+  }
+
+  const message = result.Items[0];
+
+ 
+  if (action === 'recall' && [MESSAGE_STATUSES.RECALLED, MESSAGE_STATUSES.ADMINDRECALLED].includes(message.status)) {
+    throw new AppError('Tin nhắn đã được thu hồi trước đó!', 400);
+  }
+
+  // Kiểm tra thời gian thu hồi (nếu là hành động recall)
+  if (action === 'recall') {
+    const messageTimestamp = new Date(message.timestamp).getTime();
+    const currentTimestamp = new Date().getTime();
+    const timeDiffHours = (currentTimestamp - messageTimestamp) / (1000 * 60 * 60);
+    if (timeDiffHours > 24) {
+      throw new AppError('Không thể thu hồi tin nhắn sau 24 giờ!', 400);
     }
   }
 
-  if (shouldUpdateLastMessage) {
-    await updateLastMessageForGroup(groupId);
+  // Xử lý hành động DELETE
+  if (action === 'delete') {
+    
+      // Bất kỳ ai cũng có thể xóa tin nhắn cho chính mình
+      const deletedBy = message.deletedBy || []; // Lấy danh sách deletedBy hiện tại, hoặc mảng rỗng nếu chưa có
+      const deletedAt = message.deletedAt || {}; // Lấy deletedAt hiện tại, hoặc object rỗng nếu chưa có
+
+      // Kiểm tra xem người dùng đã xóa tin nhắn chưa
+      if (deletedBy.includes(senderId)) {
+        throw new AppError('Bạn đã xóa tin nhắn này trước đó!', 400);
+      }
+
+      // Cập nhật deletedBy và deletedAt
+      deletedBy.push(senderId); // Thêm senderId vào deletedBy
+      deletedAt[senderId] = new Date().toISOString(); // Thêm thời gian xóa cho senderId
+
+      // Cập nhật bản ghi tin nhắn
+      await dynamoDB.update({
+        TableName: TABLE_NAME,
+        Key: { groupId, timestamp: message.timestamp },
+        UpdateExpression: 'SET deletedBy = :deletedBy, deletedAt = :deletedAt',
+        ExpressionAttributeValues: {
+          ':deletedBy': deletedBy,
+          ':deletedAt': deletedAt,
+        },
+      }).promise();
+
+      io().to(senderId).emit('groupMessageDeleted', { groupId, messageId, scope });
+      return { success: true, message: 'Tin nhắn đã được xóa chỉ với bạn!' };
+    
   }
 
-  return result;
+  // Xử lý hành động RECALL
+  if (action === 'recall') {
+      // Thu hồi với phạm vi 'everyone'
+      let recallStatus;
+      if (message.senderId === senderId || userRole === 'admin') {
+        // Người gửi hoặc admin thu hồi tin nhắn
+        recallStatus = userRole === 'admin' && message.senderId !== senderId ? MESSAGE_STATUSES.ADMINDRECALLED : MESSAGE_STATUSES.RECALLED;
+      } else {
+        throw new AppError('Bạn không có quyền thu hồi tin nhắn này cho mọi người!', 403);
+      }
+
+      await dynamoDB.update({
+        TableName: TABLE_NAME,
+        Key: { groupId, timestamp: message.timestamp },
+        UpdateExpression: 'SET #status = :r',
+        ExpressionAttributeNames: { '#status': 'status' },
+        ExpressionAttributeValues: { ':r': recallStatus },
+      }).promise();
+
+      io().to(groupId).emit('groupMessageRecalled', { groupId, messageId, scope, status: recallStatus });
+      return { success: true, message: `Tin nhắn đã được thu hồi với mọi người! Trạng thái: ${recallStatus}` };
+  }
+
+  // Nếu không khớp với hành động nào
+  throw new AppError('Hành động không được hỗ trợ!', 400);
 };
 
 const restoreGroupMessage = async (groupId, senderId, messageId) => {
@@ -1360,7 +1407,10 @@ const generateGroupLink = async (groupId, userId) => {
 };
 
 const getUserGroups = async (userId) => {
+  console.log('✅ userId:', userId);
+  console.log('✅ isValidUUID:', isValidUUID(userId));
   if (!userId || !isValidUUID(userId)) {
+    console.log('❗ Lỗi kiểm tra userId:', userId);
     throw new AppError('userId không hợp lệ', 400);
   }
 
@@ -1378,11 +1428,29 @@ const getUserGroups = async (userId) => {
   const groupIds = groupMemberResult.Items.map(item => item.groupId);
   const groupPromises = groupIds.map(async groupId => {
     const groupResult = await dynamoDB.get({ TableName: 'Groups', Key: { groupId } }).promise();
-    return groupResult.Item;
+
+    if (!groupResult.Item) return null;
+
+    const group = groupResult.Item;
+    const userRole = group.roles?.[userId] || 'member';
+    const memberCount = Array.isArray(group.members) ? group.members.length : 0;
+
+    // Loại bỏ trường không cần thiết như quyền admin, quyền system...
+    const { password, secretKey, ...groupSafeData } = group;
+
+    return {
+      ...groupSafeData,
+      groupId: group.groupId,
+      name: group.name,
+      avatar: group.avatar || null,
+      createdAt: group.createdAt,
+      userRole,
+      memberCount,
+    };
   });
 
   const groups = await Promise.all(groupPromises);
-  return groups.filter(group => group);
+  return groups.filter(group => group); // Loại bỏ null nếu có nhóm không tồn tại
 };
 
 const getGroupMessages = async (groupId, userId, limit = 50, lastEvaluatedKey = null) => {

@@ -9,6 +9,7 @@ require('dotenv').config();
 const {normalizePhoneNumber} = require('../utils/utils')
 const logger = require('../config/logger');
 const {redisClient} = require('../config/redis'); // Import Redis client
+
 // Kiểm tra người dùng online/offline
 const isUserOnline = async (userId) => {
   try {

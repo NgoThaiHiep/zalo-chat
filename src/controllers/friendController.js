@@ -3,10 +3,10 @@ const FriendService = require('../services/friend.service');
 const {getUserByPhoneNumber}=  require('../services/otp.services')
 
 const sendFriendRequestController =  async (req, res) => {
-        const { receiverId } = req.body;
+  const { receiverId, message } = req.body;
         const senderId = req.user.id;
         try {
-          const result = await FriendService.sendFriendRequest(senderId, receiverId);
+          const result = await FriendService.sendFriendRequest(senderId, receiverId,message);
           res.status(200).json(result);
         } catch (error) {
        

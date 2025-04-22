@@ -318,7 +318,7 @@ const createGroupController = async (req, res) => {
       const { groupId, messageId } = req.params;
       const { recallType } = req.body;
       const senderId = req.user.id;
-      const result = await groupService.recallGroupMessage(groupId, senderId, messageId, recallType);
+      const result = await groupService.recallGroupMessage(groupId, senderId, messageId);
       res.status(200).json({
         success: true,
         message: result.message,
@@ -357,7 +357,7 @@ const createGroupController = async (req, res) => {
       const { groupId, messageId } = req.params;
       const { deleteType } = req.body;
       const senderId = req.user.id;
-      const result = await groupService.deleteGroupMessage(groupId, senderId, messageId, deleteType);
+      const result = await groupService.deleteGroupMessage(groupId, senderId, messageId);
       res.status(200).json({
         success: true,
         message: result.message,
@@ -452,6 +452,7 @@ const createGroupController = async (req, res) => {
   const getUserGroupsController= async (req, res) => {
     try {
       const userId = req.user.id;
+      logger.info('Lấy danh sách nhóm của người dùng', { userId });
       const groups = await groupService.getUserGroups(userId);
       res.status(200).json({
         success: true,

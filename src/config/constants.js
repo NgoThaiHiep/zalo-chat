@@ -17,6 +17,7 @@ const DAYS_TO_SECONDS = {
     RECALLED: 'recalled',
     RESTRICTED: 'restricted',
     DELETE: 'delete',
+    ADMINDRECALLED: 'admin-recalled',
   };
   
   const MIME_TYPE_MAP = {

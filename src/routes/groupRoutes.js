@@ -58,7 +58,7 @@ router.delete('/members/:groupId/:targetUserId', kickMemberController);
 router.post('/messages/:groupId', sendGroupMessageController);
 
 // Chuyển tiếp tin nhắn nhóm
-router.post('/forward-to-group', authMiddleware, forwardGroupMessageToUserController); // Chuyển tiếp tin nhắn từ nhóm đến người dùng
+router.post('/forward-to-user', authMiddleware, forwardGroupMessageToUserController); // Chuyển tiếp tin nhắn từ nhóm đến người dùng
 router.post('/forward-to-group', authMiddleware, forwardGroupMessageController); // Chuyển tiếp tin nhắn đến nhóm
 
 // Thu hồi tin nhắn nhóm

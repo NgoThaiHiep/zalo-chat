@@ -569,8 +569,8 @@ const getMessagesBetweenUsers = async (user1, user2) => {
 };
 
 
-const forwardMessageUnified = async (senderId, messageId, sourceIsGroup, targetIsGroup, targetId) => {
-  logger.info(`Forwarding message`, { senderId, messageId, sourceIsGroup, targetIsGroup, targetId });
+const forwardMessageUnified = async (senderId, messageId, sourceIsGroup, targetIsGroup, sourceId, targetId) => {
+  logger.info(`Forwarding message`, { senderId, messageId, sourceIsGroup, targetIsGroup, sourceId, targetId });
 
   // 1. Kiểm tra tham số đầu vào
   if (!senderId || !isValidUUID(senderId) || !messageId || !isValidUUID(messageId) || !targetId || !isValidUUID(targetId)) {
@@ -581,16 +581,26 @@ const forwardMessageUnified = async (senderId, messageId, sourceIsGroup, targetI
   let originalMessage = null;
   if (sourceIsGroup) {
     // Nguồn là nhóm: Lấy từ GroupMessages
-    const sourceGroup = await dynamoDB.get({ TableName: 'Groups', Key: { groupId: targetId } }).promise();
+    const sourceGroup = await dynamoDB.get({ TableName: 'Groups', Key: { groupId: sourceId } }).promise();
     if (!sourceGroup.Item || !sourceGroup.Item.members.includes(senderId)) {
       throw new AppError('Bạn không phải thành viên nhóm gốc!', 403);
     }
 
-    const messageResult = await dynamoDB.get({ TableName: 'GroupMessages', Key: { groupId: targetId, messageId } }).promise();
-    if (!messageResult.Item) {
+    const messageResult = await dynamoDB.query({
+      TableName: 'GroupMessages',
+      IndexName: 'groupId-messageId-index',
+      KeyConditionExpression: 'groupId = :groupId AND messageId = :messageId',
+      ExpressionAttributeValues: {
+        ':groupId': sourceId,
+        ':messageId': messageId,
+      },
+      Limit: 1,
+    }).promise();
+
+    if (!messageResult.Items || messageResult.Items.length === 0) {
       throw new AppError('Tin nhắn gốc không tồn tại!', 404);
     }
-    originalMessage = messageResult.Item;
+    originalMessage = messageResult.Items[0];
   } else {
     // Nguồn là hội thoại cá nhân: Tìm trong Messages
     const senderQuery = await dynamoDB.query({
@@ -676,7 +686,7 @@ const forwardMessageUnified = async (senderId, messageId, sourceIsGroup, targetI
     mimeType: originalMessage.mimeType,
     metadata: {
       ...originalMessage.metadata,
-      forwardedFrom: sourceIsGroup ? { groupId: targetId, messageId } : messageId,
+      forwardedFrom: sourceIsGroup ? { groupId: sourceId, messageId } : messageId,
     },
     isAnonymous: false,
     isSecret: false,
@@ -765,12 +775,12 @@ const forwardMessageUnified = async (senderId, messageId, sourceIsGroup, targetI
 
 // Hàm cho 1-1
 const forwardMessage = async (senderId, messageId, targetReceiverId) => {
-  return await forwardMessageUnified(senderId, messageId, false, false, targetReceiverId);
+  return await forwardMessageUnified(senderId, messageId, false, false, null, targetReceiverId);
 };
 
 // Hàm cho 1-group
 const forwardMessageToGroup = async (senderId, messageId, targetGroupId) => {
-  return await forwardMessageUnified(senderId, messageId, false, true, targetGroupId);
+  return await forwardMessageUnified(senderId, messageId, false, true, null, targetGroupId);
 };
 
 const updateLastMessageForGroup = async (groupId, message = null) => {
@@ -1331,7 +1341,7 @@ module.exports = {
   getMessagesBetweenUsers,
   forwardMessage,
   forwardMessageToGroup,
-  forwardMessage,
+  forwardMessageUnified,
   recallMessage,
   pinMessage,
   unpinMessage,
@@ -1343,5 +1353,6 @@ module.exports = {
   updateMessageStatusOnConnect,
   canSendMessageToUser,
   checkBlockStatus,
-  forwardMessageUnified
+ 
+  
 };

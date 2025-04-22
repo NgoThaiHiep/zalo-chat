@@ -2,95 +2,145 @@ const { dynamoDB } = require('../config/aws.config');
 const conversation = require('./conversation.service');
 const {redisClient} = require('../config/redis')
 const MessageService = require('./message.service');
-const {checkBlockStatus} = require('./message.service')
-    const sendFriendRequest =  async (senderId, receiverId) => {
-    if (senderId === receiverId) {
-        throw new Error('Bạn không thể gửi yêu cầu kết bạn cho chính mình!');
-    }
-    // 0. Kiểm tra trạng thái block
-   await checkBlockStatus(senderId, receiverId)
-    // 1. Kiểm tra xem đã là bạn bè chưa
-    const friendCheckParams = {
-        TableName: 'Friends',
-        Key: { userId: senderId, friendId: receiverId },
-    };
-    const friendCheckResult = await dynamoDB.get(friendCheckParams).promise();
-    if (friendCheckResult.Item) {
-        throw new Error('Bạn đã là bạn bè với người này');
-    }
+const { getOwnProfile} = require('./auth.service');
+// Hàm kiểm tra chặn
+const checkBlockStatus = async (senderId, receiverId) => {
+  const [isSenderBlocked, isReceiverBlocked] = await Promise.all([
+    dynamoDB.get({
+      TableName: 'BlockedUsers',
+      Key: { userId: receiverId, blockedUserId: senderId },
+    }).promise(),
+    dynamoDB.get({
+      TableName: 'BlockedUsers',
+      Key: { userId: senderId, blockedUserId: receiverId },
+    }).promise(),
+  ]);
 
-    // 2. Kiểm tra xem đã có yêu cầu kết bạn nào từ senderId đến receiverId chưa (bất kỳ trạng thái nào)
-    const checkParams = {
-        TableName: 'FriendRequests',
-        KeyConditionExpression: 'userId = :receiverId',
-        FilterExpression: 'senderId = :senderId',
-        ExpressionAttributeValues: {
-        ':receiverId': receiverId,
-        ':senderId': senderId,
-        },
-    };
-    const checkResult = await dynamoDB.query(checkParams).promise();
-    if (checkResult.Items.length > 0) {
-        const existingRequest = checkResult.Items[0];
-        if (existingRequest.status === 'pending') {
-        throw new Error('Yêu cầu kết bạn đang chờ xử lý');
-        } else if (existingRequest.status === 'accepted') {
-        throw new Error('Yêu cầu đã được chấp nhận trước đó');
-        } else {
-        throw new Error('Yêu cầu kết bạn đã tồn tại');
-        }
-    }
+  if (isSenderBlocked.Item) throw new AppError('Bạn đã bị người này chặn', 403);
+  if (isReceiverBlocked.Item) throw new AppError('Bạn đã chặn người này', 403);
+};
 
-    // 3. Tạo yêu cầu mới nếu không có vấn đề gì
-    const requestId = `${senderId}#${Date.now()}`;
-    const params = {
-        TableName: 'FriendRequests',
-        Item: {
-        userId: receiverId,
-        requestId,
-        senderId,
-        status: 'pending',
-        createdAt: new Date().toISOString(),
-        },
-    };
-    await dynamoDB.put(params).promise();
-    return { message: 'Đã gửi yêu cầu kết bạn', requestId };
+
+const sendFriendRequest = async (senderId, receiverId, message) => {
+  if (senderId === receiverId) {
+    throw new Error('Bạn không thể gửi yêu cầu kết bạn cho chính mình!');
+  }
+
+  if (!message || message.trim() === '') {
+    throw new Error('Lời nhắn không được để trống!');
+  }
+
+  // 0. Kiểm tra trạng thái block
+  await checkBlockStatus(senderId, receiverId);
+
+  // 1. Kiểm tra xem đã là bạn bè chưa
+  const friendCheckParams = {
+    TableName: 'Friends',
+    Key: { userId: senderId, friendId: receiverId },
+  };
+  const friendCheckResult = await dynamoDB.get(friendCheckParams).promise();
+  if (friendCheckResult.Item) {
+    throw new Error('Bạn đã là bạn bè với người này');
+  }
+
+  // 2. Kiểm tra xem đã có yêu cầu kết bạn nào từ senderId đến receiverId chưa
+  const checkParams = {
+    TableName: 'FriendRequests',
+    KeyConditionExpression: 'userId = :receiverId',
+    FilterExpression: 'senderId = :senderId',
+    ExpressionAttributeValues: {
+      ':receiverId': receiverId,
+      ':senderId': senderId,
+    },
+  };
+  const checkResult = await dynamoDB.query(checkParams).promise();
+  if (checkResult.Items.length > 0) {
+    const existingRequest = checkResult.Items[0];
+    if (existingRequest.status === 'pending') {
+      throw new Error('Yêu cầu kết bạn đang chờ xử lý');
+    } else if (existingRequest.status === 'accepted') {
+      throw new Error('Yêu cầu đã được chấp nhận trước đó');
+    } else {
+      throw new Error('Yêu cầu kết bạn đã tồn tại');
     }
+  }
+
+  // 3. Tạo yêu cầu mới
+  const requestId = `${senderId}#${Date.now()}`;
+  const params = {
+    TableName: 'FriendRequests',
+    Item: {
+      userId: receiverId,
+      requestId,
+      senderId,
+      status: 'pending',
+      message: message.trim(),
+      createdAt: new Date().toISOString(),
+    },
+  };
+  await dynamoDB.put(params).promise();
+  return { message: 'Đã gửi yêu cầu kết bạn', requestId };
+};
 
     // Lấy danh sách yêu cầu kết bạn đã nhận (pending, gửi đến userId)
-    const  getReceivedFriendRequests = async (userId) => {
-        const params = {
-        TableName: 'FriendRequests',
-        KeyConditionExpression: 'userId = :userId',
-        FilterExpression: '#status = :status',
-        ExpressionAttributeNames: { '#status': 'status' },
-        ExpressionAttributeValues: {
-            ':userId': userId,
-            ':status': 'pending',
-        },
-        };
+const getReceivedFriendRequests = async (userId) => {
+  const params = {
+    TableName: 'FriendRequests',
+    KeyConditionExpression: 'userId = :userId',
+    FilterExpression: '#status = :status',
+    ExpressionAttributeNames: { '#status': 'status' },
+    ExpressionAttributeValues: {
+      ':userId': userId,
+      ':status': 'pending',
+    },
+  };
 
-        const result = await dynamoDB.query(params).promise();
-        return result.Items;
-    }
+  const result = await dynamoDB.query(params).promise();
 
-    // Lấy danh sách yêu cầu kết bạn đã gửi (pending, từ userId gửi đi)
-    const getSentFriendRequests = async (userId)  => {
-        const params = {
-        TableName: 'FriendRequests',
-        IndexName: 'SenderIdIndex', // Cần tạo GSI nếu chưa có
-        KeyConditionExpression: 'senderId = :senderId',
-        FilterExpression: '#status = :status',
-        ExpressionAttributeNames: { '#status': 'status' },
-        ExpressionAttributeValues: {
-            ':senderId': userId,
-            ':status': 'pending',
-        },
-        };
+  const requestsWithSenderInfo = await Promise.all(
+    result.Items.map(async (request) => {
+      const senderInfo = await getOwnProfile(request.senderId);
+      return {
+        ...request,
+        senderInfo,
+      };
+    })
+  );
 
-        const result = await dynamoDB.query(params).promise();
-        return result.Items;
-    }
+  return requestsWithSenderInfo;
+};
+
+// Lấy danh sách yêu cầu kết bạn đã gửi (pending, từ userId gửi đi)
+
+const getSentFriendRequests = async (userId) => {
+  const params = {
+    TableName: 'FriendRequests',
+    IndexName: 'SenderIdIndex', // Đảm bảo đã tạo GSI với senderId là partition key
+    KeyConditionExpression: 'senderId = :senderId',
+    FilterExpression: '#status = :status',
+    ExpressionAttributeNames: { '#status': 'status' },
+    ExpressionAttributeValues: {
+      ':senderId': userId,
+      ':status': 'pending',
+    },
+  };
+
+  const result = await dynamoDB.query(params).promise();
+
+  const requestsWithReceiverInfo = await Promise.all(
+    result.Items.map(async (request) => {
+      const receiverInfo = await getOwnProfile(request.userId); // userId là người nhận
+      return {
+        ...request,
+        receiverInfo,
+      };
+    })
+  );
+
+  return requestsWithReceiverInfo;
+};
+
+    
     const acceptFriendRequest = async (userId, requestId) =>  {
         const checkParams = {
             TableName: 'FriendRequests',
