@@ -10,6 +10,7 @@ const logger = require('../config/logger');
 const { AppError } = require('../utils/errorHandler');
 const { redisClient } = require('../config/redis');
 const bcrypt = require('bcrypt');
+const {GET_DEFAULT_CONTENT_BY_TYPE} = require('../config/constants');
 const isValidUUID = (id) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
 const {
   copyS3File,
@@ -165,9 +166,12 @@ const createMessage = async (senderId, receiverId, messageData) => {
 const updateConversations = async (senderId, receiverId, messageId, timestamp, messageData) => {
   const { content, senderId: msgSenderId, type, isRecalled = false } = messageData;
 
+  // Nếu tin nhắn bị thu hồi, content phải là "Tin nhắn đã bị thu hồi"
+  const lastMessageContent = isRecalled ? 'Tin nhắn đã bị thu hồi' : (content || GET_DEFAULT_CONTENT_BY_TYPE(type));
+
   const lastMessageData = {
     messageId,
-    content: content || (type === 'image' ? '[Hình ảnh]' : `[${type}]`),
+    content: lastMessageContent,
     createdAt: timestamp,
     senderId: msgSenderId,
     type,
@@ -304,12 +308,13 @@ const retryMessage = async (senderId, messageId) => {
       const lastMessageData = {
         messageId: savedMessage.messageId,
         content:
-          savedMessage.content ||
-          (savedMessage.type === 'image' ? '[Hình ảnh]' : `[${savedMessage.type}]`),
+          savedMessage.status === MESSAGE_STATUSES.RECALLED
+            ? 'Tin nhắn đã bị thu hồi'
+            : (savedMessage.content || GET_DEFAULT_CONTENT_BY_TYPE(savedMessage.type)),
         createdAt: savedMessage.timestamp,
         senderId: savedMessage.senderId,
         type: savedMessage.type,
-        isRecalled: false,
+        isRecalled: savedMessage.status === MESSAGE_STATUSES.RECALLED,
       };
 
       await Promise.all([
@@ -449,7 +454,7 @@ const recallMessage = async (userId, messageId) => {
     if (isLastMessageSender || isLastMessageReceiver) {
       const lastMessageUpdate = {
         messageId: message.messageId,
-        content: message.content || (message.type === 'image' ? '[Hình ảnh]' : `[${message.type}]`),
+        content: 'Tin nhắn đã bị thu hồi', // Đặt content thành "Tin nhắn đã bị thu hồi"
         createdAt: message.timestamp,
         senderId: message.senderId,
         type: message.type,
@@ -568,19 +573,22 @@ const getMessagesBetweenUsers = async (user1, user2) => {
   }
 };
 
+const extractBucketFromMediaUrl = (mediaUrl) => {
+  if (!mediaUrl || !mediaUrl.startsWith('s3://')) return null;
+  const parts = mediaUrl.replace('s3://', '').split('/');
+  return parts[0]; // bucket name
+};
 
 const forwardMessageUnified = async (senderId, messageId, sourceIsGroup, targetIsGroup, sourceId, targetId) => {
   logger.info(`Forwarding message`, { senderId, messageId, sourceIsGroup, targetIsGroup, sourceId, targetId });
 
-  // 1. Kiểm tra tham số đầu vào
   if (!senderId || !isValidUUID(senderId) || !messageId || !isValidUUID(messageId) || !targetId || !isValidUUID(targetId)) {
     throw new AppError('Tham số không hợp lệ', 400);
   }
 
-  // 2. Lấy tin nhắn gốc
+  // Lấy tin nhắn gốc
   let originalMessage = null;
   if (sourceIsGroup) {
-    // Nguồn là nhóm: Lấy từ GroupMessages
     const sourceGroup = await dynamoDB.get({ TableName: 'Groups', Key: { groupId: sourceId } }).promise();
     if (!sourceGroup.Item || !sourceGroup.Item.members.includes(senderId)) {
       throw new AppError('Bạn không phải thành viên nhóm gốc!', 403);
@@ -600,9 +608,9 @@ const forwardMessageUnified = async (senderId, messageId, sourceIsGroup, targetI
     if (!messageResult.Items || messageResult.Items.length === 0) {
       throw new AppError('Tin nhắn gốc không tồn tại!', 404);
     }
+
     originalMessage = messageResult.Items[0];
   } else {
-    // Nguồn là hội thoại cá nhân: Tìm trong Messages
     const senderQuery = await dynamoDB.query({
       TableName: 'Messages',
       IndexName: 'SenderIdMessageIdIndex',
@@ -639,7 +647,6 @@ const forwardMessageUnified = async (senderId, messageId, sourceIsGroup, targetI
     }
   }
 
-  // 3. Kiểm tra trạng thái tin nhắn gốc
   if (originalMessage.status === MESSAGE_STATUSES.RECALLED || originalMessage.status === MESSAGE_STATUSES.DELETE) {
     throw new AppError('Không thể chuyển tiếp tin nhắn đã thu hồi hoặc đã xóa!', 400);
   }
@@ -648,129 +655,103 @@ const forwardMessageUnified = async (senderId, messageId, sourceIsGroup, targetI
     throw new AppError('Không có quyền chuyển tiếp tin nhắn này', 403);
   }
 
-  // 4. Kiểm tra quyền gửi tin nhắn đến đích
+  // Xác định đích
   let targetReceiverId = null;
   let targetGroupId = null;
   if (targetIsGroup) {
-    // Đích là nhóm
     targetGroupId = targetId;
     const targetGroup = await dynamoDB.get({ TableName: 'Groups', Key: { groupId: targetGroupId } }).promise();
     if (!targetGroup.Item || !targetGroup.Item.members.includes(senderId)) {
       throw new AppError('Nhóm đích không tồn tại hoặc bạn không phải thành viên!', 403);
     }
   } else {
-    // Đích là hội thoại cá nhân
     targetReceiverId = targetId;
-    const { canSend, isRestricted } = await canSendMessageToUser(senderId, targetReceiverId, true);
+    const { canSend } = await canSendMessageToUser(senderId, targetReceiverId, true);
     if (!canSend) throw new AppError('Không có quyền gửi tin nhắn!', 403);
   }
 
-  // 5. Xử lý media (nếu có)
+  // Xử lý media
   let newMediaUrl = originalMessage.mediaUrl;
   let newS3Key = null;
-  const bucketName = process.env.BUCKET_NAME_Chat_Send;
   const newMessageId = uuidv4();
+
   if (newMediaUrl && newMediaUrl.startsWith('s3://')) {
     const originalKey = newMediaUrl.split('/').slice(3).join('/');
-    ({ mediaUrl: newMediaUrl, s3Key: newS3Key } = await copyS3File(bucketName, originalKey, newMessageId, originalMessage.mimeType));
+    const originalBucket = extractBucketFromMediaUrl(newMediaUrl);
+
+    if (!originalBucket) {
+      throw new AppError('Không thể xác định bucket từ mediaUrl!', 500);
+    }
+
+    ({ mediaUrl: newMediaUrl, s3Key: newS3Key } = await copyS3File(
+      originalBucket,
+      originalKey,
+      newMessageId,
+      originalMessage.mimeType
+    ));
   }
 
-  // 6. Tạo tin nhắn mới
-  const baseMessage = {
-    messageId: newMessageId,
-    senderId,
+  const messageData = {
     type: originalMessage.type,
     content: originalMessage.content,
     mediaUrl: newMediaUrl,
     fileName: originalMessage.fileName,
     mimeType: originalMessage.mimeType,
-    metadata: {
-      ...originalMessage.metadata,
-      forwardedFrom: sourceIsGroup ? { groupId: sourceId, messageId } : messageId,
-    },
-    isAnonymous: false,
-    isSecret: false,
-    quality: originalMessage.quality,
-    timestamp: new Date().toISOString(),
-    status: MESSAGE_STATUSES.SENDING,
+    metadata: originalMessage.metadata,
+    replyToMessageId: originalMessage.replyToMessageId || null,
   };
 
-  try {
-    let savedMessage = null;
-    if (targetIsGroup) {
-      // Đích là nhóm: Lưu vào GroupMessages
-      const newMessage = {
-        ...baseMessage,
+  let result;
+  const now = new Date().toISOString();
+
+  if (targetIsGroup) {
+    result = await sendMessageCore(
+      {
         groupId: targetGroupId,
-      };
-      savedMessage = await sendMessageCore(newMessage, 'GroupMessages', bucketName);
-      await updateLastMessageForGroup(targetGroupId, savedMessage);
-      io().to(targetGroupId).emit('groupMessage', savedMessage);
-    } else {
-      // Đích là hội thoại cá nhân: Lưu vào Messages
-      const conversation = await dynamoDB.get({
-        TableName: 'Conversations',
-        Key: { userId: senderId, targetUserId: targetReceiverId },
-      }).promise();
-      if (!conversation.Item) {
-        await createConversation(senderId, targetReceiverId);
-      }
+        senderId,
+        ...messageData,
+        ownerId: targetGroupId,
+        isAnonymous: originalMessage.isAnonymous || false,
+        isSecret: originalMessage.isSecret || false,
+        status: MESSAGE_STATUSES.SENT,
+      },
+      'GroupMessages',
+      process.env.BUCKET_NAME_GroupChat_Send
+    );
 
-      const [senderAutoDelete, receiverAutoDelete] = await Promise.all([
-        getAutoDeleteSetting(senderId, targetReceiverId),
-        getAutoDeleteSetting(targetReceiverId, senderId),
-      ]);
+    // Update lastMessage cho từng thành viên trong nhóm
+    const group = await dynamoDB.get({ TableName: 'Groups', Key: { groupId: targetGroupId } }).promise();
+    const members = group.Item?.members || [];
 
-      const now = Date.now();
-      const senderExpiresAt =
-        senderAutoDelete !== 'never' && DAYS_TO_SECONDS[senderAutoDelete]
-          ? Math.floor(now / 1000) + DAYS_TO_SECONDS[senderAutoDelete]
-          : null;
-      const receiverExpiresAt =
-        receiverAutoDelete !== 'never' && DAYS_TO_SECONDS[receiverAutoDelete]
-          ? Math.floor(now / 1000) + DAYS_TO_SECONDS[receiverAutoDelete]
-          : null;
+    const lastMessage = {
+      messageId: result.messageId,
+      content: result.content || GET_DEFAULT_CONTENT_BY_TYPE(result.type),
+      createdAt: result.timestamp || now,
+      senderId: result.senderId,
+      type: result.type,
+      isRecalled: false,
+    };
 
-      const senderMessage = buildMessageRecord({ ...baseMessage, receiverId: targetReceiverId }, senderId, senderExpiresAt);
-      const receiverMessage = buildMessageRecord({ ...baseMessage, receiverId: targetReceiverId }, targetReceiverId, receiverExpiresAt);
-
-      await Promise.all([
-        sendMessageCore(senderMessage, 'Messages', bucketName),
-        sendMessageCore(receiverMessage, 'Messages', bucketName),
-      ]);
-
-      // Cập nhật lastMessage cho hội thoại cá nhân
-      await updateConversations(senderId, targetReceiverId, newMessageId, baseMessage.timestamp, {
-        content: baseMessage.content,
-        senderId: baseMessage.senderId,
-        type: baseMessage.type,
-        isRecalled: false,
-      });
-
-      const { canSend, isRestricted } = await canSendMessageToUser(senderId, targetReceiverId, true);
-      const initialStatus = getInitialStatus(isRestricted, isUserOnline(targetReceiverId), false);
-
-      await Promise.all([
-        updateMessageStatus(newMessageId, senderId, initialStatus),
-        updateMessageStatus(newMessageId, targetReceiverId, initialStatus),
-      ]);
-
-      savedMessage = { ...senderMessage, status: initialStatus };
-      io().to(senderId).emit('receiveMessage', savedMessage);
-      if (!isRestricted) {
-        io().to(targetReceiverId).emit('receiveMessage', { ...receiverMessage, status: initialStatus });
-      }
-    }
-
-    logger.info('Message forwarded successfully', { newMessageId });
-    return savedMessage;
-  } catch (error) {
-    if (newS3Key) {
-      await deleteS3Object(bucketName, newS3Key);
-    }
-    logger.error(`Error forwarding message`, { messageId: newMessageId, error: error.message, stack: error.stack });
-    throw new AppError(`Không thể chuyển tiếp tin nhắn: ${error.message}`, 500);
+    await Promise.all(
+      members.map((memberId) =>
+        dynamoDB.update({
+          TableName: 'Conversations',
+          Key: { userId: memberId, targetUserId: targetGroupId },
+          UpdateExpression: 'SET lastMessage = :msg, updatedAt = :time',
+          ExpressionAttributeValues: {
+            ':msg': lastMessage,
+            ':time': now,
+          },
+        }).promise()
+      )
+    );
+  } else {
+    // Đích là người dùng
+    result = await createMessage(senderId, targetReceiverId, messageData);
+    // createMessage đã tự gọi updateConversations
   }
+
+  return result;
 };
 
 // Hàm cho 1-1
@@ -817,7 +798,7 @@ const updateLastMessageForGroup = async (groupId, message = null) => {
     const lastMessageData = lastMessage
       ? {
           messageId: lastMessage.messageId,
-          content: lastMessage.content || (lastMessage.type === 'image' ? '[Hình ảnh]' : `[${lastMessage.type}]`),
+          content: lastMessage.content || GET_DEFAULT_CONTENT_BY_TYPE[lastMessage.type],
           createdAt: lastMessage.timestamp, // Đồng bộ với getConversationSummary
           senderId: lastMessage.senderId,
           type: lastMessage.type,
@@ -1106,7 +1087,6 @@ const deleteMessage = async (userId, messageId) => {
             ':otherUserId': otherUserId,
           },
           ScanIndexForward: false,
-          // Limit: 10,
         }).promise(),
         dynamoDB.query({
           TableName: 'Messages',
@@ -1117,7 +1097,6 @@ const deleteMessage = async (userId, messageId) => {
             ':otherUserId': otherUserId,
           },
           ScanIndexForward: false,
-          // Limit: 10,
         }).promise(),
       ]);
 
@@ -1143,8 +1122,9 @@ const deleteMessage = async (userId, messageId) => {
             ? {
                 messageId: previousMessage.messageId,
                 content:
-                  previousMessage.content ||
-                  (previousMessage.type === 'image' ? '[Hình ảnh]' : `[${previousMessage.type}]`),
+                  previousMessage.status === MESSAGE_STATUSES.RECALLED
+                    ? 'Tin nhắn đã bị thu hồi'
+                    : (previousMessage.content || GET_DEFAULT_CONTENT_BY_TYPE(previousMessage.type)),
                 createdAt: previousMessage.timestamp,
                 senderId: previousMessage.senderId,
                 type: previousMessage.type,
@@ -1223,11 +1203,14 @@ const restoreMessage = async (userId, messageId) => {
         ExpressionAttributeValues: {
           ':msg': {
             messageId: message.messageId,
-            content: message.content || (message.type === 'image' ? '[Hình ảnh]' : `[${message.type}]`),
+            content:
+              message.status === MESSAGE_STATUSES.RECALLED
+                ? 'Tin nhắn đã bị thu hồi'
+                : (message.content || GET_DEFAULT_CONTENT_BY_TYPE(message.type)),
             createdAt: message.timestamp,
             senderId: message.senderId,
             type: message.type,
-            isRecalled: false,
+            isRecalled: message.status === MESSAGE_STATUSES.RECALLED,
           },
           ':time': new Date().toISOString(),
         },
@@ -1274,7 +1257,6 @@ const updateMessageStatusOnConnect = async (userId) => {
     io().to(userId).emit('receiveMessage', { ...message, status: 'delivered' });
   }
 };
-
 
 
 // Hàm kiểm tra quyền gửi tin nhắn

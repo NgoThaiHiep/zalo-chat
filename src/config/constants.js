@@ -36,5 +36,25 @@ const DAYS_TO_SECONDS = {
     'text/plain': { type: 'file', folder: 'files', ext: 'txt', maxSize: 1024 * 1024 * 1024 },
     'image/webp': { type: ['image', 'sticker', 'gif'], folder: 'images', ext: 'webp', maxSize: 10 * 1024 * 1024 },
   };
+
+  const GET_DEFAULT_CONTENT_BY_TYPE = (type) => {
+    switch (type) {
+      case 'image':
+        return '[Hình ảnh]';
+      case 'gif':
+        return '[GIF]';
+      case 'sticker':
+        return '[Nhãn dán]';
+      case 'video':
+        return '[Video]';
+      case 'voice':
+        return '[Tin nhắn thoại]';
+      case 'file':
+        return '[Tệp tin]';
+      default:
+        return `[${type}]`;
+    }
+  };
   
-  module.exports = { DAYS_TO_SECONDS, MESSAGE_STATUSES, MIME_TYPE_MAP };
+  
+  module.exports = { DAYS_TO_SECONDS, MESSAGE_STATUSES, MIME_TYPE_MAP,GET_DEFAULT_CONTENT_BY_TYPE };

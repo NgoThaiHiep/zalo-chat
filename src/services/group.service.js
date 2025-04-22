@@ -7,7 +7,7 @@ const { AppError } = require('../utils/errorHandler');
 const { io } = require('../socket');
 const { copyS3File } = require('../utils/messageUtils');
 const { createConversation } = require('./conversation.service');
-const { MESSAGE_STATUSES } = require('../config/constants');
+const { MESSAGE_STATUSES,GET_DEFAULT_CONTENT_BY_TYPE } = require('../config/constants');
 const { getOwnProfile } = require('../services/auth.service');
 const { forwardMessageUnified} = require('./message.service');
 console.log('Imported forwardMessageUnified:', forwardMessageUnified);
@@ -913,8 +913,7 @@ const updateLastMessageForGroup = async (groupId, message = null) => {
         IndexName: 'GroupMessagesIndex',
         KeyConditionExpression: 'groupId = :groupId',
         ExpressionAttributeValues: { ':groupId': groupId },
-        ScanIndexForward: false, // Lấy tin nhắn mới nhất
-        // Limit: 10, // Lấy tối đa 10 tin nhắn để tìm tin nhắn hợp lệ
+        ScanIndexForward: false,
       }).promise();
 
       // Tìm tin nhắn hợp lệ (không bị xóa hoặc thu hồi)
@@ -927,11 +926,14 @@ const updateLastMessageForGroup = async (groupId, message = null) => {
     const lastMessageData = lastMessage
       ? {
           messageId: lastMessage.messageId,
-          content: lastMessage.content || (lastMessage.type === 'image' ? '[Hình ảnh]' : `[${lastMessage.type}]`),
-          createdAt: lastMessage.timestamp, // Đồng bộ với getConversationSummary
+          content:
+            lastMessage.status === MESSAGE_STATUSES.RECALLED || lastMessage.status === MESSAGE_STATUSES.ADMINDRECALLED
+              ? 'Tin nhắn đã bị thu hồi'
+              : (lastMessage.content || GET_DEFAULT_CONTENT_BY_TYPE(lastMessage.type)),
+          createdAt: lastMessage.timestamp,
           senderId: lastMessage.senderId,
           type: lastMessage.type,
-          isRecalled: lastMessage.status === MESSAGE_STATUSES.RECALLED, // Thêm trường isRecalled
+          isRecalled: lastMessage.status === MESSAGE_STATUSES.RECALLED || lastMessage.status === MESSAGE_STATUSES.ADMINDRECALLED,
         }
       : null;
 
@@ -974,12 +976,11 @@ const recallGroupMessage = async (groupId, senderId, messageId) => {
   // Thực hiện hành động recall
   const result = await manageGroupMessage(groupId, senderId, messageId, 'recall');
 
-  // Chỉ kiểm tra và cập nhật lastMessage nếu recall thành công và scope là 'everyone'
-  if (result.success && recallType === 'everyone') {
-    // Truy vấn tất cả Conversations của nhóm trong một lần
+ 
+  if (result.success) {
     const conversations = await dynamoDB.query({
       TableName: 'Conversations',
-      IndexName: 'targetUserId-index', // Giả sử có index này
+      IndexName: 'targetUserId-index', 
       KeyConditionExpression: 'targetUserId = :groupId',
       ExpressionAttributeValues: { ':groupId': groupId },
     }).promise();
@@ -1000,18 +1001,16 @@ const recallGroupMessage = async (groupId, senderId, messageId) => {
 const deleteGroupMessage = async (groupId, senderId, messageId) => {
   // Thực hiện hành động delete
   const result = await manageGroupMessage(groupId, senderId, messageId, 'delete');
-
-  // Chỉ kiểm tra và cập nhật lastMessage nếu delete thành công và scope là 'everyone'
-  if (result.success && deleteType === 'everyone') {
-    // Truy vấn tất cả Conversations của nhóm trong một lần
+  if (result.success) {
+ 
     const conversations = await dynamoDB.query({
       TableName: 'Conversations',
-      IndexName: 'targetUserId-index', // Giả sử có index này
+      IndexName: 'targetUserId-index', 
       KeyConditionExpression: 'targetUserId = :groupId',
       ExpressionAttributeValues: { ':groupId': groupId },
     }).promise();
 
-    // Kiểm tra xem tin nhắn có phải là lastMessage của bất kỳ thành viên nào không
+    
     const shouldUpdateLastMessage = conversations.Items?.some(
       conv => conv.lastMessage?.messageId === messageId
     );
@@ -1029,8 +1028,8 @@ const manageGroupMessage = async (groupId, senderId, messageId, action) => {
   if (!groupId || !isValidUUID(groupId) || !senderId || !isValidUUID(senderId) || !messageId || !isValidUUID(messageId)) {
     throw new AppError('Tham số không hợp lệ', 400);
   }
-  if (!['delete', 'recall'].includes(action) || !['everyone', 'self'].includes(scope)) {
-    throw new AppError('Hành động hoặc phạm vi không hợp lệ!', 400);
+  if (!['delete', 'recall'].includes(action)) {
+    throw new AppError('Hành động hoặc phạm vi không hợp lệ!', 400);  
   }
 
   // Lấy thông tin nhóm để kiểm tra vai trò và thành viên
@@ -1103,7 +1102,7 @@ const manageGroupMessage = async (groupId, senderId, messageId, action) => {
         },
       }).promise();
 
-      io().to(senderId).emit('groupMessageDeleted', { groupId, messageId, scope });
+      io().to(senderId).emit('groupMessageDeleted', { groupId, messageId });
       return { success: true, message: 'Tin nhắn đã được xóa chỉ với bạn!' };
     
   }
@@ -1127,7 +1126,7 @@ const manageGroupMessage = async (groupId, senderId, messageId, action) => {
         ExpressionAttributeValues: { ':r': recallStatus },
       }).promise();
 
-      io().to(groupId).emit('groupMessageRecalled', { groupId, messageId, scope, status: recallStatus });
+      io().to(groupId).emit('groupMessageRecalled', { groupId, messageId, status: recallStatus });
       return { success: true, message: `Tin nhắn đã được thu hồi với mọi người! Trạng thái: ${recallStatus}` };
   }
 
