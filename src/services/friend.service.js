@@ -194,13 +194,51 @@ const getSentFriendRequests = async (userId) => {
         }
 
     const getFriends = async (userId) => {
-        const params = {
-        TableName: 'Friends',
-        KeyConditionExpression: 'userId = :userId',
-        ExpressionAttributeValues: { ':userId': userId },
-        };
-        const result = await dynamoDB.query(params).promise();
-        return result.Items;
+      if (!userId || typeof userId !== 'string') {
+        throw new AppError('userId không hợp lệ!', 400);
+      }
+    
+      try {
+        // Bước 1: Lấy danh sách bạn bè
+        const friendResult = await dynamoDB.query({
+          TableName: 'Friends',
+          KeyConditionExpression: 'userId = :userId',
+          ExpressionAttributeValues: { ':userId': userId },
+        }).promise();
+    
+        const friends = friendResult.Items || [];
+        if (friends.length === 0) return [];
+    
+        // Bước 2: Truy vấn chi tiết từng người bạn
+        const friendIds = friends.map(f => f.friendId);
+    
+        const keys = friendIds.map(friendId => ({
+          userId: friendId,
+        }));
+    
+        const userData = await dynamoDB.batchGet({
+          RequestItems: {
+            Users: {
+              Keys: keys,
+            },
+          },
+        }).promise();
+    
+        const userMap = {};
+        for (const user of userData.Responses.Users) {
+          const { password, ...safeUser } = user;
+          userMap[user.userId] = safeUser;
+        }
+    
+        // Bước 3: Ghép thông tin friend + user info
+        return friends.map(friend => ({
+          ...friend,
+          user: userMap[friend.friendId] || null,
+        }));
+      } catch (error) {
+        logger.error('Lỗi khi lấy thông tin bạn bè', { userId, error: error.message });
+        throw new AppError('Không thể lấy thông tin bạn bè!', 500);
+      }
     }
 
     const cancelFriendRequest = async (senderId, requestId) => {

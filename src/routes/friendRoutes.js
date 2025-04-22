@@ -14,8 +14,8 @@ router.post('/reject', FriendController.rejectFriendRequestController);     //T�
 router.post('/cancel', FriendController.cancelFriendRequestController);    // Hủy yêu cầu kêt bạn
 
 // Nhóm: Quản lý danh sách bạn bè
-router.get('/list', FriendController.getFriendsController);     
-router.post('/remove', checkOwnership, FriendController.removeFriendController);    // Lấy danh sách bạn bè
+router.get('/list', FriendController.getFriendsController);      // Lấy danh sách bạn bè
+router.post('/remove', checkOwnership, FriendController.removeFriendController);   // Xóa bạn bè
 router.post('/favorite/mark', FriendController.markFavoriteController);  //Đánh dấu bạn bè yêu thích.
 router.post('/favorite/unmark', FriendController.unmarkFavoriteController);//Bỏ đánh dấu yêu thích.
 router.get('/favorites', FriendController.getFavoriteFriendsController); //Lấy danh sách bạn bè yêu thích.
