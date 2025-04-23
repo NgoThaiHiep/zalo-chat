@@ -292,9 +292,9 @@ const initializeChatSocket = (chatIo) => {
         if (!messageId) {
           throw new AppError('messageId is required', 400);
         }
-
+    
         const result = await MessageService.markMessageAsSeen(userId, messageId);
-
+    
         const message = await MessageService.getMessageById(messageId, userId);
         if (message) {
           chatIo.to(`user:${userId}`).emit('messageStatus', {
@@ -308,12 +308,18 @@ const initializeChatSocket = (chatIo) => {
             });
           }
         }
-
+    
         logger.info('[ChatSocket] Message marked as seen', { messageId, userId });
-        callback({ success: true, data: result });
+        if (typeof callback === 'function') {
+          callback({ success: true, data: result });
+        }
       } catch (error) {
         logger.error('[ChatSocket] Error marking message as seen', { error: error.message });
-        callback({ success: false, message: error.message });
+        if (typeof callback === 'function') {
+          callback({ success: false, message: error.message });
+        } else {
+          logger.warn('[ChatSocket] No callback provided for markMessageAsSeen');
+        }
       }
     });
 
