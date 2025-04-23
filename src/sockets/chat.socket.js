@@ -64,8 +64,7 @@ const initializeChatSocket = (chatIo) => {
 
         const newMessage = await MessageService.createMessage(userId, receiverId, messageData);
 
-        chatIo.to(`user:${userId}`).emit('receiveMessage', newMessage);
-        if (userId !== receiverId) {
+        if (receiverId) {
           chatIo.to(`user:${receiverId}`).emit('receiveMessage', newMessage);
         }
 
@@ -145,12 +144,19 @@ const initializeChatSocket = (chatIo) => {
 
         const result = await MessageService.recallMessage(userId, messageId);
 
+        // Lấy thông tin tin nhắn để xác định receiverId
         const message = await MessageService.getMessageById(messageId, userId);
         if (message) {
+          // Emit tới người gửi
           chatIo.to(`user:${userId}`).emit('messageRecalled', { messageId });
-          if (message.senderId !== userId) {
+          // Emit tới người nhận hoặc nhóm
+          if (message.groupId) {
+            chatIo.to(`group:${message.groupId}`).emit('messageRecalled', { messageId });
+          } else if (message.receiverId && message.receiverId !== userId) {
             chatIo.to(`user:${message.receiverId}`).emit('messageRecalled', { messageId });
           }
+        } else {
+          logger.warn('[ChatSocket] Message not found for recall', { messageId, userId });
         }
 
         logger.info('[ChatSocket] Message recalled', { messageId, userId });
@@ -292,9 +298,9 @@ const initializeChatSocket = (chatIo) => {
         if (!messageId) {
           throw new AppError('messageId is required', 400);
         }
-    
+
         const result = await MessageService.markMessageAsSeen(userId, messageId);
-    
+
         const message = await MessageService.getMessageById(messageId, userId);
         if (message) {
           chatIo.to(`user:${userId}`).emit('messageStatus', {
@@ -308,7 +314,7 @@ const initializeChatSocket = (chatIo) => {
             });
           }
         }
-    
+
         logger.info('[ChatSocket] Message marked as seen', { messageId, userId });
         if (typeof callback === 'function') {
           callback({ success: true, data: result });

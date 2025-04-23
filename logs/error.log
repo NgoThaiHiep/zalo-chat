@@ -1428,3 +1428,31 @@
 {"error":"receiveMessage is not defined","level":"error","message":"[ChatSocket] Error marking message as seen","timestamp":"2025-04-23T18:06:55.502Z"}
 {"error":"callback is not a function","level":"error","message":"[ChatSocket] Error marking message as seen","timestamp":"2025-04-23T18:09:04.787Z"}
 {"error":"receiveMessage is not defined","level":"error","message":"[ChatSocket] Error marking message as seen","timestamp":"2025-04-23T18:09:36.819Z"}
+{"error":"Sai số điện thoại hoặc mật khẩu!","level":"error","message":"[loginController] Error","timestamp":"2025-04-23T18:14:43.685Z"}
+{"error":"receiveMessage is not defined","level":"error","message":"[ChatSocket] Error marking message as seen","timestamp":"2025-04-23T18:15:17.719Z"}
+{"error":"receiveMessage is not defined","level":"error","message":"[ChatSocket] Error marking message as seen","timestamp":"2025-04-23T18:17:12.848Z"}
+{"error":"receiveMessage is not defined","level":"error","message":"[ChatSocket] Error marking message as seen","timestamp":"2025-04-23T18:17:49.774Z"}
+{"error":"receiveMessage is not defined","level":"error","message":"[ChatSocket] Error marking message as seen","timestamp":"2025-04-23T18:18:01.270Z"}
+{"error":"receiveMessage is not defined","level":"error","message":"[ChatSocket] Error marking message as seen","timestamp":"2025-04-23T18:18:49.215Z"}
+{"error":"receiveMessage is not defined","level":"error","message":"[ChatSocket] Error marking message as seen","timestamp":"2025-04-23T18:21:02.027Z"}
+{"error":"receiveMessage is not defined","level":"error","message":"[ChatSocket] Error marking message as seen","timestamp":"2025-04-23T18:21:33.819Z"}
+{"error":"receiveMessage is not defined","level":"error","message":"[ChatSocket] Error marking message as seen","timestamp":"2025-04-23T18:22:51.051Z"}
+{"error":"receiveMessage is not defined","level":"error","message":"[ChatSocket] Error marking message as seen","timestamp":"2025-04-23T18:23:22.304Z"}
+{"error":"receiveMessage is not defined","level":"error","message":"[ChatSocket] Error marking message as seen","timestamp":"2025-04-23T18:24:35.273Z"}
+{"error":"receiveMessage is not defined","level":"error","message":"[ChatSocket] Error marking message as seen","timestamp":"2025-04-23T18:24:51.010Z"}
+{"error":"The provided key element does not match the schema","level":"error","message":"Failed to fetch user info","timestamp":"2025-04-23T18:24:59.152Z","userId":null}
+{"error":"Unauthorized to mark this message as seen","level":"error","message":"[ChatSocket] Error marking message as seen","timestamp":"2025-04-23T18:24:59.602Z"}
+{"error":"Unauthorized to mark this message as seen","level":"error","message":"[ChatSocket] Error marking message as seen","timestamp":"2025-04-23T18:24:59.610Z"}
+{"error":"Unauthorized to mark this message as seen","level":"error","message":"[ChatSocket] Error marking message as seen","timestamp":"2025-04-23T18:24:59.622Z"}
+{"error":"Unauthorized to mark this message as seen","level":"error","message":"[ChatSocket] Error marking message as seen","timestamp":"2025-04-23T18:24:59.628Z"}
+{"error":"The provided key element does not match the schema","level":"error","message":"Failed to fetch user info","timestamp":"2025-04-23T18:25:00.335Z","userId":null}
+{"error":"The provided key element does not match the schema","level":"error","message":"Failed to fetch user info","timestamp":"2025-04-23T18:25:01.637Z","userId":null}
+{"error":"receiverId and type are required","level":"error","message":"[ChatSocket] Error sending message","timestamp":"2025-04-23T18:25:05.066Z"}
+{"error":"Unauthorized to mark this message as seen","level":"error","message":"[ChatSocket] Error marking message as seen","timestamp":"2025-04-23T18:25:05.486Z"}
+{"error":"Unauthorized to mark this message as seen","level":"error","message":"[ChatSocket] Error marking message as seen","timestamp":"2025-04-23T18:25:05.494Z"}
+{"error":"Unauthorized to mark this message as seen","level":"error","message":"[ChatSocket] Error marking message as seen","timestamp":"2025-04-23T18:25:05.502Z"}
+{"error":"Unauthorized to mark this message as seen","level":"error","message":"[ChatSocket] Error marking message as seen","timestamp":"2025-04-23T18:25:05.507Z"}
+{"error":"Unauthorized to mark this message as seen","level":"error","message":"[ChatSocket] Error marking message as seen","timestamp":"2025-04-23T18:25:08.713Z"}
+{"error":"Unauthorized to mark this message as seen","level":"error","message":"[ChatSocket] Error marking message as seen","timestamp":"2025-04-23T18:25:08.716Z"}
+{"error":"Unauthorized to mark this message as seen","level":"error","message":"[ChatSocket] Error marking message as seen","timestamp":"2025-04-23T18:25:08.733Z"}
+{"error":"Unauthorized to mark this message as seen","level":"error","message":"[ChatSocket] Error marking message as seen","timestamp":"2025-04-23T18:25:08.754Z"}
