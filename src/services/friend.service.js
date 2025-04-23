@@ -3,6 +3,7 @@ const conversation = require('./conversation.service');
 const {redisClient} = require('../config/redis')
 const MessageService = require('./message.service');
 const { getOwnProfile} = require('./auth.service');
+const {createConversation} = require('./conversation.service');
 // Hàm kiểm tra chặn
 const checkBlockStatus = async (senderId, receiverId) => {
   const [isSenderBlocked, isReceiverBlocked] = await Promise.all([
@@ -141,39 +142,71 @@ const getSentFriendRequests = async (userId) => {
 };
 
     
-    const acceptFriendRequest = async (userId, requestId) =>  {
-        const checkParams = {
-            TableName: 'FriendRequests',
-            Key: { userId, requestId },
-          };
-          const checkResult = await dynamoDB.get(checkParams).promise();
-      
-          if (!checkResult.Item) {
-            throw new Error('Không tìm thấy yêu cầu kết bạn');
-          }
-          if (checkResult.Item.status !== 'pending') {
-            throw new Error('Yêu cầu kết bạn không phải padding');
-          }
-      
-          const senderId = requestId.split('#')[0];
-          const friendParams1 = {
-            TableName: 'Friends',
-            Item: { userId, friendId: senderId, addedAt: new Date().toISOString() },
-          };
-          const friendParams2 = {
-            TableName: 'Friends',
-            Item: { userId: senderId, friendId: userId, addedAt: new Date().toISOString() },
-          };
-      
-          // Thêm bạn bè và xóa yêu cầu
-          await Promise.all([
-            dynamoDB.put(friendParams1).promise(),
-            dynamoDB.put(friendParams2).promise(),
-            dynamoDB.delete(checkParams).promise(), // Xóa bản ghi FriendRequests
-          ]);
-      
-          return { message: 'Đã chấp nhận kết bạn' };
-        }
+const acceptFriendRequest = async (userId, requestId) =>  {
+  try {
+    // 1. Kiểm tra yêu cầu kết bạn
+    const checkParams = {
+      TableName: 'FriendRequests',
+      Key: { userId, requestId },
+    };
+
+    const checkResult = await dynamoDB.get(checkParams).promise();
+
+    if (!checkResult.Item) {
+      logger.error('Friend request not found', { userId, requestId });
+      throw new AppError('Không tìm thấy yêu cầu kết bạn', 404);
+    }
+
+    if (checkResult.Item.status !== 'pending') {
+      logger.error('Friend request is not pending', { userId, requestId });
+      throw new AppError('Yêu cầu kết bạn không phải đang chờ xử lý', 400);
+    }
+
+    // 2. Lấy senderId từ requestId (định dạng: senderId#timestamp)
+    const senderId = requestId.split('#')[0];
+
+    // 3. Thêm bạn bè 2 chiều
+    const now = new Date().toISOString();
+    const friendParams1 = {
+      TableName: 'Friends',
+      Item: { userId, friendId: senderId, addedAt: now },
+    };
+    const friendParams2 = {
+      TableName: 'Friends',
+      Item: { userId: senderId, friendId: userId, addedAt: now },
+    };
+
+    // 4. Xoá yêu cầu kết bạn
+    const deleteParams = checkParams;
+
+    await Promise.all([
+      dynamoDB.put(friendParams1).promise(),
+      dynamoDB.put(friendParams2).promise(),
+      dynamoDB.delete(deleteParams).promise(),
+    ]);
+
+    // 5. Tạo hội thoại 2 chiều bằng cách tái sử dụng createConversation
+    const result1 = await createConversation(userId, senderId);
+    const result2 = await createConversation(senderId, userId);
+
+    // 6. Trả kết quả
+    return {
+      success: true,
+      message: 'Đã chấp nhận yêu cầu kết bạn và tạo hội thoại',
+      conversationIds: {
+        [userId]: result1.conversationId,
+        [senderId]: result2.conversationId,
+      },
+    };
+  } catch (error) {
+    logger.error('Error in acceptFriendRequestAndCreateConversation', {
+      userId,
+      requestId,
+      error: error.message,
+    });
+    throw new AppError(`Lỗi khi chấp nhận yêu cầu kết bạn và tạo hội thoại: ${error.message}`, error.statusCode || 500);
+  }
+}
 
     const rejectFriendRequest = async (userId, requestId) =>{
         const checkParams = {

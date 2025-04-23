@@ -1893,12 +1893,14 @@ const getUserGroups = async (userId) => {
 };
 
 const getGroupMessages = async (groupId, userId, limit = 50, lastEvaluatedKey = null) => {
+  // 1. Kiểm tra đầu vào
   if (!groupId || !isValidUUID(groupId) || !userId || !isValidUUID(userId)) {
     throw new AppError('groupId hoặc userId không hợp lệ!', 400);
   }
 
   limit = Math.min(Math.max(parseInt(limit) || 50, 1), 100);
 
+  // 2. Kiểm tra nhóm và thành viên
   const groupResult = await dynamoDB.get({ TableName: 'Groups', Key: { groupId } }).promise();
   if (!groupResult.Item) {
     throw new AppError('Nhóm không tồn tại!', 404);
@@ -1907,6 +1909,7 @@ const getGroupMessages = async (groupId, userId, limit = 50, lastEvaluatedKey = 
     throw new AppError('Bạn không phải thành viên nhóm!', 403);
   }
 
+  // 3. Lấy tin nhắn nhóm
   const params = {
     TableName: 'GroupMessages',
     IndexName: 'GroupMessagesIndex',
@@ -1921,22 +1924,73 @@ const getGroupMessages = async (groupId, userId, limit = 50, lastEvaluatedKey = 
 
   const now = Math.floor(Date.now() / 1000);
 
-  // Lọc bỏ tin nhắn đã bị xóa bởi user
+  // 4. Lọc bỏ tin nhắn đã bị xóa hoặc hết hạn
   const visibleMessages = (messages.Items || []).filter(msg => {
-    // Bỏ tin nếu bị xóa bởi user này
     if (Array.isArray(msg.deletedBy) && msg.deletedBy.includes(userId)) return false;
-
-    // Bỏ tin nếu đã hết hạn
     if (msg.expiresAt && msg.expiresAt <= now) return false;
-
     return true;
   });
 
+  // 5. Lấy thông tin người dùng (4 trường: userId, name, avatar, phoneNumber) cho mỗi senderId
+  const senderIds = [...new Set(visibleMessages.map(msg => msg.senderId))]; // Lấy danh sách senderId duy nhất
+  const userPromises = senderIds.map(senderId =>
+    dynamoDB
+      .get({
+        TableName: 'Users',
+        Key: { userId: senderId },
+      })
+      .promise()
+      .then(result => {
+        if (result.Item) {
+          // Lấy chỉ 4 trường cần thiết
+          const { userId, name, avatar, phoneNumber } = result.Item;
+          return { userId, name, avatar, phoneNumber }; // Trả về chỉ các trường này
+        } else {
+          // Log lỗi khi không có dữ liệu cho userId
+          logger.error('User not found', { userId: senderId });
+          return {
+            userId: senderId,
+            name: 'Chưa có tên',
+            avatar: 'default-avatar.png',
+            phoneNumber: 'Chưa có số điện thoại',
+          };
+        }
+      })
+      .catch(error => {
+        logger.error('Failed to fetch user info', { userId: senderId, error: error.message });
+        return {
+          userId: senderId,
+          name: 'Chưa có tên',
+          avatar: 'default-avatar.png',
+          phoneNumber: 'Chưa có số điện thoại',
+        };
+      })
+  );
+
+  const users = await Promise.all(userPromises);
+  const userMap = users.reduce((map, user) => {
+    map[user.userId] = user; // Thêm toàn bộ dữ liệu người dùng vào map
+    return map;
+  }, {});
+
+  // 6. Gắn thông tin người dùng vào tin nhắn
+  const enrichedMessages = visibleMessages.map(msg => ({
+    ...msg,
+    sender: {
+      ...userMap[msg.senderId],
+    },
+  }));
+
+  // 7. Trả về kết quả
   return {
-    messages: visibleMessages,
-    lastEvaluatedKey: messages.LastEvaluatedKey || null,
+    messages: enrichedMessages,
+    lastEvaluatedKey: messages.LastEvaluatedKey,
   };
 };
+
+
+
+
 
 module.exports = {
   assignMemberRole ,

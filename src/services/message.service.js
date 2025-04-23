@@ -566,13 +566,62 @@ const getMessagesBetweenUsers = async (user1, user2) => {
       new Map(filteredMessages.map(msg => [`${msg.messageId}:${msg.ownerId}`, msg])).values()
     ).sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
 
-    return { success: true, messages: uniqueMessages };
+    // Lấy thông tin người dùng (4 trường: userId, name, avatar, phoneNumber) cho mỗi senderId
+    const senderIds = [...new Set(uniqueMessages.map(msg => msg.senderId))]; // Lấy danh sách senderId duy nhất
+    const userPromises = senderIds.map(senderId =>
+      dynamoDB
+        .get({
+          TableName: 'Users',
+          Key: { userId: senderId },
+        })
+        .promise()
+        .then(result => {
+          if (result.Item) {
+            // Chỉ lấy 4 trường cần thiết
+            const { userId, name, avatar, phoneNumber } = result.Item;
+            return { userId, name, avatar, phoneNumber }; // Trả về chỉ các trường này
+          } else {
+            // Log lỗi khi không có dữ liệu cho userId
+            logger.error('User not found', { userId: senderId });
+            return {
+              userId: senderId,
+              name: 'Chưa có tên',
+              avatar: 'default-avatar.png',
+              phoneNumber: 'Chưa có số điện thoại',
+            };
+          }
+        })
+        .catch(error => {
+          logger.error('Failed to fetch user info', { userId: senderId, error: error.message });
+          return {
+            userId: senderId,
+            name: 'Chưa có tên',
+            avatar: 'default-avatar.png',
+            phoneNumber: 'Chưa có số điện thoại',
+          };
+        })
+    );
+
+    const users = await Promise.all(userPromises);
+    const userMap = users.reduce((map, user) => {
+      map[user.userId] = user; // Thêm toàn bộ dữ liệu người dùng vào map
+      return map;
+    }, {});
+
+    // 6. Gắn thông tin người dùng vào tin nhắn
+    const enrichedMessages = uniqueMessages.map(msg => ({
+      ...msg,
+      sender: {
+        ...userMap[msg.senderId],
+      },
+    }));
+
+    return { success: true, messages: enrichedMessages };
   } catch (error) {
     logger.error(`Error fetching messages`, { user1, user2, error: error.message });
     throw new AppError(`Failed to fetch messages: ${error.message}`, 500);
   }
 };
-
 const extractBucketFromMediaUrl = (mediaUrl) => {
   if (!mediaUrl || !mediaUrl.startsWith('s3://')) return null;
   const parts = mediaUrl.replace('s3://', '').split('/');
