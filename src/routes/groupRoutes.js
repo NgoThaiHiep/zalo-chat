@@ -25,9 +25,10 @@ const {
   getGroupMessagesController,
   forwardGroupMessageToUserController,
   forwardGroupMessageController,
-  upload,
+ 
 } = require('../controllers/groupController');
 const { uploadProfileImages } = require('../middlewares/uploadMiddleware');
+const upload = require('../middlewares/upload');
 const router = express.Router();
 
 router.use(authMiddleware);

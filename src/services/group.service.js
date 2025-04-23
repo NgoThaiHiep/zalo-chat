@@ -4,7 +4,7 @@ const { dynamoDB, s3 } = require('../config/aws.config');
 const logger = require('../config/logger');
 const { sendMessageCore } = require('./messageCore');
 const { AppError } = require('../utils/errorHandler');
-const { io } = require('../socket');
+
 const { copyS3File, uploadS3File} = require('../utils/messageUtils');
 const { createConversation } = require('./conversation.service');
 const { MESSAGE_STATUSES,GET_DEFAULT_CONTENT_BY_TYPE } = require('../config/constants');
@@ -103,13 +103,7 @@ const addMemberCore = async (groupId, userId, group, inviterName = null) => {
       status: MESSAGE_STATUSES.SENT,
     }, 'GroupMessages', process.env.BUCKET_NAME_Chat_Send);
 
-    io().to(updatedMembers).emit('groupEvent', {
-      event: 'memberAdded',
-      groupId,
-      userName,
-      inviterName,
-    });
-    io().to(userId).emit('conversationCreated', { conversationId, targetUserId: groupId, groupName: group.name });
+  
 
     logger.info('Thêm thành viên vào nhóm thành công', { groupId, userId, inviterName });
     return updatedMembers;
@@ -165,8 +159,7 @@ const removeMemberCore = async (groupId, userId, group, isKicked = false, adminU
       await dynamoDB.delete({ TableName: 'GroupMembers', Key: { groupId, userId } }).promise();
       await dynamoDB.delete({ TableName: 'Groups', Key: { groupId } }).promise();
       await deleteGroupMessages(groupId);
-      io().to(userId).emit('groupEvent', { event: 'groupDeleted', groupId });
-      io().to(userId).emit('conversationDeleted', { targetUserId: groupId });
+    
       return { newMembers: [], newAdminId: null, groupDeleted: true };
     } else if (memberCount === 2) {
       const remainingMemberId = group.members.find(member => member !== userId);
@@ -185,13 +178,7 @@ const removeMemberCore = async (groupId, userId, group, isKicked = false, adminU
         ExpressionAttributeNames: { '#role': 'role' },
         ExpressionAttributeValues: { ':adminRole': 'admin' },
       }).promise();
-      io().to(remainingMemberId).emit('groupEvent', {
-        event: isKicked ? 'memberKicked' : 'memberLeft',
-        groupId,
-        userName,
-        newAdmin: remainingMemberId,
-      });
-      io().to(userId).emit('conversationDeleted', { targetUserId: groupId });
+     
       return { newMembers, newAdminId: remainingMemberId, groupDeleted: false };
     } else {
       const isAdmin = group.roles[userId] === 'admin';
@@ -237,13 +224,7 @@ const removeMemberCore = async (groupId, userId, group, isKicked = false, adminU
       }
 
       await dynamoDB.delete({ TableName: 'GroupMembers', Key: { groupId, userId } }).promise();
-      io().to(group.members).emit('groupEvent', {
-        event: isKicked ? 'memberKicked' : 'memberLeft',
-        groupId,
-        userName,
-        newAdmin: newAdminId,
-      });
-      io().to(userId).emit('conversationDeleted', { targetUserId: groupId });
+    
       return { newMembers, newAdminId, groupDeleted: false };
     }
   } catch (error) {
@@ -253,126 +234,134 @@ const removeMemberCore = async (groupId, userId, group, isKicked = false, adminU
 
 // Hàm phụ trợ: Quản lý xóa/thu hồi tin nhắn
 const assignMemberRole = async (groupId, targetUserId, role, requestingUserId) => {
-  // 1. Kiểm tra định dạng groupId, targetUserId và requestingUserId
-  console.log('✅ groupId:', groupId);
-  console.log('✅ targetUserId:', targetUserId);
-  console.log('✅ requestingUserId:', requestingUserId);
-  if (
-    !groupId ||
-    !targetUserId ||
-    !requestingUserId ||
-    !isValidUUID(groupId) ||
-    !isValidUUID(targetUserId) ||
-    !isValidUUID(requestingUserId)
-  ) {
-    throw new AppError('groupId, targetUserId hoặc requestingUserId không hợp lệ', 400);
-  }
-
-  // 2. Kiểm tra vai trò hợp lệ
-  const validRoles = ['admin', 'co-admin', 'member'];
-  if (!validRoles.includes(role)) {
-    throw new AppError('Vai trò không hợp lệ. Vai trò phải là admin, co-admin hoặc member.', 400);
-  }
-
-  // 3. Kiểm tra nhóm có tồn tại không
-  const groupResult = await dynamoDB
-    .get({
-      TableName: 'Groups',
-      Key: { groupId },
-    })
-    .promise();
-
-  if (!groupResult.Item) {
-    throw new AppError('Nhóm không tồn tại', 404);
-  }
-
-  const group = groupResult.Item;
-
-  // 4. Kiểm tra quyền của người yêu cầu (requestingUserId phải là admin)
-  const requestingUserRole = group.roles?.[requestingUserId] || 'member';
-  if (requestingUserRole !== 'admin') {
-    throw new AppError('Bạn không có quyền gán vai trò. Chỉ admin mới có thể thực hiện hành động này.', 403);
-  }
-
-  // 5. Kiểm tra targetUserId có phải là thành viên của nhóm không
-  const member = await dynamoDB.get({
-    TableName: 'GroupMembers',
-    Key: {
-      groupId,
-      userId: targetUserId,
-    },
-  }).promise();
-  
-  if (!member.Item) {
-    throw new AppError('Người dùng không phải là thành viên của nhóm', 400);
-  }
-
-  // 6. Kiểm tra số lượng admin trong nhóm
-  if (role === 'admin') {
-    const adminCount = Object.values(group.roles).filter(r => r === 'admin').length;
-    
-    if (adminCount >= 1) {
-      throw new AppError('Mỗi nhóm chỉ được phép có 1 admin.', 400);
-    }
-  }
-
-  // 7. Kiểm tra số lượng co-admin trong nhóm
-  if (role === 'co-admin') {
-    const coAdminCount = Object.values(group.roles).filter(r => r === 'co-admin').length;
-    
-    if (coAdminCount >= 2) {
-      throw new AppError('Mỗi nhóm chỉ được phép có tối đa 2 co-admin.', 400);
-    }
-  }
-
-  // 8. Cập nhật vai trò trong bảng Groups (dùng ExpressionAttributeNames để tránh lỗi reserved keyword)
-  const updatedRoles = {
-    ...group.roles,
-    [targetUserId]: role,
-  };
-
-  // Log the updated roles to verify the change
-  console.log('Updated roles:', updatedRoles);
-
   try {
-    // Cập nhật bảng Groups
-    await dynamoDB.update({
-      TableName: 'Groups',
-      Key: { groupId },
-      UpdateExpression: 'SET #roles = :roles',
-      ExpressionAttributeNames: {
-        '#roles': 'roles', // Thay thế từ khóa 'roles'
-      },
-      ExpressionAttributeValues: {
-        ':roles': updatedRoles,
+    // 1. Kiểm tra định dạng groupId, targetUserId và requestingUserId
+    console.log('✅ groupId:', groupId);
+    console.log('✅ targetUserId:', targetUserId);
+    console.log('✅ requestingUserId:', requestingUserId);
+    if (
+      !groupId ||
+      !targetUserId ||
+      !requestingUserId ||
+      !isValidUUID(groupId) ||
+      !isValidUUID(targetUserId) ||
+      !isValidUUID(requestingUserId)
+    ) {
+      throw new AppError('groupId, targetUserId hoặc requestingUserId không hợp lệ', 400);
+    }
+
+    // 2. Kiểm tra vai trò hợp lệ
+    const validRoles = ['admin', 'co-admin', 'member'];
+    if (!validRoles.includes(role)) {
+      throw new AppError('Vai trò không hợp lệ. Vai trò phải là admin, co-admin hoặc member.', 400);
+    }
+
+    // 3. Kiểm tra nhóm có tồn tại không
+    const groupResult = await dynamoDB
+      .get({
+        TableName: 'Groups',
+        Key: { groupId },
+      })
+      .promise();
+
+    if (!groupResult.Item) {
+      throw new AppError('Nhóm không tồn tại', 404);
+    }
+
+    const group = groupResult.Item;
+
+    // 4. Kiểm tra quyền của người yêu cầu (requestingUserId phải là admin)
+    const requestingUserRole = group.roles?.[requestingUserId] || 'member';
+    if (requestingUserRole !== 'admin') {
+      throw new AppError('Bạn không có quyền gán vai trò. Chỉ admin mới có thể thực hiện hành động này.', 403);
+    }
+
+    // 5. Kiểm tra targetUserId có phải là thành viên của nhóm không
+    const member = await dynamoDB.get({
+      TableName: 'GroupMembers',
+      Key: {
+        groupId,
+        userId: targetUserId,
       },
     }).promise();
 
-    // Cập nhật vai trò trong bảng GroupMembers
-    await dynamoDB.update({
-      TableName: 'GroupMembers',
-      Key: { groupId, userId: targetUserId },
-      UpdateExpression: 'SET #role = :role',
-      ExpressionAttributeNames: {
-        '#role': 'role', // Thay thế từ khóa 'role'
-      },
-      ExpressionAttributeValues: {
-        ':role': role,
-      },
-    }).promise();
+    if (!member.Item) {
+      throw new AppError('Người dùng không phải là thành viên của nhóm', 400);
+    }
+
+    // 6. Kiểm tra số lượng admin trong nhóm
+    if (role === 'admin') {
+      const adminCount = Object.values(group.roles).filter(r => r === 'admin').length;
+
+      if (adminCount >= 1) {
+        throw new AppError('Mỗi nhóm chỉ được phép có 1 admin.', 400);
+      }
+    }
+
+    // 7. Kiểm tra số lượng co-admin trong nhóm
+    if (role === 'co-admin') {
+      const coAdminCount = Object.values(group.roles).filter(r => r === 'co-admin').length;
+
+      if (coAdminCount >= 2) {
+        throw new AppError('Mỗi nhóm chỉ được phép có tối đa 2 co-admin.', 400);
+      }
+    }
+
+    // 8. Cập nhật vai trò trong bảng Groups (dùng ExpressionAttributeNames để tránh lỗi reserved keyword)
+    const updatedRoles = {
+      ...group.roles,
+      [targetUserId]: role,
+    };
+
+    // Log the updated roles to verify the change
+    console.log('Updated roles:', updatedRoles);
+
+    // Hàm cập nhật bảng Groups và GroupMembers riêng biệt để dễ bảo trì
+    await updateGroupRoles(groupId, updatedRoles);
+    await updateMemberRole(groupId, targetUserId, role);
 
     console.log('Roles updated successfully in both tables.');
+
+    // 9. Trả về thông tin vai trò đã được cập nhật
+    return {
+      groupId,
+      userId: targetUserId,
+      role,
+    };
   } catch (error) {
-    console.error('Error updating roles:', error);
+    console.error('Error updating member role:', error);
     throw new AppError('Không thể cập nhật vai trò', 500);
   }
+};
 
-  // 9. Trả về thông tin vai trò đã được cập nhật
-  return {
-    groupId,
-    userId: targetUserId,
-    role,
-  };
+// Cập nhật vai trò trong bảng Groups
+const updateGroupRoles = async (groupId, updatedRoles) => {
+  await dynamoDB.update({
+    TableName: 'Groups',
+    Key: { groupId },
+    UpdateExpression: 'SET #roles = :roles',
+    ExpressionAttributeNames: {
+      '#roles': 'roles', // Thay thế từ khóa 'roles'
+    },
+    ExpressionAttributeValues: {
+      ':roles': updatedRoles,
+    },
+  }).promise();
+};
+
+// Cập nhật vai trò trong bảng GroupMembers
+const updateMemberRole = async (groupId, targetUserId, role) => {
+  await dynamoDB.update({
+    TableName: 'GroupMembers',
+    Key: { groupId, userId: targetUserId },
+    UpdateExpression: 'SET #role = :role',
+    ExpressionAttributeNames: {
+      '#role': 'role', // Thay thế từ khóa 'role'
+    },
+    ExpressionAttributeValues: {
+      ':role': role,
+    },
+  }).promise();
 };
 
 const createGroup = async (name, createdBy, members = []) => {
@@ -503,23 +492,8 @@ const createGroup = async (name, createdBy, members = []) => {
         .promise();
     }
 
-    // 10. Phát sự kiện qua Socket.IO
-    io().to(memberIds).emit('groupEvent', {
-      event: 'groupCreated',
-      groupId,
-      name: name.trim(),
-      roles, // Gửi thông tin vai trò (chỉ admin và member)
-    });
-
-    memberIds.forEach(memberId => {
-      io().to(memberId).emit('conversationCreated', {
-        conversationId: uuidv4(),
-        targetUserId: groupId,
-        groupName: name.trim(),
-        role: roles[memberId], // Gửi vai trò của thành viên (admin hoặc member)
-      });
-    });
-
+ 
+  
     logger.info('Tạo nhóm và hội thoại thành công', { groupId, memberIds });
     return newGroup;
   } catch (error) {
@@ -662,15 +636,7 @@ const updateGroupInfo = async (groupId, userId, { name, avatarFile }) => {
       status: MESSAGE_STATUSES.SENT,
     }, 'GroupMessages', process.env.BUCKET_NAME_Chat_Send);
 
-    // Emit socket
-    io().to(group.members).emit('groupEvent', {
-      event: 'groupInfoUpdated',
-      groupId,
-      name: name || group.name,
-      avatar: avatarUrl,
-      updatedBy: userName,
-    });
-
+  
     logger.info('Cập nhật thông tin nhóm thành công', { groupId, userId, name, avatar: avatarUrl });
 
     return {
@@ -725,13 +691,7 @@ const joinGroup = async (groupId, userId) => {
     }).promise();
 
     const adminMembers = group.members.filter(memberId => ['admin', 'co-admin'].includes(group.roles[memberId]));
-    io().to(adminMembers).emit('groupEvent', {
-      event: 'joinRequest',
-      groupId,
-      userId,
-      userName,
-      inviterName: null,
-    });
+  
 
     logger.info('Tạo yêu cầu tham gia nhóm thành công', { groupId, userId });
     return {
@@ -810,13 +770,7 @@ const addMemberToGroup = async (groupId, inviterId, newUserId) => {
 
     // Gửi sự kiện yêu cầu tham gia đến các quản trị viên
     const adminMembers = group.members.filter(memberId => ['admin', 'co-admin'].includes(group.roles[memberId]));
-    io().to(adminMembers).emit('groupEvent', {
-      event: 'joinRequest',
-      groupId,
-      userId: newUserId,
-      userName: newUserName,
-      inviterName,
-    });
+   
 
     logger.info('Tạo yêu cầu tham gia nhóm thành công', { groupId, newUserId, inviterId });
     return {
@@ -882,13 +836,7 @@ const approveJoinRequest = async (groupId, adminUserId, userId, approve, reason 
         },
       }).promise();
 
-      io().to(userId).emit('groupEvent', {
-        event: 'joinRequestProcessed',
-        groupId,
-        approved: true,
-        groupName: group.name,
-      });
-
+     
       logger.info('Yêu cầu tham gia nhóm đã được phê duyệt', { groupId, userId, adminUserId });
       return {
         message: `Yêu cầu tham gia nhóm của ${userName} đã được phê duyệt!`,
@@ -955,15 +903,7 @@ const rejectJoinRequest = async (groupId, adminUserId, userId, reason = null) =>
       },
     }).promise();
 
-    // 7. Phát sự kiện Socket.IO
-    io().to(userId).emit('groupEvent', {
-      event: 'joinRequestProcessed',
-      groupId,
-      approved: false,
-      groupName: group.name,
-      ...(reason && { rejectionReason: reason }),
-    });
-
+   
     // 8. Ghi log và trả về kết quả
     logger.info('Yêu cầu tham gia nhóm đã được từ chối', { groupId, userId, adminUserId, reason });
     return {
@@ -1153,11 +1093,6 @@ const deleteGroup = async (groupId, adminUserId) => {
     await dynamoDB.delete({ TableName: 'Groups', Key: { groupId } }).promise();
     await deleteGroupMessages(groupId);
 
-    io().to(members).emit('groupEvent', { event: 'groupDeleted', groupId });
-    members.forEach(memberId => {
-      io().to(memberId).emit('conversationDeleted', { targetUserId: groupId });
-    });
-
     logger.info('Xóa nhóm và hội thoại thành công', { groupId });
     return { message: 'Xóa nhóm thành công!', groupId };
   } catch (error) {
@@ -1258,7 +1193,7 @@ const sendGroupMessage = async (groupId, senderId, messageData) => {
   // Cập nhật lastMessage cho tất cả thành viên trong nhóm
   await updateLastMessageForGroup(groupId, savedMessage);
 
-  io().to(groupId).emit('groupMessage', savedMessage);
+ 
   return savedMessage;
 };
 
@@ -1519,7 +1454,7 @@ const manageGroupMessage = async (groupId, senderId, messageId, action) => {
         },
       }).promise();
 
-      io().to(senderId).emit('groupMessageDeleted', { groupId, messageId });
+     
       return { success: true, message: 'Tin nhắn đã được xóa chỉ với bạn!' };
     
   }
@@ -1543,7 +1478,7 @@ const manageGroupMessage = async (groupId, senderId, messageId, action) => {
         ExpressionAttributeValues: { ':r': recallStatus },
       }).promise();
 
-      io().to(groupId).emit('groupMessageRecalled', { groupId, messageId, status: recallStatus });
+     
       return { success: true, message: `Tin nhắn đã được thu hồi với mọi người! Trạng thái: ${recallStatus}` };
   }
 
@@ -1589,7 +1524,7 @@ const restoreGroupMessage = async (groupId, senderId, messageId) => {
     await updateLastMessageForGroup(groupId, message);
   }
 
-  io().to(senderId).emit('groupMessageRestored', { groupId, messageId });
+
   return { success: true, message: 'Tin nhắn đã được khôi phục!' };
 };
 
@@ -1612,7 +1547,7 @@ const pinGroupMessage = async (groupId, senderId, messageId) => {
       UpdateExpression: 'SET pinnedMessages = :p',
       ExpressionAttributeValues: { ':p': pinnedMessages },
     }).promise();
-    io().to(groupId).emit('groupMessagePinned', { groupId, messageId });
+   
   }
 
   return { success: true, message: 'Tin nhắn đã được ghim!' };
@@ -1801,13 +1736,7 @@ const updateCommunitySettings = async (groupId, adminUserId, settings) => {
         status: MESSAGE_STATUSES.SENT,
       }, 'GroupMessages', process.env.BUCKET_NAME_Chat_Send);
 
-      // Emit a socket event notifying about the group settings update
-      io().to(group.members).emit('groupEvent', {
-        event: 'communitySettingsUpdated',
-        groupId,
-        settings: { allowChangeGroupInfo, showAllMembers, allowAddMembers, requireApproval, restrictMessaging },
-        message: messageContent,
-      });
+     
     }
 
     // Log success and return the result

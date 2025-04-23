@@ -1,36 +1,29 @@
-
 const ConversationService = require('../services/conversation.service');
-
+const logger = require('../config/logger');
+const { dynamoDB } = require('../config/aws.config');
+const { isValidUUID } = require('../utils/helpers');
+const { AppError } = require('../utils/errorHandler');
 const setAutoDeleteSettingController = async (req, res) => {
   try {
     const userId = req.user.id;
     const { targetUserId, autoDeleteAfter } = req.body;
-
     if (!targetUserId || !autoDeleteAfter) {
-      return res.status(400).json({ message: 'Thiếu targetUserId hoặc autoDeleteAfter!' });
+      throw new AppError('targetUserId và autoDeleteAfter là bắt buộc', 400);
     }
-
+    if (!isValidUUID(targetUserId)) {
+      throw new AppError('targetUserId không hợp lệ', 400);
+    }
     const result = await ConversationService.setAutoDeleteSetting(userId, targetUserId, autoDeleteAfter);
-    res.status(200).json(result);
+    req.io.of('/conversation').to(`user:${userId}`).emit('conversation:setAutoDelete', {
+      success: true,
+      data: { message: result.message, targetUserId, autoDeleteAfter },
+    });
+    logger.info(`[ConversationController] Emitted conversation:setAutoDelete to user:${userId}`);
+    res.status(200).json({ success: true, data: result });
   } catch (error) {
-    res.status(500).json({ message: error.message || 'Lỗi khi cài đặt tự động xóa!' });
+    logger.error('[setAutoDeleteSettingController] Error', { error: error.message });
+    throw new AppError(error.message || 'Lỗi khi cài đặt tự động xóa', error.statusCode || 500);
   }
-};
-
-const getAutoDeleteSettingController = async (req, res) => {
-    try {
-      const userId = req.user.id;
-      const { targetUserId } = req.params;
-  
-      if (!targetUserId) {
-        return res.status(400).json({ message: 'Thiếu targetUserId!' });
-      }
-  
-      const setting = await ConversationService.getAutoDeleteSetting(userId, targetUserId);
-      res.status(200).json({ autoDeleteAfter: setting });
-    } catch (error) {
-      res.status(500).json({ message: error.message || 'Lỗi khi lấy cài đặt tự động xóa!' });
-    }
 };
 
 const muteConversationController = async (req, res) => {
@@ -38,7 +31,6 @@ const muteConversationController = async (req, res) => {
     const userId = req.user.id;
     const { mutedUserId, duration } = req.body;
 
-    // Kiểm tra input
     if (!mutedUserId || !duration) {
       return res.status(400).json({ success: false, message: 'mutedUserId và duration là bắt buộc!' });
     }
@@ -49,21 +41,30 @@ const muteConversationController = async (req, res) => {
     }
 
     const result = await ConversationService.muteConversation(userId, mutedUserId, duration);
+
+    // Phát sự kiện qua Socket.IO trong namespace /conversation
+    req.io.of('/conversation').to(`user:${userId}`).emit('conversation:mute:success', {
+      message: result.message,
+      mutedUserId,
+      muteUntil: result.muteUntil,
+    });
+
+    // Thông báo người kia nếu là bạn bè
+    const isFriend = await dynamoDB.get({
+      TableName: 'Friends',
+      Key: { userId, friendId: mutedUserId },
+    }).promise().then(res => !!res.Item);
+    if (isFriend) {
+      req.io.of('/conversation').to(`user:${mutedUserId}`).emit('conversation:mute:notify', {
+        mutedBy: userId,
+        duration,
+      });
+    }
+    logger.info(`[ConversationController] Emitted conversation:mute:success to user:${userId}${isFriend ? ` and conversation:mute:notify to user:${mutedUserId}` : ''}`);
+
     res.status(200).json(result);
   } catch (error) {
-    console.error('Lỗi trong muteConversationController:', error);
-    res.status(500).json({ success: false, message: error.message || 'Lỗi server' });
-  }
-};
-
-const getMutedConversationsController = async (req, res) => {
-  try {
-    const userId = req.user.id;
-
-    const result = await ConversationService.getMutedConversations(userId);
-    res.status(200).json(result);
-  } catch (error) {
-    console.error('Lỗi trong getMutedConversationsController:', error);
+    logger.error('[muteConversationController] Error', { error: error.message });
     res.status(500).json({ success: false, message: error.message || 'Lỗi server' });
   }
 };
@@ -82,9 +83,17 @@ const hideConversationController = async (req, res) => {
     }
 
     const result = await ConversationService.hideConversation(userId, hiddenUserId, password);
+
+    // Phát sự kiện qua Socket.IO trong namespace /conversation
+    req.io.of('/conversation').to(`user:${userId}`).emit('conversation:hide:success', {
+      message: result.message,
+      hiddenUserId,
+    });
+    logger.info(`[ConversationController] Emitted conversation:hide:success to user:${userId}`);
+
     res.status(200).json(result);
   } catch (error) {
-    console.error('Lỗi trong hideConversationController:', error);
+    logger.error('[hideConversationController] Error', { error: error.message });
     res.status(400).json({ success: false, message: error.message || 'Lỗi khi ẩn hội thoại' });
   }
 };
@@ -99,168 +108,200 @@ const unhideConversationController = async (req, res) => {
     }
 
     const result = await ConversationService.unhideConversation(userId, hiddenUserId, password);
+
+    // Phát sự kiện qua Socket.IO trong namespace /conversation
+    req.io.of('/conversation').to(`user:${userId}`).emit('conversation:unhide:success', {
+      message: result.message,
+      hiddenUserId,
+    });
+    logger.info(`[ConversationController] Emitted conversation:unhide:success to user:${userId}`);
+
     res.status(200).json(result);
   } catch (error) {
-    console.error('Lỗi trong unhideConversationController:', error);
+    logger.error('[unhideConversationController] Error', { error: error.message });
     res.status(403).json({ success: false, message: error.message || 'Lỗi khi bỏ ẩn hội thoại' });
+  }
+};
+
+const pinConversationController = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { pinnedUserId } = req.body;
+
+    if (!pinnedUserId) {
+      return res.status(400).json({ success: false, message: 'pinnedUserId là bắt buộc!' });
+    }
+
+    const result = await ConversationService.pinConversation(userId, pinnedUserId);
+
+    // Phát sự kiện qua Socket.IO trong namespace /conversation
+    req.io.of('/conversation').to(`user:${userId}`).emit('conversation:pin:success', {
+      message: result.message,
+      pinnedUserId,
+    });
+    logger.info(`[ConversationController] Emitted conversation:pin:success to user:${userId}`);
+
+    res.status(200).json(result);
+  } catch (error) {
+    logger.error('[pinConversationController] Error', { error: error.message });
+    res.status(400).json({ success: false, message: error.message || 'Lỗi khi ghim hội thoại' });
+  }
+};
+
+const unpinConversationController = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { pinnedUserId } = req.body;
+
+    if (!pinnedUserId) {
+      return res.status(400).json({ success: false, message: 'pinnedUserId là bắt buộc!' });
+    }
+
+    const result = await ConversationService.unpinConversation(userId, pinnedUserId);
+
+    // Phát sự kiện qua Socket.IO trong namespace /conversation
+    req.io.of('/conversation').to(`user:${userId}`).emit('conversation:unpin:success', {
+      message: result.message,
+      pinnedUserId,
+    });
+    logger.info(`[ConversationController] Emitted conversation:unpin:success to user:${userId}`);
+
+    res.status(200).json(result);
+  } catch (error) {
+    logger.error('[unpinConversationController] Error', { error: error.message });
+    res.status(400).json({ success: false, message: error.message || 'Lỗi khi bỏ ghim hội thoại' });
+  }
+};
+
+const createConversationController = async (req, res) => {
+  const { userId, targetUserId } = req.body;
+
+  try {
+    const result = await ConversationService.createConversation(userId, targetUserId);
+
+    // Phát sự kiện qua Socket.IO trong namespace /conversation
+    if (result.conversationId) {
+      req.io.of('/conversation').to(`user:${userId}`).emit('conversation:create:success', {
+        message: 'Hội thoại được tạo thành công',
+        conversationId: result.conversationId,
+        targetUserId,
+      });
+      req.io.of('/conversation').to(`user:${targetUserId}`).emit('conversation:created', {
+        conversationId: result.conversationId,
+        createdBy: userId,
+      });
+      logger.info(`[ConversationController] Emitted conversation:create:success to user:${userId} and conversation:created to user:${targetUserId}`);
+    }
+
+    if (result.conversationId) {
+      return res.status(201).json({
+        success: true,
+        message: 'Hội thoại được tạo thành công',
+        data: { conversationId: result.conversationId },
+      });
+    } else {
+      return res.status(200).json({
+        success: true,
+        message: 'Hội thoại đã tồn tại',
+        data: { conversationId: null },
+      });
+    }
+  } catch (error) {
+    logger.error('[createConversationController] Error', { userId, targetUserId, error: error.message });
+    res.status(500).json({ success: false, message: error.message || 'Lỗi server' });
+  }
+};
+
+const getAutoDeleteSettingController = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { targetUserId } = req.query;
+
+    if (!targetUserId) {
+      return res.status(400).json({ success: false, message: 'targetUserId là bắt buộc!' });
+    }
+
+    const result = await ConversationService.getAutoDeleteSetting(userId, targetUserId);
+    res.status(200).json(result);
+  } catch (error) {
+    logger.error('[getAutoDeleteSettingController] Error', { error: error.message });
+    res.status(500).json({ success: false, message: error.message || 'Lỗi server' });
+  }
+};
+
+const getMutedConversationsController = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const result = await ConversationService.getMutedConversations(userId);
+    res.status(200).json(result);
+  } catch (error) {
+    logger.error('[getMutedConversationsController] Error', { error: error.message });
+    res.status(500).json({ success: false, message: error.message || 'Lỗi server' });
   }
 };
 
 const getHiddenConversationsController = async (req, res) => {
   try {
     const userId = req.user.id;
-
     const result = await ConversationService.getHiddenConversations(userId);
     res.status(200).json(result);
   } catch (error) {
-    console.error('Lỗi trong getHiddenConversationsController:', error);
+    logger.error('[getHiddenConversationsController] Error', { error: error.message });
     res.status(500).json({ success: false, message: error.message || 'Lỗi server' });
   }
 };
 
-const pinConversationController = async (req, res) => {
-    try {
-      const userId = req.user.id;
-      const { pinnedUserId } = req.body;
-  
-      if (!pinnedUserId) {
-        return res.status(400).json({ success: false, message: 'pinnedUserId là bắt buộc!' });
-      }
-  
-      const result = await ConversationService.pinConversation(userId, pinnedUserId);
-      res.status(200).json(result);
-    } catch (error) {
-      console.error('Lỗi trong pinConversationController:', error);
-      res.status(400).json({ success: false, message: error.message || 'Lỗi khi ghim hội thoại' });
-    }
-};
-  
-const unpinConversationController = async (req, res) => {
-    try {
-      const userId = req.user.id;
-      const { pinnedUserId } = req.body;
-  
-      if (!pinnedUserId) {
-        return res.status(400).json({ success: false, message: 'pinnedUserId là bắt buộc!' });
-      }
-  
-      const result = await ConversationService.unpinConversation(userId, pinnedUserId);
-      res.status(200).json(result);
-    } catch (error) {
-      console.error('Lỗi trong unpinConversationController:', error);
-      res.status(400).json({ success: false, message: error.message || 'Lỗi khi bỏ ghim hội thoại' });
-    }
-};
-
 const getPinnedConversationsController = async (req, res) => {
-    try {
-      const userId = req.user.id;
-      const result = await ConversationService.getPinnedConversations(userId);
-      res.status(200).json({ success: true, ...result });
-    } catch (error) {
-      console.error('Lỗi trong getPinnedConversationsController:', error);
-      res.status(500).json({ success: false, message: error.message || 'Lỗi server' });
-    }
-  };
-
-  const createConversationController = async (req, res, next) => {
-    const { userId, targetUserId } = req.body;
-  
-    try {
-      const result = await ConversationService.createConversation(userId, targetUserId);
-      if (result.conversationId) {
-        return res.status(201).json({
-          success: true,
-          message: 'Hội thoại được tạo thành công',
-          data: { conversationId: result.conversationId },
-        });
-      } else {
-        return res.status(200).json({
-          success: true,
-          message: 'Hội thoại đã tồn tại',
-          data: { conversationId: null },
-        });
-      }
-    } catch (error) {
-      logger.error('Error in createConversation controller', {
-        userId,
-        targetUserId,
-        error: error.message,
-      });
-      next(error);
-    }
-  };
-  
-  const getConversationController = async (req, res, next) => {
-    const { userId, targetUserId } = req.query;
-  
-    try {
-      const result = await ConversationService.getConversation(userId, targetUserId);
-      return res.status(200).json({
-        success: true,
-        message: 'Lấy hội thoại thành công',
-        data: result.conversation,
-      });
-    } catch (error) {
-      logger.error('Error in getConversation controller', {
-        userId,
-        targetUserId,
-        error: error.message,
-      });
-      next(error);
-    }
-  };
-  const getConversationSummaryController = async (req, res) => {
+  try {
     const userId = req.user.id;
-    const { minimal = 'false' } = req.query;
-  
-    try {
-      if (!userId) {
-        return res.status(400).json({
-          success: false,
-          message: 'Thiếu thông tin user',
-        });
-      }
-  
-      const isMinimal = minimal === 'true';
-      const result = await ConversationService.getConversationSummary(userId, { minimal: isMinimal });
-  
-      if (!result.success) {
-        return res.status(500).json({
-          success: false,
-          message: result.error || 'Lỗi khi lấy tóm tắt hội thoại',
-        });
-      }
-  
-      return res.status(200).json({
-        success: true,
-        message: isMinimal ? 'Lấy danh sách người nhắn thành công' : 'Lấy tóm tắt hội thoại thành công',
-        data: result.data,
-      });
-    } catch (error) {
-      console.error('Lỗi trong getConversationSummaryController:', error);
-  
-      return res.status(500).json({
-        success: false,
-        message: 'Lỗi server',
-        error: error.message || 'Đã xảy ra lỗi không xác định',
-      });
+    const result = await ConversationService.getPinnedConversations(userId);
+    res.status(200).json(result);
+  } catch (error) {
+    logger.error('[getPinnedConversationsController] Error', { error: error.message });
+    res.status(500).json({ success: false, message: error.message || 'Lỗi server' });
+  }
+};
+
+const getConversationController = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { conversationId } = req.params;
+
+    if (!conversationId) {
+      return res.status(400).json({ success: false, message: 'conversationId là bắt buộc!' });
     }
-  };
+
+    const result = await ConversationService.getConversation(userId, conversationId);
+    res.status(200).json(result);
+  } catch (error) {
+    logger.error('[getConversationController] Error', { error: error.message });
+    res.status(500).json({ success: false, message: error.message || 'Lỗi server' });
+  }
+};
+
+const getConversationSummaryController = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const result = await ConversationService.getConversationSummary(userId);
+    res.status(200).json(result);
+  } catch (error) {
+    logger.error('[getConversationSummaryController] Error', { error: error.message });
+    res.status(500).json({ success: false, message: error.message || 'Lỗi server' });
+  }
+};
+
 module.exports = {
-    setAutoDeleteSettingController,
-    getAutoDeleteSettingController,
-    pinConversationController,
-    unpinConversationController,
-
-    muteConversationController,
-    getMutedConversationsController,
-    hideConversationController,
-    unhideConversationController,
-    getHiddenConversationsController,
-
-    getPinnedConversationsController,
-    createConversationController,
-    getConversationController,
-    getConversationSummaryController,
-}
+  setAutoDeleteSettingController,
+  getAutoDeleteSettingController,
+  pinConversationController,
+  unpinConversationController,
+  muteConversationController,
+  getMutedConversationsController,
+  hideConversationController,
+  unhideConversationController,
+  getHiddenConversationsController,
+  getPinnedConversationsController,
+  createConversationController,
+  getConversationController,
+  getConversationSummaryController,
+};

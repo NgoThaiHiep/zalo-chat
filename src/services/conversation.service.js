@@ -104,10 +104,6 @@ const hideConversation = async (userId, hiddenUserId, password) => {
   } catch (err) {
     logger.error('Lỗi lưu vào Redis:', err);
   }
-
-  // 8. Phát sự kiện
-  io().to(userId).emit('conversationHidden', { hiddenUserId });
-
   return { success: true, message: 'Đã ẩn cuộc trò chuyện!' };
 };
 
@@ -167,7 +163,7 @@ const unhideConversation = async (userId, hiddenUserId, password) => {
   }
 
   // 6. Phát sự kiện
-  io().to(userId).emit('conversationUnhidden', { hiddenUserId });
+
 
   return { success: true, message: 'Đã mở ẩn cuộc trò chuyện!' };
 };
@@ -416,7 +412,7 @@ const muteConversation = async (userId, mutedUserId, duration) => {
         ConditionExpression: 'attribute_exists(settings.muteUntil)',
       }).promise();
       await redisClient.del(`mute:${userId}:${mutedUserId}`);
-      io().to(userId).emit('conversationUnmuted', { mutedUserId });
+    
       return { success: true, message: 'Đã bật thông báo!' };
     } catch (err) {
       if (err.code === 'ConditionalCheckFailedException') {
@@ -473,7 +469,7 @@ const muteConversation = async (userId, mutedUserId, duration) => {
     logger.error('Lỗi lưu vào Redis:', err);
   }
 
-  io().to(userId).emit('conversationMuted', { mutedUserId, muteUntil });
+ 
 
   return { success: true, message: 'Đã chặn thông báo!', muteUntil };
 };
@@ -548,7 +544,7 @@ const pinConversation = async (userId, pinnedUserId) => {
     throw new AppError('Không thể ghim hội thoại!', 500);
   }
 
-  io().to(userId).emit('conversationPinned', { pinnedUserId });
+
 
   return { success: true, message: 'Đã ghim hội thoại!' };
 };
@@ -584,7 +580,7 @@ const unpinConversation = async (userId, pinnedUserId) => {
     throw new AppError('Không thể bỏ ghim hội thoại!', 500);
   }
 
-  io().to(userId).emit('conversationUnpinned', { pinnedUserId });
+
 
   return { success: true, message: 'Đã bỏ ghim hội thoại!' };
 };
@@ -852,7 +848,7 @@ const setAutoDeleteSetting = async (userId, targetUserId, autoDeleteAfter) => {
     throw new AppError('Không thể đặt cài đặt tự động xóa!', 500);
   }
 
-  io().to(userId).emit('autoDeleteSettingUpdated', { targetUserId, autoDeleteAfter });
+ 
 
   return { success: true, message: `Cài đặt tự động xóa đã được đặt thành ${autoDeleteAfter}` };
 };
@@ -1114,6 +1110,5 @@ module.exports = {
   createConversation,
   checkConversationExists,
   getConversation,
-  createConversation,
   getConversationSummary,
 };

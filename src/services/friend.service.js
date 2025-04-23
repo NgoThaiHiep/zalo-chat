@@ -3,6 +3,7 @@ const conversation = require('./conversation.service');
 const {redisClient} = require('../config/redis')
 const MessageService = require('./message.service');
 const { getOwnProfile} = require('./auth.service');
+const  logger = require('../config/logger');
 const {createConversation} = require('./conversation.service');
 // Hàm kiểm tra chặn
 const checkBlockStatus = async (senderId, receiverId) => {

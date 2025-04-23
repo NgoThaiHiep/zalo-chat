@@ -1,176 +1,199 @@
-const { Server } = require("socket.io");
-const {dynamoDB} = require("../config/aws.config");
-const {redisClient} = require("../config/redis");
+const logger = require('../config/logger');
+const authenticateSocket = require('../middlewares/socketAuthMiddleware');
+const FriendService = require('../services/friend.service');
+const ConversationService = require('../services/conversation.service');
+const { dynamoDB } = require('../config/aws.config');
+const { AppError } = require('../utils/errorHandler');
+const { isValidUUID } = require('../utils/helpers');
 
+const initializeFriendSocket = (friendIo) => {
+  friendIo.use(authenticateSocket);
 
-module.exports = function (io) {
-  io.on("connection", (socket) => {
-    console.log(`User connected: ${socket.id}`);
+  friendIo.on('connection', (socket) => {
+    const userId = socket.user.id;
+    logger.info(`[FriendSocket] User connected: ${userId} (Socket ID: ${socket.id})`);
 
-    // Lắng nghe yêu cầu kết bạn
-    socket.on("sendFriendRequest", async ({ senderId, receiverId }) => {
+    socket.join(userId);
+
+    socket.on('friend:sendRequest', async ({ receiverId, message }, callback) => {
       try {
-        if (senderId === receiverId) {
-          socket.emit("error", { message: "Cannot send friend request to yourself" });
-          return;
+        if (!receiverId) {
+          throw new AppError('receiverId is required', 400);
         }
-
-        // Kiểm tra xem đã là bạn bè hay chưa
-        const isAlreadyFriends = await dynamoDB.checkFriendStatus(senderId, receiverId);
-        if (isAlreadyFriends) {
-          socket.emit("error", { message: "Already friends" });
-          return;
-        }
-
-        // Kiểm tra xem đã gửi yêu cầu chưa
-        const isRequestSent = await dynamoDB.checkRequestStatus(senderId, receiverId);
-        if (isRequestSent) {
-          socket.emit("error", { message: "Friend request already sent" });
-          return;
-        }
-
-        // Gửi yêu cầu kết bạn
-        await dynamoDB.sendFriendRequest(senderId, receiverId);
-        socket.emit("friendRequestSent", { message: "Friend request sent" });
-
-        // Thông báo cho người nhận
-        socket.to(receiverId).emit("friendRequestReceived", { senderId, message: "You have a new friend request" });
-
+        const result = await FriendService.sendFriendRequest(userId, receiverId, message);
+        callback({ success: true, data: { requestId: result.requestId, message: result.message } });
+        friendIo.to(receiverId).emit('friend:requestReceived', {
+          requestId: result.requestId,
+          senderId: userId,
+          message,
+        });
+        logger.info(`[FriendSocket] User ${userId} sent friend request to ${receiverId}`);
       } catch (error) {
-        console.error("Error in sendFriendRequest:", error);
-        socket.emit("error", { message: "An error occurred while sending friend request" });
+        logger.error(`[FriendSocket] Error sending friend request for ${userId}`, { error: error.message });
+        callback({ success: false, message: error.message });
       }
     });
 
-    // Lắng nghe chấp nhận yêu cầu kết bạn
-    socket.on("acceptFriendRequest", async ({ senderId, receiverId }) => {
+    socket.on('friend:acceptRequest', async ({ requestId }, callback) => {
       try {
-        const requestStatus = await dynamoDB.checkRequestStatus(senderId, receiverId);
-        if (!requestStatus) {
-          socket.emit("error", { message: "No pending friend request" });
-          return;
+        if (!requestId) {
+          throw new AppError('requestId is required', 400);
         }
+        const result = await FriendService.acceptFriendRequest(userId, requestId);
+        callback({ success: true, data: { message: result.message, conversationIds: result.conversationIds } });
 
-        // Chấp nhận yêu cầu
-        await dynamoDB.acceptFriendRequest(senderId, receiverId);
-        socket.emit("friendRequestAccepted", { message: "Friend request accepted" });
+        const senderId = requestId.split('#')[0];
+        friendIo.to(senderId).emit('friend:requestAccepted', {
+          accepterId: userId,
+          conversationId: result.conversationIds[senderId],
+        });
 
-        // Cập nhật thông báo cho cả hai người
-        socket.to(senderId).emit("friendRequestAccepted", { receiverId, message: "Your friend request was accepted" });
+        await ConversationService.createConversation(userId, senderId);
+        await ConversationService.createConversation(senderId, userId);
 
-        // Cập nhật thêm trong Redis hoặc thông báo theo nhu cầu
-        redisClient.set(`${senderId}:${receiverId}:friends`, true);
-
+        logger.info(`[FriendSocket] User ${userId} accepted friend request ${requestId}`);
       } catch (error) {
-        console.error("Error in acceptFriendRequest:", error);
-        socket.emit("error", { message: "An error occurred while accepting friend request" });
+        logger.error(`[FriendSocket] Error accepting friend request for ${userId}`, { error: error.message });
+        callback({ success: false, message: error.message });
       }
     });
 
-    // Lắng nghe từ chối yêu cầu kết bạn
-    socket.on("rejectFriendRequest", async ({ senderId, receiverId }) => {
+    socket.on('friend:rejectRequest', async ({ requestId }, callback) => {
       try {
-        const requestStatus = await dynamoDB.checkRequestStatus(senderId, receiverId);
-        if (!requestStatus) {
-          socket.emit("error", { message: "No pending friend request" });
-          return;
+        if (!requestId) {
+          throw new AppError('requestId is required', 400);
         }
+        const result = await FriendService.rejectFriendRequest(userId, requestId);
+        callback({ success: true, message: result.message });
 
-        // Từ chối yêu cầu
-        await dynamoDB.rejectFriendRequest(senderId, receiverId);
-        socket.emit("friendRequestRejected", { message: "Friend request rejected" });
-
-        // Cập nhật thông báo cho người gửi
-        socket.to(senderId).emit("friendRequestRejected", { receiverId, message: "Your friend request was rejected" });
-
+        const senderId = requestId.split('#')[0];
+        friendIo.to(senderId).emit('friend:requestRejected', { rejecterId: userId });
+        logger.info(`[FriendSocket] User ${userId} rejected friend request ${requestId}`);
       } catch (error) {
-        console.error("Error in rejectFriendRequest:", error);
-        socket.emit("error", { message: "An error occurred while rejecting friend request" });
+        logger.error(`[FriendSocket] Error rejecting friend request for ${userId}`, { error: error.message });
+        callback({ success: false, message: error.message });
       }
     });
 
-    // Lắng nghe hủy yêu cầu kết bạn
-    socket.on("cancelFriendRequest", async ({ senderId, receiverId }) => {
+    socket.on('friend:cancelRequest', async ({ requestId }, callback) => {
       try {
-        const isRequestSent = await dynamoDB.checkRequestStatus(senderId, receiverId);
-        if (!isRequestSent) {
-          socket.emit("error", { message: "No pending request to cancel" });
-          return;
+        if (!requestId) {
+          throw new AppError('requestId is required', 400);
         }
+        const result = await FriendService.cancelFriendRequest(userId, requestId);
+        callback({ success: true, message: result.message });
 
-        // Hủy yêu cầu kết bạn
-        await dynamoDB.cancelFriendRequest(senderId, receiverId);
-        socket.emit("friendRequestCancelled", { message: "Friend request cancelled" });
-
-        // Thông báo cho người nhận
-        socket.to(receiverId).emit("friendRequestCancelled", { senderId, message: "Your friend request was cancelled" });
-
+        const receiverId = (await dynamoDB.query({
+          TableName: 'FriendRequests',
+          IndexName: 'SenderIdIndex',
+          KeyConditionExpression: 'senderId = :senderId AND requestId = :requestId',
+          ExpressionAttributeValues: {
+            ':senderId': userId,
+            ':requestId': requestId,
+          },
+        }).promise()).Items[0]?.userId;
+        if (receiverId) {
+          friendIo.to(receiverId).emit('friend:requestCancelled', { senderId: userId });
+        }
+        logger.info(`[FriendSocket] User ${userId} cancelled friend request ${requestId}`);
       } catch (error) {
-        console.error("Error in cancelFriendRequest:", error);
-        socket.emit("error", { message: "An error occurred while canceling friend request" });
+        logger.error(`[FriendSocket] Error cancelling friend request for ${userId}`, { error: error.message });
+        callback({ success: false, message: error.message });
       }
     });
 
-    // Lắng nghe chặn người dùng
-    socket.on("blockUser", async ({ userId, blockUserId }) => {
+    socket.on('friend:block', async ({ blockedUserId }, callback) => {
       try {
-        if (userId === blockUserId) {
-          socket.emit("error", { message: "Cannot block yourself" });
-          return;
+        if (!blockedUserId) {
+          throw new AppError('blockedUserId is required', 400);
         }
-
-        const isBlocked = await dynamoDB.isBlocked(userId, blockUserId);
-        if (isBlocked) {
-          socket.emit("error", { message: "User is already blocked" });
-          return;
-        }
-
-        // Chặn người dùng
-        await dynamoDB.blockUser(userId, blockUserId);
-        socket.emit("userBlocked", { message: "User has been blocked" });
-
-        // Thông báo cho người bị chặn
-        socket.to(blockUserId).emit("userBlocked", { userId, message: "You have been blocked" });
-
+        const result = await FriendService.blockUser(userId, blockedUserId);
+        callback({ success: true, data: { message: result.message, blockedUserId } });
+        logger.info(`[FriendSocket] User ${userId} blocked user ${blockedUserId}`);
       } catch (error) {
-        console.error("Error in blockUser:", error);
-        socket.emit("error", { message: "An error occurred while blocking the user" });
+        logger.error(`[FriendSocket] Error blocking user for ${userId}`, { error: error.message });
+        callback({ success: false, message: error.message });
       }
     });
 
-    // Lắng nghe bỏ chặn người dùng
-    socket.on("unblockUser", async ({ userId, unblockUserId }) => {
+    socket.on('friend:unblock', async ({ blockedUserId }, callback) => {
       try {
-        const isBlocked = await dynamoDB.isBlocked(userId, unblockUserId);
-        if (!isBlocked) {
-          socket.emit("error", { message: "User is not blocked" });
-          return;
+        if (!blockedUserId) {
+          throw new AppError('blockedUserId is required', 400);
         }
-
-        // Bỏ chặn người dùng
-        await dynamoDB.unblockUser(userId, unblockUserId);
-        socket.emit("userUnblocked", { message: "User has been unblocked" });
-
+        const result = await FriendService.unblockUser(userId, blockedUserId);
+        callback({ success: true, data: { message: result.message, blockedUserId } });
+        logger.info(`[FriendSocket] User ${userId} unblocked user ${blockedUserId}`);
       } catch (error) {
-        console.error("Error in unblockUser:", error);
-        socket.emit("error", { message: "An error occurred while unblocking the user" });
+        logger.error(`[FriendSocket] Error unblocking user for ${userId}`, { error: error.message });
+        callback({ success: false, message: error.message });
       }
     });
 
-    // Lắng nghe gợi ý bạn bè
-    socket.on("suggestFriends", async (userId) => {
+    socket.on('friend:remove', async ({ friendId }, callback) => {
       try {
-        const suggestions = await dynamoDB.getFriendSuggestions(userId);
-        socket.emit("friendSuggestions", { suggestions });
+        if (!friendId) {
+          throw new AppError('friendId là bắt buộc', 400);
+        }
+        if (!isValidUUID(friendId)) {
+          throw new AppError('friendId không hợp lệ', 400);
+        }
+        const result = await FriendService.removeFriend(userId, friendId);
+        callback({ success: true, data: { message: result.message, friendId } });
+        friendIo.to(friendId).emit('friend:removed', { removerId: userId });
+        logger.info(`[FriendSocket] User ${userId} removed friend ${friendId}`);
       } catch (error) {
-        console.error("Error in suggestFriends:", error);
-        socket.emit("error", { message: "An error occurred while fetching friend suggestions" });
+        logger.error(`[FriendSocket] Error removing friend for ${userId}`, { error: error.message });
+        callback({ success: false, message: error.message });
       }
     });
 
-    // Ngắt kết nối
-    socket.on("disconnect", () => {
-      console.log(`User disconnected: ${socket.id}`);
+    socket.on('friend:markFavorite', async ({ friendId }, callback) => {
+      try {
+        if (!friendId) {
+          throw new AppError('friendId is required', 400);
+        }
+        const result = await FriendService.markFavorite(userId, friendId);
+        callback({ success: true, data: { message: result.message, friendId } });
+        logger.info(`[FriendSocket] User ${userId} marked ${friendId} as favorite`);
+      } catch (error) {
+        logger.error(`[FriendSocket] Error marking favorite for ${userId}`, { error: error.message });
+        callback({ success: false, message: error.message });
+      }
+    });
+
+    socket.on('friend:unmarkFavorite', async ({ friendId }, callback) => {
+      try {
+        if (!friendId) {
+          throw new AppError('friendId is required', 400);
+        }
+        const result = await FriendService.unmarkFavorite(userId, friendId);
+        callback({ success: true, data: { message: result.message, friendId } });
+        logger.info(`[FriendSocket] User ${userId} unmarked ${friendId} as favorite`);
+      } catch (error) {
+        logger.error(`[FriendSocket] Error unmarking favorite for ${userId}`, { error: error.message });
+        callback({ success: false, message: error.message });
+      }
+    });
+
+    socket.on('friend:setNickname', async ({ targetUserId, nickname }, callback) => {
+      try {
+        if (!targetUserId || !nickname) {
+          throw new AppError('targetUserId and nickname are required', 400);
+        }
+        const result = await FriendService.setConversationNickname(userId, targetUserId, nickname);
+        callback({ success: true, data: { message: result.message, targetUserId, nickname } });
+        logger.info(`[FriendSocket] User ${userId} set nickname for ${targetUserId}`);
+      } catch (error) {
+        logger.error(`[FriendSocket] Error setting nickname for ${userId}`, { error: error.message });
+        callback({ success: false, message: error.message });
+      }
+    });
+
+    socket.on('disconnect', () => {
+      logger.info(`[FriendSocket] User disconnected: ${userId}`);
     });
   });
 };
+
+module.exports = initializeFriendSocket;

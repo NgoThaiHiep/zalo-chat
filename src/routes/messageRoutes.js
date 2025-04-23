@@ -19,7 +19,7 @@ const {
 
   checkBlockStatusController,
  
-  getConversationSummaryController
+
 } = require('../controllers/messageController');
 const {authMiddleware ,checkOwnership} = require('../middlewares/authMiddleware');
 

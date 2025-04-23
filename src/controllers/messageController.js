@@ -1,25 +1,10 @@
 const { log } = require('winston');
 const MessageService = require('../services/message.service');
 const multer = require('multer');
-
-const upload = multer({
-  storage: multer.memoryStorage(),
-  limits: { fileSize: 1024 * 1024 * 1024 }, // 1GB
-  fileFilter: (req, file, cb) => {
-    const allowedMimeTypes = [
-      'image/jpeg', 'image/png', 'image/heic', 'image/gif',
-      'video/mp4',
-      'audio/mpeg', 'audio/wav', 'audio/mp4',
-      'application/pdf', 'application/zip', 'application/x-rar-compressed', 'application/vnd.rar', 'text/plain',
-    ];
-    if (allowedMimeTypes.includes(file.mimetype)) {
-      cb(null, true);
-    } else {
-      cb(new Error('MIME type không được hỗ trợ!'), false);
-    }
-  },
-});
-
+const { isValidUUID } = require('../utils/helpers');
+const  logger = require('../config/logger');
+const upload = require('../middlewares/upload');
+const { AppError } = require('../utils/errorHandler');
 const sendMessageController = async (req, res) => {
   try {
     const senderId = req.user.id;
@@ -29,11 +14,13 @@ const sendMessageController = async (req, res) => {
     const mimeType = req.file ? req.file.mimetype : null;
 
     if (!receiverId || !type) {
-      return res.status(400).json({ success: false, message: 'receiverId hoặc type là bắt buộc!' });
+      throw new AppError('receiverId và type là bắt buộc', 400);
     }
-
-    if (['image', 'file', 'video', 'voice', 'sticker'].includes(type) && !req.file) {
-      return res.status(400).json({ success: false, message: `File là bắt buộc cho loại tin nhắn ${type}!` });
+    if (!isValidUUID(receiverId)) {
+      throw new AppError('receiverId không hợp lệ', 400);
+    }
+    if (['image', 'file', 'video', 'voice', 'sticker','gif'].includes(type) && !req.file) {
+      throw new AppError(`File là bắt buộc cho loại tin nhắn ${type}`, 400);
     }
 
     const messageData = {
@@ -50,19 +37,17 @@ const sendMessageController = async (req, res) => {
     };
 
     const newMessage = await MessageService.createMessage(senderId, receiverId, messageData);
-    res.status(201).json({
-      success: true,
-      message: 'Gửi tin nhắn thành công!',
-      data: newMessage,
-    });
+    req.io.of('/chat').to(`user:${senderId}`).emit('receiveMessage', newMessage);
+    if (senderId !== receiverId) {
+      req.io.of('/chat').to(`user:${receiverId}`).emit('receiveMessage', newMessage);
+    }
+    logger.info(`[MessageController] Emitted receiveMessage to user:${senderId} and user:${receiverId}`);
+    res.status(201).json({ success: true, data: newMessage });
   } catch (error) {
-    console.error('Error in sendMessage:', error);
-    const statusCode = error.message.includes('là bắt buộc') ? 400 : 
-                       error.message.includes('không tồn tại') ? 404 : 500;
-    res.status(statusCode).json({ success: false, message: error.message });
+    logger.error('[sendMessageController] Error', { error: error.message });
+    throw new AppError(error.message || 'Lỗi khi gửi tin nhắn', error.statusCode || 500);
   }
 };
-
 const getMessagesBetweenController = async (req, res) => {
   try {
     const { userId } = req.params;
@@ -90,16 +75,34 @@ const getMessagesBetweenController = async (req, res) => {
 const forwardMessageController = async (req, res) => {
   try {
     const { messageId, targetReceiverId } = req.body;
-    const senderId = req.user.id; // Lấy senderId từ thông tin người dùng đã xác thực
+    const senderId = req.user.id;
     console.log('Sender ID:', senderId);
     console.log('Forward message request:', { senderId, messageId, targetReceiverId });
 
-    // Kiểm tra đầu vào
     if (!messageId || !targetReceiverId) {
       return res.status(400).json({ success: false, message: 'Thiếu messageId hoặc targetReceiverId' });
     }
 
     const result = await MessageService.forwardMessage(senderId, messageId, targetReceiverId);
+
+    // Phát sự kiện Socket.IO đến người gửi và người nhận
+    try {
+      req.io.of('/chat').to(`user:${senderId}`).emit('receiveMessage', {
+        success: true,
+        data: result,
+      });
+      logger.info(`[Controller] Emitted receiveMessage to user:${senderId}`);
+    } catch (error) {
+      logger.error(`[Controller] Error emitting receiveMessage`, { error: error.message });
+    }
+    if (senderId !== targetReceiverId) {
+      req.io.of('/chat').to(`user:${targetReceiverId}`).emit('receiveMessage', {
+        success: true,
+        data: result,
+      });
+    }
+
+    logger.info(`[MessageController] Emitted receiveMessage to user:${senderId} and user:${targetReceiverId}`);
     return res.status(200).json({ success: true, data: result });
   } catch (error) {
     console.error('Error in forwardMessageController:', error);
@@ -123,12 +126,33 @@ const forwardMessageToGroupController = async (req, res) => {
     console.log('Sender ID:', senderId);
     console.log('Forward message to group request:', { senderId, messageId, targetGroupId });
 
-    // Kiểm tra đầu vào
     if (!messageId || !targetGroupId) {
       return res.status(400).json({ success: false, message: 'Thiếu messageId hoặc targetGroupId' });
     }
 
     const result = await MessageService.forwardMessageToGroup(senderId, messageId, targetGroupId);
+
+    // Phát sự kiện Socket.IO đến nhóm đích
+    req.io.of('/group').to(`group:${targetGroupId}`).emit('newGroupMessage', {
+      success: true,
+      data: {
+        groupId: targetGroupId,
+        message: result,
+      },
+    });
+
+    // Thông báo cho người gửi
+    try {
+      req.io.of('/chat').to(`user:${senderId}`).emit('receiveMessage', {
+        success: true,
+        data: result,
+      });
+      logger.info(`[Controller] Emitted receiveMessage to user:${senderId}`);
+    } catch (error) {
+      logger.error(`[Controller] Error emitting receiveMessage`, { error: error.message });
+    }
+
+    logger.info(`[MessageController] Emitted newGroupMessage to group:${targetGroupId} and receiveMessage to user:${senderId}`);
     return res.status(200).json({ success: true, data: result });
   } catch (error) {
     console.error('Error in forwardMessageToGroupController:', error);
@@ -148,21 +172,27 @@ const recallMessageController = async (req, res) => {
   try {
     const { messageId } = req.params;
     const userId = req.user.id;
-
     if (!messageId) {
-      return res.status(400).json({ success: false, message: 'messageId là bắt buộc!' });
+      throw new AppError('messageId là bắt buộc', 400);
     }
-
-    console.log('Recall message request:', { userId, messageId });
-
+    if (!isValidUUID(messageId)) {
+      throw new AppError('messageId không hợp lệ', 400);
+    }
     const result = await MessageService.recallMessage(userId, messageId);
-   
-    res.status(200).json({ success: true, ...result });
+    const message = await MessageService.getMessageById(messageId, userId);
+    if (message) {
+      req.io.of('/chat').to(`user:${userId}`).emit('messageRecalled', { messageId });
+      if (message.senderId !== userId) {
+        req.io.of('/chat').to(`user:${message.receiverId}`).emit('messageRecalled', { messageId });
+      }
+    }
+    logger.info(`[MessageController] Emitted messageRecalled to user:${userId} and user:${message?.receiverId}`);
+    res.status(200).json({ success: true, data: result });
   } catch (error) {
-    res.status(403).json({ success: false, message: error.message });
+    logger.error('[recallMessageController] Error', { error: error.message });
+    throw new AppError(error.message || 'Lỗi khi thu hồi tin nhắn', error.statusCode || 403);
   }
 };
-
 const pinMessageController = async (req, res) => {
   try {
     const { messageId } = req.params;

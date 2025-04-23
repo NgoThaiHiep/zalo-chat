@@ -4,9 +4,11 @@ const { initializeDatabase } = require('./config/database');
 const logger = require('./config/logger');
 const { initializeSocket } = require('./socket');
 const initializeChatSocket = require('./sockets/chat.socket');
-const  initializeFriendSocket  = require('./sockets/friend.socket');
-const { initializeConversationSocket } = require('./sockets/conversation.socket');
+const initializeFriendSocket = require('./sockets/friend.socket');
+const  initializeConversationSocket = require('./sockets/conversation.socket');
 const initializeSearchSocket = require('./sockets/search.socket');
+const initializeGroupSocket  = require('./sockets/group.socket');
+const initializeAuthSocket = require('./sockets/auth.socket');
 
 const server = http.createServer(app);
 const io = initializeSocket(server);
@@ -16,6 +18,8 @@ const chatIo = io.of('/chat');
 const friendIo = io.of('/friend');
 const conversationIo = io.of('/conversation');
 const searchIo = io.of('/search');
+const groupIo = io.of('/group');
+const authIo = io.of('/auth');
 
 // Ensure socket initialization completes before attaching handlers
 Promise.resolve()
@@ -24,6 +28,8 @@ Promise.resolve()
     initializeFriendSocket(friendIo);
     initializeConversationSocket(conversationIo);
     initializeSearchSocket(searchIo);
+    initializeGroupSocket(groupIo);
+    initializeAuthSocket(authIo);
     logger.info('[SERVER] All socket namespaces initialized');
   })
   .catch((error) => {
@@ -67,4 +73,4 @@ const startServer = async () => {
 
 startServer();
 
-module.exports = { server, io, startServer };
+module.exports = { server, startServer };

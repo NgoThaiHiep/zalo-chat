@@ -1,188 +1,343 @@
-const MessageService = require('../services/message.service');
 const logger = require('../config/logger');
+const authenticateSocket = require('../middlewares/socketAuthMiddleware');
+const MessageService = require('../services/message.service');
 const { AppError } = require('../utils/errorHandler');
-const { debounce } = require('lodash');
 
+const initializeChatSocket = (chatIo) => {
+  chatIo.use(authenticateSocket);
 
-module.exports = (io) => {
+  chatIo.on('connection', (socket) => {
+    const userId = socket.user.id;
+    logger.info('[ChatSocket] User connected', { userId, socketId: socket.id });
 
+    socket.join(`user:${userId}`);
+    logger.info('[ChatSocket] User joined room', { userId, room: `user:${userId}` });
 
-
-  io.on('connection', (socket) => {
-    logger.info('[CHAT_SOCKET] Client connected', { socketId: socket.id, userId: socket.userId });
-
-    // Update message status to delivered
-    MessageService.updateMessageStatusOnConnect(socket.userId).catch((error) => {
-      logger.error('[CHAT_SOCKET] Failed to update message status', { userId: socket.userId, error: error.message });
-    });
-
-    socket.on('sendMessage', async ({ receiverId, messageData }, callback) => {
+    const updateMessagesOnConnect = async () => {
       try {
-        if (!receiverId || typeof receiverId !== 'string') {
-          throw new AppError('receiverId không hợp lệ hoặc thiếu', 400);
-        }
-        if (!messageData || typeof messageData !== 'object') {
-          throw new AppError('messageData không hợp lệ hoặc thiếu', 400);
-        }
-        if (messageData.file && Buffer.isBuffer(messageData.file) && messageData.file.length > 10 * 1024 * 1024) {
-          throw new AppError('File vượt quá giới hạn 10MB', 400);
-        }
-        const result = await MessageService.createMessage(socket.userId, receiverId, messageData);
-        callback({ success: true, data: result });
+        await MessageService.updateMessageStatusOnConnect(userId);
+        logger.info('[ChatSocket] Updated message statuses on connect', { userId });
       } catch (error) {
-        logger.error('[CHAT_SOCKET] Failed to send message', { userId: socket.userId, receiverId, error: error.message });
-        callback({ success: false, error: { message: error.message, statusCode: error.statusCode || 500 } });
+        logger.error('[ChatSocket] Failed to update message statuses on connect', {
+          userId,
+          error: error.message,
+        });
+      }
+    };
+
+    updateMessagesOnConnect();
+
+    socket.on('sendMessage', async (data, callback) => {
+      try {
+        const {
+          receiverId,
+          type,
+          content,
+          metadata,
+          isAnonymous = false,
+          isSecret = false,
+          quality = 'original',
+          expiresAfter,
+          file,
+        } = data;
+
+        if (!receiverId || !type) {
+          throw new AppError('receiverId and type are required', 400);
+        }
+
+        if (['image', 'file', 'video', 'voice', 'sticker','gif'].includes(type) && !file) {
+          throw new AppError(`File is required for message type ${type}`, 400);
+        }
+
+        const messageData = {
+          type,
+          content: content || null,
+          file: file ? Buffer.from(file.data) : null,
+          fileName: file ? file.name : null,
+          mimeType: file ? file.mimeType : null,
+          metadata,
+          isAnonymous: !!isAnonymous,
+          isSecret: !!isSecret,
+          quality,
+          expiresAfter,
+        };
+
+        const newMessage = await MessageService.createMessage(userId, receiverId, messageData);
+
+        chatIo.to(`user:${userId}`).emit('receiveMessage', newMessage);
+        if (userId !== receiverId) {
+          chatIo.to(`user:${receiverId}`).emit('receiveMessage', newMessage);
+        }
+
+        logger.info('[ChatSocket] Message sent', { messageId: newMessage.messageId, senderId: userId, receiverId });
+        callback({ success: true, data: newMessage });
+      } catch (error) {
+        logger.error('[ChatSocket] Error sending message', { error: error.message });
+        callback({ success: false, message: error.message });
       }
     });
 
-    socket.on('retryMessage', async ({ messageId }, callback) => {
+    socket.on('getMessagesBetween', async (data, callback) => {
       try {
-        if (!messageId || typeof messageId !== 'string') {
-          throw new AppError('messageId không hợp lệ hoặc thiếu', 400);
+        const { userId: targetUserId } = data;
+        if (!targetUserId) {
+          throw new AppError('userId is required', 400);
         }
-        const result = await MessageService.retryMessage(socket.userId, messageId);
+
+        const result = await MessageService.getMessagesBetweenUsers(userId, targetUserId);
+
+        logger.info('[ChatSocket] Fetched messages between users', { userId, targetUserId });
         callback({ success: true, data: result });
       } catch (error) {
-        logger.error('[CHAT_SOCKET] Failed to retry message', { userId: socket.userId, messageId, error: error.message });
-        callback({ success: false, error: { message: error.message, statusCode: error.statusCode || 500 } });
+        logger.error('[ChatSocket] Error fetching messages', { error: error.message });
+        callback({ success: false, message: error.message });
       }
     });
 
-    socket.on('markMessageAsSeen', async ({ messageId }, callback) => {
+    socket.on('forwardMessage', async (data, callback) => {
       try {
-        if (!messageId || typeof messageId !== 'string') {
-          throw new AppError('messageId không hợp lệ hoặc thiếu', 400);
+        const { messageId, targetReceiverId } = data;
+        if (!messageId || !targetReceiverId) {
+          throw new AppError('messageId and targetReceiverId are required', 400);
         }
-        const result = await MessageService.markMessageAsSeen(socket.userId, messageId);
+
+        const result = await MessageService.forwardMessage(userId, messageId, targetReceiverId);
+
+        chatIo.to(`user:${userId}`).emit('receiveMessage', result);
+        chatIo.to(`user:${targetReceiverId}`).emit('receiveMessage', result);
+
+        logger.info('[ChatSocket] Message forwarded', { messageId, userId, targetReceiverId });
         callback({ success: true, data: result });
       } catch (error) {
-        logger.error('[CHAT_SOCKET] Failed to mark message as seen', { userId: socket.userId, messageId, error: error.message });
-        callback({ success: false, error: { message: error.message, statusCode: error.statusCode || 500 } });
+        logger.error('[ChatSocket] Error forwarding message', { error: error.message });
+        callback({ success: false, message: error.message });
       }
     });
 
-    socket.on('recallMessage', async ({ messageId }, callback) => {
+    socket.on('forwardMessageToGroup', async (data, callback) => {
       try {
-        if (!messageId || typeof messageId !== 'string') {
-          throw new AppError('messageId không hợp lệ hoặc thiếu', 400);
+        const { messageId, targetGroupId } = data;
+        if (!messageId || !targetGroupId) {
+          throw new AppError('messageId and targetGroupId are required', 400);
         }
-        const result = await MessageService.recallMessage(socket.userId, messageId);
+
+        const result = await MessageService.forwardMessageToGroup(userId, messageId, targetGroupId);
+
+        chatIo.to(`group:${targetGroupId}`).emit('newGroupMessage', {
+          groupId: targetGroupId,
+          message: result,
+        });
+
+        logger.info('[ChatSocket] Message forwarded to group', { messageId, userId, targetGroupId });
         callback({ success: true, data: result });
       } catch (error) {
-        logger.error('[CHAT_SOCKET] Failed to recall message', { userId: socket.userId, messageId, error: error.message });
-        callback({ success: false, error: { message: error.message, statusCode: error.statusCode || 500 } });
+        logger.error('[ChatSocket] Error forwarding message to group', { error: error.message });
+        callback({ success: false, message: error.message });
       }
     });
 
-    socket.on('getMessagesBetweenUsers', async ({ otherUserId }, callback) => {
+    socket.on('recallMessage', async (data, callback) => {
       try {
-        if (!otherUserId || typeof otherUserId !== 'string') {
-          throw new AppError('otherUserId không hợp lệ hoặc thiếu', 400);
+        const { messageId } = data;
+        if (!messageId) {
+          throw new AppError('messageId is required', 400);
         }
-        const result = await MessageService.getMessagesBetweenUsers(socket.userId, otherUserId);
+
+        const result = await MessageService.recallMessage(userId, messageId);
+
+        const message = await MessageService.getMessageById(messageId, userId);
+        if (message) {
+          chatIo.to(`user:${userId}`).emit('messageRecalled', { messageId });
+          if (message.senderId !== userId) {
+            chatIo.to(`user:${message.receiverId}`).emit('messageRecalled', { messageId });
+          }
+        }
+
+        logger.info('[ChatSocket] Message recalled', { messageId, userId });
         callback({ success: true, data: result });
       } catch (error) {
-        logger.error('[CHAT_SOCKET] Failed to get messages', { userId: socket.userId, otherUserId, error: error.message });
-        callback({ success: false, error: { message: error.message, statusCode: error.statusCode || 500 } });
+        logger.error('[ChatSocket] Error recalling message', { error: error.message });
+        callback({ success: false, message: error.message });
       }
     });
 
-    socket.on('forwardMessage', async ({ messageId, targetReceiverId }, callback) => {
+    socket.on('pinMessage', async (data, callback) => {
       try {
-        if (!messageId || typeof messageId !== 'string' || !targetReceiverId || typeof targetReceiverId !== 'string') {
-          throw new AppError('messageId hoặc targetReceiverId không hợp lệ hoặc thiếu', 400);
+        const { messageId } = data;
+        if (!messageId) {
+          throw new AppError('messageId is required', 400);
         }
-        const result = await MessageService.forwardMessage(socket.userId, messageId, targetReceiverId);
+
+        const result = await MessageService.pinMessage(userId, messageId);
+
+        const message = await MessageService.getMessageById(messageId, userId);
+        if (message) {
+          chatIo.to(`user:${userId}`).emit('messagePinned', { messageId });
+          const otherUserId = message.senderId === userId ? message.receiverId : message.senderId;
+          chatIo.to(`user:${otherUserId}`).emit('messagePinned', { messageId });
+        }
+
+        logger.info('[ChatSocket] Message pinned', { messageId, userId });
         callback({ success: true, data: result });
       } catch (error) {
-        logger.error('[CHAT_SOCKET] Failed to forward message', { userId: socket.userId, messageId, targetReceiverId, error: error.message });
-        callback({ success: false, error: { message: error.message, statusCode: error.statusCode || 500 } });
+        logger.error('[ChatSocket] Error pinning message', { error: error.message });
+        callback({ success: false, message: error.message });
       }
     });
 
-    socket.on('pinMessage', async ({ messageId }, callback) => {
+    socket.on('unpinMessage', async (data, callback) => {
       try {
-        if (!messageId || typeof messageId !== 'string') {
-          throw new AppError('messageId không hợp lệ hoặc thiếu', 400);
+        const { messageId } = data;
+        if (!messageId) {
+          throw new AppError('messageId is required', 400);
         }
-        const result = await MessageService.pinMessage(socket.userId, messageId);
+
+        const result = await MessageService.unpinMessage(userId, messageId);
+
+        const message = await MessageService.getMessageById(messageId, userId);
+        if (message) {
+          chatIo.to(`user:${userId}`).emit('messageUnpinned', { messageId });
+          const otherUserId = message.senderId === userId ? message.receiverId : message.senderId;
+          chatIo.to(`user:${otherUserId}`).emit('messageUnpinned', { messageId });
+        }
+
+        logger.info('[ChatSocket] Message unpinned', { messageId, userId });
         callback({ success: true, data: result });
       } catch (error) {
-        logger.error('[CHAT_SOCKET] Failed to pin message', { userId: socket.userId, messageId, error: error.message });
-        callback({ success: false, error: { message: error.message, statusCode: error.statusCode || 500 } });
+        logger.error('[ChatSocket] Error unpinning message', { error: error.message });
+        callback({ success: false, message: error.message });
       }
     });
 
-    socket.on('unpinMessage', async ({ messageId }, callback) => {
+    socket.on('getPinnedMessages', async (data, callback) => {
       try {
-        if (!messageId || typeof messageId !== 'string') {
-          throw new AppError('messageId không hợp lệ hoặc thiếu', 400);
+        const { otherUserId } = data;
+        if (!otherUserId) {
+          throw new AppError('otherUserId is required', 400);
         }
-        const result = await MessageService.unpinMessage(socket.userId, messageId);
+
+        const result = await MessageService.getPinnedMessages(userId, otherUserId);
+
+        logger.info('[ChatSocket] Fetched pinned messages', { userId, otherUserId });
         callback({ success: true, data: result });
       } catch (error) {
-        logger.error('[CHAT_SOCKET] Failed to unpin message', { userId: socket.userId, messageId, error: error.message });
-        callback({ success: false, error: { message: error.message, statusCode: error.statusCode || 500 } });
+        logger.error('[ChatSocket] Error fetching pinned messages', { error: error.message });
+        callback({ success: false, message: error.message });
       }
     });
 
-    socket.on('getPinnedMessages', async ({ otherUserId }, callback) => {
+    socket.on('deleteMessage', async (data, callback) => {
       try {
-        if (!otherUserId || typeof otherUserId !== 'string') {
-          throw new AppError('otherUserId không hợp lệ hoặc thiếu', 400);
+        const { messageId } = data;
+        if (!messageId) {
+          throw new AppError('messageId is required', 400);
         }
-        const result = await MessageService.getPinnedMessages(socket.userId, otherUserId);
+
+        const result = await MessageService.deleteMessage(userId, messageId);
+
+        chatIo.to(`user:${userId}`).emit('messageDeleted', { messageId });
+
+        logger.info('[ChatSocket] Message deleted', { messageId, userId });
         callback({ success: true, data: result });
       } catch (error) {
-        logger.error('[CHAT_SOCKET] Failed to get pinned messages', { userId: socket.userId, otherUserId, error: error.message });
-        callback({ success: false, error: { message: error.message, statusCode: error.statusCode || 500 } });
+        logger.error('[ChatSocket] Error deleting message', { error: error.message });
+        callback({ success: false, message: error.message });
       }
     });
 
-
-    socket.on('deleteMessage', async ({ messageId }, callback) => {
+    socket.on('restoreMessage', async (data, callback) => {
       try {
-        if (!messageId || typeof messageId !== 'string') {
-          throw new AppError('messageId không hợp lệ hoặc thiếu', 400);
+        const { messageId } = data;
+        if (!messageId) {
+          throw new AppError('messageId is required', 400);
         }
-        const result = await MessageService.deleteMessage(socket.userId, messageId);
+
+        const result = await MessageService.restoreMessage(userId, messageId);
+
+        chatIo.to(`user:${userId}`).emit('messageRestored', { messageId });
+
+        logger.info('[ChatSocket] Message restored', { messageId, userId });
         callback({ success: true, data: result });
       } catch (error) {
-        logger.error('[CHAT_SOCKET] Failed to delete message', { userId: socket.userId, messageId, error: error.message });
-        callback({ success: false, error: { message: error.message, statusCode: error.statusCode || 500 } });
+        logger.error('[ChatSocket] Error restoring message', { error: error.message });
+        callback({ success: false, message: error.message });
       }
     });
 
-    socket.on('restoreMessage', async ({ messageId }, callback) => {
+    socket.on('retryMessage', async (data, callback) => {
       try {
-        if (!messageId || typeof messageId !== 'string') {
-          throw new AppError('messageId không hợp lệ hoặc thiếu', 400);
+        const { messageId } = data;
+        if (!messageId) {
+          throw new AppError('messageId is required', 400);
         }
-        const result = await MessageService.restoreMessage(socket.userId, messageId);
+
+        const result = await MessageService.retryMessage(userId, messageId);
+
+        chatIo.to(`user:${userId}`).emit('receiveMessage', result);
+        if (result.receiverId !== userId) {
+          chatIo.to(`user:${result.receiverId}`).emit('receiveMessage', result);
+        }
+
+        logger.info('[ChatSocket] Message retried', { messageId, userId });
         callback({ success: true, data: result });
       } catch (error) {
-        logger.error('[CHAT_SOCKET] Failed to restore message', { userId: socket.userId, messageId, error: error.message });
-        callback({ success: false, error: { message: error.message, statusCode: error.statusCode || 500 } });
+        logger.error('[ChatSocket] Error retrying message', { error: error.message });
+        callback({ success: false, message: error.message });
       }
     });
 
-    const debouncedTyping = debounce((receiverId) => {
-      socket.to(receiverId).emit('typing', { senderId: socket.userId });
-    }, 500);
-
-    socket.on('typing', ({ receiverId }) => {
+    socket.on('markMessageAsSeen', async (data, callback) => {
       try {
-        if (!receiverId || typeof receiverId !== 'string') {
-          throw new AppError('receiverId không hợp lệ hoặc thiếu', 400);
+        const { messageId } = data;
+        if (!messageId) {
+          throw new AppError('messageId is required', 400);
         }
-        debouncedTyping(receiverId);
+
+        const result = await MessageService.markMessageAsSeen(userId, messageId);
+
+        const message = await MessageService.getMessageById(messageId, userId);
+        if (message) {
+          chatIo.to(`user:${userId}`).emit('messageStatus', {
+            messageId,
+            status: message.status,
+          });
+          if (message.senderId !== userId) {
+            chatIo.to(`user:${message.senderId}`).emit('messageStatus', {
+              messageId,
+              status: message.status,
+            });
+          }
+        }
+
+        logger.info('[ChatSocket] Message marked as seen', { messageId, userId });
+        callback({ success: true, data: result });
       } catch (error) {
-        logger.error('[CHAT_SOCKET] Failed to process typing event', { userId: socket.userId, receiverId, error: error.message });
+        logger.error('[ChatSocket] Error marking message as seen', { error: error.message });
+        callback({ success: false, message: error.message });
+      }
+    });
+
+    socket.on('checkBlockStatus', async (data, callback) => {
+      try {
+        const { receiverId } = data;
+        if (!receiverId) {
+          throw new AppError('receiverId is required', 400);
+        }
+
+        const result = await MessageService.checkBlockStatus(userId, receiverId);
+
+        logger.info('[ChatSocket] Checked block status', { userId, receiverId });
+        callback({ success: true, data: result });
+      } catch (error) {
+        logger.error('[ChatSocket] Error checking block status', { error: error.message });
+        callback({ success: false, message: error.message });
       }
     });
 
     socket.on('disconnect', () => {
-      logger.info('[CHAT_SOCKET] Client disconnected', { socketId: socket.id, userId: socket.userId });
+      logger.info('[ChatSocket] User disconnected', { userId, socketId: socket.id });
     });
   });
 };
+
+module.exports = initializeChatSocket;

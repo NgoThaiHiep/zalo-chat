@@ -1,36 +1,45 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
-
 const { corsOptions } = require('./config/cors');
-const { errorHandler } = require('./middlewares/errorHandler'); // Middleware xử lý lỗi
-const morgan = require('morgan'); // Logging middleware
-
+const { errorHandler } = require('./middlewares/errorHandler');
+const morgan = require('morgan');
 const authRoutes = require('./routes/authRoutes');
 const messageRoutes = require('./routes/messageRoutes');
 const groupRoutes = require('./routes/groupRoutes');
-const friendRoutes = require('./routes/friendRoutes')
+const friendRoutes = require('./routes/friendRoutes');
 const conversationRoutes = require('./routes/conversationRoutes');
-const searchRoutes = require('./routes/searchRouters'); // Tìm kiếm người dùng và tin nhắn
+const searchRoutes = require('./routes/searchRouters');
+const { getSocketInstance } = require('./socket'); // Import from socket.js
+
 const app = express();
 
 // Middleware
+app.use(cors(corsOptions));
+app.use(morgan('combined'));
+app.use(express.json());
 
-app.use(cors(corsOptions)); // Áp dụng cấu hình CORS
-app.use(morgan('combined')); // Ghi log các request
-app.use(express.json()); // Parse JSON body
-
+// Gắn io vào req
+app.use((req, res, next) => {
+  try {
+    req.io = getSocketInstance(); // Get initialized io instance
+    next();
+  } catch (error) {
+    logger.error('[App] Failed to attach Socket.IO to req', { error: error.message });
+    next(error);
+  }
+});
 
 // Định nghĩa routes
 const API_PREFIX = '/api';
-app.use(`${API_PREFIX}/auth`, authRoutes); // Quản lý xác thực
-app.use(`${API_PREFIX}/messages`, messageRoutes); // Quản lý tin nhắn
-app.use(`${API_PREFIX}/groups`, groupRoutes); // Quản lý nhóm
-app.use(`${API_PREFIX}/friends`, friendRoutes); // Quản lý bạn bè
-app.use(`${API_PREFIX}/conversations`, conversationRoutes); // Quản lý hội thoại
-app.use(`${API_PREFIX}/searchs`, searchRoutes); // Tìm kiếm người dùng và tin nhắn
+app.use(`${API_PREFIX}/auth`, authRoutes);
+app.use(`${API_PREFIX}/messages`, messageRoutes);
+app.use(`${API_PREFIX}/groups`, groupRoutes);
+app.use(`${API_PREFIX}/friends`, friendRoutes);
+app.use(`${API_PREFIX}/conversations`, conversationRoutes);
+app.use(`${API_PREFIX}/searchs`, searchRoutes);
 
 // Xử lý lỗi toàn cục
 app.use(errorHandler);
 
-module.exports = app; // Chỉ export app
+module.exports = app;

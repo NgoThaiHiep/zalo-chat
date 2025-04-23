@@ -79,7 +79,7 @@ const createMessage = async (senderId, receiverId, messageData) => {
   const receiverMessage =
     senderId === receiverId ? null : buildMessageRecord(baseMessage, receiverId, receiverExpiresAt);
 
-  io().to(senderId).emit('messageStatus', { messageId, status: MESSAGE_STATUSES.PENDING });
+
 
   let senderResult = null;
   let receiverResult = null;
@@ -131,11 +131,7 @@ const createMessage = async (senderId, receiverId, messageData) => {
       );
     }
 
-    // Emit message với đúng mediaUrl
-    io().to(senderId).emit('receiveMessage', { ...senderResult, status: initialStatus });
-    if (senderId !== receiverId && isUserOnline(receiverId) && !isRestricted) {
-      io().to(receiverId).emit('receiveMessage', { ...receiverResult, status: initialStatus });
-    }
+
 
     logger.info('Message created successfully', { messageId });
 
@@ -157,7 +153,7 @@ const createMessage = async (senderId, receiverId, messageData) => {
       receiverResult && updateMessageStatus(messageId, receiverId, MESSAGE_STATUSES.FAILED),
     ]);
 
-    io().to(senderId).emit('messageStatus', { messageId, status: MESSAGE_STATUSES.FAILED });
+  
     logger.error(`Error creating message`, { messageId, error: error.message, stack: error.stack });
     throw new AppError(`Không thể gửi tin nhắn: ${error.message}`, 500);
   }
@@ -275,7 +271,7 @@ const retryMessage = async (senderId, messageId) => {
   }
 
   await updateMessageStatus(messageId, senderId, MESSAGE_STATUSES.SENDING);
-  io().to(senderId).emit('messageStatus', { messageId, status: MESSAGE_STATUSES.SENDING });
+
 
   try {
     const savedMessage = await sendMessageCore(message, 'Messages', process.env.BUCKET_NAME_Chat_Send);
@@ -339,10 +335,7 @@ const retryMessage = async (senderId, messageId) => {
       ]);
     }
 
-    if (receiverOnline) {
-      io().to(savedMessage.receiverId).emit('receiveMessage', { ...savedMessage, status: newStatus });
-    }
-    io().to(senderId).emit('messageStatus', { messageId, status: newStatus });
+
 
     if (deletedMessage.Item) {
       await dynamoDB.delete({
@@ -355,7 +348,7 @@ const retryMessage = async (senderId, messageId) => {
   } catch (error) {
     logger.error(`Error retrying message`, { messageId, error: error.message });
     await updateMessageStatus(messageId, senderId, MESSAGE_STATUSES.FAILED);
-    io().to(senderId).emit('messageStatus', { messageId, status: MESSAGE_STATUSES.FAILED });
+  
     throw new AppError(`Failed to retry message: ${error.message}`, 500);
   }
 };
@@ -403,8 +396,6 @@ const markMessageAsSeen = async (userId, messageId) => {
     ]);
   }receiveMessage
 
-  io().to(message.senderId).emit('messageStatus', { messageId, status: newStatus });
-  io().to(userId).emit('messageStatus', { messageId, status: newStatus });
 
   return { message: `Message status updated to ${newStatus}` };
 };
@@ -485,8 +476,7 @@ const recallMessage = async (userId, messageId) => {
       ]);
     }
 
-    io().to(message.receiverId).emit('messageRecalled', { messageId });
-    io().to(message.senderId).emit('messageRecalled', { messageId });
+ 
 
     return { success: true, message: 'Message recalled successfully' };
   } catch (error) {
@@ -905,8 +895,8 @@ const pinMessage = async (userId, messageId) => {
       }).promise(),
     ]);
 
-    io().to(userId).emit('messagePinned', { messageId });
-    io().to(otherUserId).emit('messagePinned', { messageId });
+
+
 
     return { success: true, message: `Tin nhắn đã được ghim bởi ${userId}` };
   } catch (err) {
@@ -967,8 +957,6 @@ const unpinMessage = async (userId, messageId) => {
       }).promise(),
     ]);
 
-    io().to(userId).emit('messageUnpinned', { messageId });
-    io().to(otherUserId).emit('messageUnpinned', { messageId });
 
     return { success: true, message: `Đã bỏ ghim tin nhắn bởi ${userId}` };
   } catch (err) {
@@ -1108,7 +1096,7 @@ const deleteMessage = async (userId, messageId) => {
       }).promise();
     }
 
-    io().to(userId).emit('messageDeleted', { messageId });
+
 
     return { success: true, message: 'Tin nhắn đã được xóa chỉ với bạn!' };
   } catch (err) {
@@ -1189,7 +1177,7 @@ const restoreMessage = async (userId, messageId) => {
       }).promise();
     }
 
-    io().to(userId).emit('messageRestored', { messageId });
+
 
     return { success: true, message: 'Tin nhắn đã được khôi phục!' };
   } catch (err) {
@@ -1225,8 +1213,7 @@ const updateMessageStatusOnConnect = async (userId) => {
       ExpressionAttributeNames: { '#status': 'status' },
       ExpressionAttributeValues: { ':delivered': 'delivered' },
     }).promise();
-    io().to(message.senderId).emit('messageStatus', { messageId: message.messageId, status: 'delivered' });
-    io().to(userId).emit('receiveMessage', { ...message, status: 'delivered' });
+  
   }
 };
 
@@ -1289,7 +1276,21 @@ const checkBlockStatus = async (senderId, receiverId) => {
 };
 
 
-
+const getMessageById = async (messageId, ownerId) => {
+  try {
+    const { Item } = await dynamoDB.get({
+      TableName: 'Messages',
+      Key: { messageId, ownerId },
+    }).promise();
+    if (!Item) {
+      throw new AppError('Tin nhắn không tồn tại', 404);
+    }
+    return Item;
+  } catch (error) {
+    logger.error('[MessageService] Error fetching message by ID', { messageId, ownerId, error: error.message });
+    throw new AppError(`Không thể lấy tin nhắn: ${error.message}`, 500);
+  }
+};
 module.exports = {
   createMessage,
   getMessagesBetweenUsers,
@@ -1307,6 +1308,7 @@ module.exports = {
   updateMessageStatusOnConnect,
   canSendMessageToUser,
   checkBlockStatus,
+  getMessageById
  
   
 };
