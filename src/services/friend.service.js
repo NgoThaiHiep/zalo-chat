@@ -433,6 +433,7 @@ const acceptFriendRequest = async (userId, requestId) =>  {
       
         if (!user.Item) {
           throw new Error('Người dùng không tồn tại!');
+          
         }
       
         const nickname = await getConversationNickname(currentUserId, targetUserId);
@@ -555,6 +556,6 @@ module.exports = {
     getUserName,
     setConversationNickname,
     getConversationNickname,
-    
+    isFriendCheck,
   
 }

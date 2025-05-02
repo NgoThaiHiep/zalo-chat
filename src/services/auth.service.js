@@ -146,12 +146,7 @@ const loginUser = async (phoneNumber, password) => {
   const normalizedPhone = normalizePhoneNumber(phoneNumber);
   const user = await getUserByPhoneNumber(normalizedPhone);
 
-  if (!user) {
-    throw new Error("Sai số điện thoại hoặc mật khẩu!");
-  }
-
-  const isMatch = await bcrypt.compare(password, user.password);
-  if (!isMatch) {
+  if (!user || !(await bcrypt.compare(password, user.password))) {
     throw new Error("Sai số điện thoại hoặc mật khẩu!");
   }
 

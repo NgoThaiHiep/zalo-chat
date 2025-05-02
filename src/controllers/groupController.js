@@ -83,17 +83,11 @@ const createGroupController = async (req, res) => {
         throw new AppError(`memberId ${memberId} không hợp lệ`, 400);
       }
     });
+
     const newGroup = await groupService.createGroup(name, createdBy, members, initialRoles);
-    members.forEach((memberId) => {
-      req.io.of('/group').to(`user:${memberId}`).emit('groupCreated', {
-        success: true,
-        data: { groupId: newGroup.groupId, name, createdBy },
-      });
-    });
-    logger.info(`[GroupController] Emitted groupCreated to group:${newGroup.groupId}`);
     res.status(201).json({ success: true, data: newGroup });
   } catch (error) {
-    logger.error('[createGroupController] Error', { error: error.message });
+    logger.error('[createGroupController] Lỗi', { error: error.message });
     throw new AppError(error.message || 'Lỗi khi tạo nhóm', error.statusCode || 500);
   }
 };

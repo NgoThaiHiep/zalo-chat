@@ -1918,8 +1918,20 @@ const getGroupMessages = async (groupId, userId, limit = 50, lastEvaluatedKey = 
 };
 
 
+const isUserAdmin = async (groupId, userId) => {
+  const group = await this.getGroupInfo(groupId, userId);
+  return group.userRole === 'admin' || group.userRole === 'co-admin';
+}
 
-
+const isUserGroupMember = async (groupId, userId) => {
+  try {
+    await this.getGroupInfo(groupId, userId);
+    return true;
+  } catch (err) {
+    if (err.statusCode === 403) return false;
+    throw err; 
+  }
+}
 
 module.exports = {
   assignMemberRole ,
@@ -1946,4 +1958,6 @@ module.exports = {
   getGroupMessages,
   forwardGroupMessageToUser,
   forwardGroupMessage,
+  isUserAdmin,
+  isUserGroupMember,
 };
