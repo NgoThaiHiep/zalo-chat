@@ -1,10 +1,10 @@
 const { dynamoDB } = require('../config/aws.config');
-const conversation = require('./conversation.service');
 const {redisClient} = require('../config/redis')
 const MessageService = require('./message.service');
 const { getOwnProfile} = require('./auth.service');
 const  logger = require('../config/logger');
-const {createConversation} = require('./conversation.service');
+const { AppError } = require('../utils/errorHandler');
+
 // Hàm kiểm tra chặn
 const checkBlockStatus = async (senderId, receiverId) => {
   const [isSenderBlocked, isReceiverBlocked] = await Promise.all([
@@ -143,7 +143,27 @@ const getSentFriendRequests = async (userId) => {
 };
 
     
-const acceptFriendRequest = async (userId, requestId) =>  {
+const acceptFriendRequest = async (userId, requestId) => {
+  const conversation = require('./conversation.service');
+  logger.info('Bắt đầu xử lý acceptFriendRequest', { userId, requestId });
+
+  // Kiểm tra đầu vào
+  if (!userId) {
+    logger.error('Thiếu userId', { userId, requestId });
+    throw new AppError('userId không hợp lệ', 400);
+  }
+  if (!requestId) {
+    logger.error('Thiếu requestId', { userId, requestId });
+    throw new AppError('requestId không hợp lệ', 400);
+  }
+
+  // Kiểm tra định dạng requestId
+  const requestIdPattern = /^[0-9a-f-]{36}#\d+$/;
+  if (!requestIdPattern.test(requestId)) {
+    logger.error('Định dạng requestId không hợp lệ', { requestId });
+    throw new AppError('requestId không hợp lệ', 400);
+  }
+
   try {
     // 1. Kiểm tra yêu cầu kết bạn
     const checkParams = {
@@ -154,19 +174,33 @@ const acceptFriendRequest = async (userId, requestId) =>  {
     const checkResult = await dynamoDB.get(checkParams).promise();
 
     if (!checkResult.Item) {
-      logger.error('Friend request not found', { userId, requestId });
+      logger.error('Không tìm thấy yêu cầu kết bạn', { userId, requestId });
       throw new AppError('Không tìm thấy yêu cầu kết bạn', 404);
     }
 
     if (checkResult.Item.status !== 'pending') {
-      logger.error('Friend request is not pending', { userId, requestId });
+      logger.error('Yêu cầu kết bạn không phải đang chờ xử lý', { userId, requestId });
       throw new AppError('Yêu cầu kết bạn không phải đang chờ xử lý', 400);
     }
 
-    // 2. Lấy senderId từ requestId (định dạng: senderId#timestamp)
+    // 2. Lấy senderId từ requestId
     const senderId = requestId.split('#')[0];
+    if (!senderId) {
+      logger.error('Không thể trích xuất senderId từ requestId', { requestId });
+      throw new AppError('requestId không hợp lệ', 400);
+    }
 
-    // 3. Thêm bạn bè 2 chiều
+    // 3. Kiểm tra senderId tồn tại
+    const senderCheck = await dynamoDB.get({
+      TableName: 'Users',
+      Key: { userId: senderId },
+    }).promise();
+    if (!senderCheck.Item) {
+      logger.error('Người gửi yêu cầu không tồn tại', { senderId });
+      throw new AppError('Người gửi yêu cầu không tồn tại', 404);
+    }
+
+    // 4. Thêm bạn bè 2 chiều và xóa yêu cầu kết bạn
     const now = new Date().toISOString();
     const friendParams1 = {
       TableName: 'Friends',
@@ -176,8 +210,6 @@ const acceptFriendRequest = async (userId, requestId) =>  {
       TableName: 'Friends',
       Item: { userId: senderId, friendId: userId, addedAt: now },
     };
-
-    // 4. Xoá yêu cầu kết bạn
     const deleteParams = checkParams;
 
     await Promise.all([
@@ -186,28 +218,28 @@ const acceptFriendRequest = async (userId, requestId) =>  {
       dynamoDB.delete(deleteParams).promise(),
     ]);
 
-    // 5. Tạo hội thoại 2 chiều bằng cách tái sử dụng createConversation
-    const result1 = await createConversation(userId, senderId);
-    const result2 = await createConversation(senderId, userId);
+    // 5. Tạo hội thoại 2 chiều
+    const result1 = await conversation.createConversation(userId, senderId);
+    const result2 = await conversation.createConversation(senderId, userId);
 
     // 6. Trả kết quả
     return {
       success: true,
       message: 'Đã chấp nhận yêu cầu kết bạn và tạo hội thoại',
       conversationIds: {
-        [userId]: result1.conversationId,
-        [senderId]: result2.conversationId,
+        [userId]: result1.conversationId || 'existing',
+        [senderId]: result2.conversationId || 'existing',
       },
     };
   } catch (error) {
-    logger.error('Error in acceptFriendRequestAndCreateConversation', {
+    logger.error('Lỗi trong acceptFriendRequest', {
       userId,
       requestId,
       error: error.message,
     });
     throw new AppError(`Lỗi khi chấp nhận yêu cầu kết bạn và tạo hội thoại: ${error.message}`, error.statusCode || 500);
   }
-}
+};
 
     const rejectFriendRequest = async (userId, requestId) =>{
         const checkParams = {

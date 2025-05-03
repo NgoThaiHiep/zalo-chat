@@ -31,40 +31,70 @@ const sendFriendRequestController = async (req, res) => {
     res.status(200).json({ success: true, data: result });
   } catch (error) {
     logger.error('[sendFriendRequestController] Error', { error: error.message });
-    throw new AppError(error.message || 'Lỗi khi gửi yêu cầu kết bạn', error.statusCode || 500);
+  
+    return res.status(error.statusCode || 500).json({
+      success: false,
+      error: error.message || 'Lỗi khi gửi yêu cầu kết bạn',
+    });
   }
 };
 const acceptFriendRequestController = async (req, res) => {
-  const { requestId } = req.prams;
+  const { requestId } = req.query;
   const userId = req.user.id;
+  logger.info(`Xử lý POST /api/friends/accept`, { requestId, userId });
+
+  // Kiểm tra đầu vào
+  if (!requestId || !userId) {
+    logger.error('Thiếu requestId hoặc userId', { requestId, userId });
+    return res.status(400).json({ message: 'Yêu cầu phải có requestId và userId' });
+  }
+
+  // Kiểm tra định dạng requestId
+  const requestIdPattern = /^[0-9a-f-]{36}#\d+$/;
+  if (!requestIdPattern.test(requestId)) {
+    logger.error('Định dạng requestId không hợp lệ', { requestId });
+    return res.status(400).json({ message: 'requestId không hợp lệ' });
+  }
 
   try {
     const result = await FriendService.acceptFriendRequest(userId, requestId);
 
-    // Phát sự kiện qua Socket.IO trong namespace /friend
+    // Trích xuất senderId
     const senderId = requestId.split('#')[0];
+    if (!senderId) {
+      logger.error('Không thể trích xuất senderId từ requestId', { requestId });
+      throw new AppError('requestId không hợp lệ', 400);
+    }
+
+    // Phát sự kiện Socket.IO
     req.io.of('/friend').to(`user:${userId}`).emit('friend:acceptRequest:success', {
       message: result.message,
       conversationIds: result.conversationIds,
     });
     req.io.of('/friend').to(`user:${senderId}`).emit('friend:requestAccepted', {
       accepterId: userId,
-      conversationId: result.conversationIds[senderId],
+      conversationId: result.conversationIds[senderId] || 'existing',
     });
-    logger.info(`[FriendController] Emitted friend:acceptRequest:success to user:${userId} and friend:requestAccepted to user:${senderId}`);
+    logger.info(
+      `[FriendController] Đã phát sự kiện friend:acceptRequest:success cho user:${userId} và friend:requestAccepted cho user:${senderId}`
+    );
 
-    res.status(200).json(result);
+    return res.status(200).json(result);
   } catch (error) {
-    logger.error('[acceptFriendRequestController] Error', { error: error.message });
+    logger.error('[acceptFriendRequestController] Lỗi', { error: error.message });
     if (error.message === 'Không tìm thấy yêu cầu kết bạn') {
       return res.status(404).json({ message: 'Không tìm thấy yêu cầu kết bạn' });
     }
-    if (error.message === 'Yêu cầu kết bạn không phải padding') {
-      return res.status(400).json({ message: 'Yêu cầu kết bạn không phải padding' });
+    if (error.message === 'Yêu cầu kết bạn không phải đang chờ xử lý') {
+      return res.status(400).json({ message: 'Yêu cầu kết bạn không phải đang chờ xử lý' });
     }
-    res.status(500).json({ message: 'Lỗi khi chấp nhận yêu cầu', error: error.message });
+    return res.status(error.statusCode || 500).json({
+      message: 'Lỗi khi chấp nhận yêu cầu',
+      error: error.message,
+    });
   }
 };
+
 
 const rejectFriendRequestController = async (req, res) => {
   const { requestId } = req.body;

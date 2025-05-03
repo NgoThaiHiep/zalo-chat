@@ -1456,3 +1456,83 @@
 {"error":"Unauthorized to mark this message as seen","level":"error","message":"[ChatSocket] Error marking message as seen","timestamp":"2025-04-23T18:25:08.716Z"}
 {"error":"Unauthorized to mark this message as seen","level":"error","message":"[ChatSocket] Error marking message as seen","timestamp":"2025-04-23T18:25:08.733Z"}
 {"error":"Unauthorized to mark this message as seen","level":"error","message":"[ChatSocket] Error marking message as seen","timestamp":"2025-04-23T18:25:08.754Z"}
+{"error":"Yêu cầu kết bạn đang chờ xử lý","level":"error","message":"[sendFriendRequestController] Error","timestamp":"2025-05-03T04:18:16.267Z"}
+{"error":"Yêu cầu kết bạn đang chờ xử lý","level":"error","message":"[sendFriendRequestController] Error","timestamp":"2025-05-03T04:21:17.395Z"}
+{"error":"Yêu cầu kết bạn đang chờ xử lý","level":"error","message":"[sendFriendRequestController] Error","timestamp":"2025-05-03T04:25:33.811Z"}
+{"error":"The provided key element does not match the schema","level":"error","message":"Error in acceptFriendRequestAndCreateConversation","timestamp":"2025-05-03T04:35:37.104Z","userId":"8137054b-0a68-45d1-a203-a8552747b463"}
+{"error":"AppError is not defined","level":"error","message":"[acceptFriendRequestController] Error","timestamp":"2025-05-03T04:35:37.105Z"}
+{"error":"The provided key element does not match the schema","level":"error","message":"Error in acceptFriendRequestAndCreateConversation","timestamp":"2025-05-03T04:36:19.424Z","userId":"8137054b-0a68-45d1-a203-a8552747b463"}
+{"error":"AppError is not defined","level":"error","message":"[acceptFriendRequestController] Error","timestamp":"2025-05-03T04:36:19.430Z"}
+{"error":"The provided key element does not match the schema","level":"error","message":"Error in acceptFriendRequestAndCreateConversation","timestamp":"2025-05-03T04:37:19.777Z","userId":"8137054b-0a68-45d1-a203-a8552747b463"}
+{"error":"AppError is not defined","level":"error","message":"[acceptFriendRequestController] Error","timestamp":"2025-05-03T04:37:19.782Z"}
+{"error":"The provided key element does not match the schema","level":"error","message":"Error in acceptFriendRequestAndCreateConversation","timestamp":"2025-05-03T04:38:01.785Z","userId":"8137054b-0a68-45d1-a203-a8552747b463"}
+{"error":"AppError is not defined","level":"error","message":"[acceptFriendRequestController] Error","timestamp":"2025-05-03T04:38:01.787Z"}
+{"level":"error","message":"Friend request not found","requestId":"requestId=50ae4ea2-a40f-430c-91ac-79dea2d5f725","timestamp":"2025-05-03T04:45:31.274Z","userId":"8137054b-0a68-45d1-a203-a8552747b463"}
+{"error":"AppError is not defined","level":"error","message":"Error in acceptFriendRequestAndCreateConversation","requestId":"requestId=50ae4ea2-a40f-430c-91ac-79dea2d5f725","timestamp":"2025-05-03T04:45:31.275Z","userId":"8137054b-0a68-45d1-a203-a8552747b463"}
+{"error":"AppError is not defined","level":"error","message":"[acceptFriendRequestController] Error","timestamp":"2025-05-03T04:45:31.276Z"}
+{"level":"error","message":"Friend request not found","requestId":"50ae4ea2-a40f-430c-91ac-79dea2d5f725","timestamp":"2025-05-03T04:46:07.936Z","userId":"8137054b-0a68-45d1-a203-a8552747b463"}
+{"error":"AppError is not defined","level":"error","message":"Error in acceptFriendRequestAndCreateConversation","requestId":"50ae4ea2-a40f-430c-91ac-79dea2d5f725","timestamp":"2025-05-03T04:46:07.936Z","userId":"8137054b-0a68-45d1-a203-a8552747b463"}
+{"error":"AppError is not defined","level":"error","message":"[acceptFriendRequestController] Error","timestamp":"2025-05-03T04:46:07.937Z"}
+{"level":"error","message":"Friend request not found","requestId":"50ae4ea2-a40f-430c-91ac-79dea2d5f725","timestamp":"2025-05-03T04:47:15.977Z","userId":"8137054b-0a68-45d1-a203-a8552747b463"}
+{"error":"AppError is not defined","level":"error","message":"Error in acceptFriendRequestAndCreateConversation","requestId":"50ae4ea2-a40f-430c-91ac-79dea2d5f725","timestamp":"2025-05-03T04:47:15.979Z","userId":"8137054b-0a68-45d1-a203-a8552747b463"}
+{"error":"AppError is not defined","level":"error","message":"[acceptFriendRequestController] Error","timestamp":"2025-05-03T04:47:15.981Z"}
+{"level":"error","message":"Friend request not found","requestId":"50ae4ea2-a40f-430c-91ac-79dea2d5f725","timestamp":"2025-05-03T04:47:29.835Z","userId":"8137054b-0a68-45d1-a203-a8552747b463"}
+{"error":"AppError is not defined","level":"error","message":"Error in acceptFriendRequestAndCreateConversation","requestId":"50ae4ea2-a40f-430c-91ac-79dea2d5f725","timestamp":"2025-05-03T04:47:29.835Z","userId":"8137054b-0a68-45d1-a203-a8552747b463"}
+{"error":"AppError is not defined","level":"error","message":"[acceptFriendRequestController] Error","timestamp":"2025-05-03T04:47:29.836Z"}
+{"level":"error","message":"Friend request not found","requestId":"50ae4ea2-a40f-430c-91ac-79dea2d5f725","timestamp":"2025-05-03T04:49:27.302Z","userId":"8137054b-0a68-45d1-a203-a8552747b463"}
+{"error":"AppError is not defined","level":"error","message":"Error in acceptFriendRequestAndCreateConversation","requestId":"50ae4ea2-a40f-430c-91ac-79dea2d5f725","timestamp":"2025-05-03T04:49:27.303Z","userId":"8137054b-0a68-45d1-a203-a8552747b463"}
+{"error":"AppError is not defined","level":"error","message":"[acceptFriendRequestController] Error","timestamp":"2025-05-03T04:49:27.304Z"}
+{"level":"error","message":"Friend request not found","requestId":"a","timestamp":"2025-05-03T04:49:37.646Z","userId":"8137054b-0a68-45d1-a203-a8552747b463"}
+{"error":"AppError is not defined","level":"error","message":"Error in acceptFriendRequestAndCreateConversation","requestId":"a","timestamp":"2025-05-03T04:49:37.647Z","userId":"8137054b-0a68-45d1-a203-a8552747b463"}
+{"error":"AppError is not defined","level":"error","message":"[acceptFriendRequestController] Error","timestamp":"2025-05-03T04:49:37.647Z"}
+{"level":"error","message":"Friend request not found","requestId":"50ae4ea2-a40f-430c-91ac-79dea2d5f725","timestamp":"2025-05-03T04:49:49.152Z","userId":"8137054b-0a68-45d1-a203-a8552747b463"}
+{"error":"AppError is not defined","level":"error","message":"Error in acceptFriendRequestAndCreateConversation","requestId":"50ae4ea2-a40f-430c-91ac-79dea2d5f725","timestamp":"2025-05-03T04:49:49.153Z","userId":"8137054b-0a68-45d1-a203-a8552747b463"}
+{"error":"AppError is not defined","level":"error","message":"[acceptFriendRequestController] Error","timestamp":"2025-05-03T04:49:49.154Z"}
+{"level":"error","message":"Friend request not found","requestId":"50ae4ea2-a40f-430c-91ac-79dea2d5f725","timestamp":"2025-05-03T04:50:36.376Z","userId":"8137054b-0a68-45d1-a203-a8552747b463"}
+{"error":"AppError is not defined","level":"error","message":"Error in acceptFriendRequestAndCreateConversation","requestId":"50ae4ea2-a40f-430c-91ac-79dea2d5f725","timestamp":"2025-05-03T04:50:36.376Z","userId":"8137054b-0a68-45d1-a203-a8552747b463"}
+{"error":"AppError is not defined","level":"error","message":"[acceptFriendRequestController] Error","timestamp":"2025-05-03T04:50:36.378Z"}
+{"error":"createConversation is not a function","level":"error","message":"Error in acceptFriendRequestAndCreateConversation","requestId":"50ae4ea2-a40f-430c-91ac-79dea2d5f725#1745420670108","timestamp":"2025-05-03T04:51:31.675Z","userId":"8137054b-0a68-45d1-a203-a8552747b463"}
+{"error":"AppError is not defined","level":"error","message":"[acceptFriendRequestController] Error","timestamp":"2025-05-03T04:51:31.676Z"}
+{"level":"error","message":"Friend request not found","requestId":"50ae4ea2-a40f-430c-91ac-79dea2d5f725#1745420670108","timestamp":"2025-05-03T04:51:44.113Z","userId":"8137054b-0a68-45d1-a203-a8552747b463"}
+{"error":"AppError is not defined","level":"error","message":"Error in acceptFriendRequestAndCreateConversation","requestId":"50ae4ea2-a40f-430c-91ac-79dea2d5f725#1745420670108","timestamp":"2025-05-03T04:51:44.114Z","userId":"8137054b-0a68-45d1-a203-a8552747b463"}
+{"error":"AppError is not defined","level":"error","message":"[acceptFriendRequestController] Error","timestamp":"2025-05-03T04:51:44.114Z"}
+{"error":"Bạn đã là bạn bè với người này","level":"error","message":"[sendFriendRequestController] Error","timestamp":"2025-05-03T04:52:30.194Z"}
+{"error":"The provided key element does not match the schema","level":"error","message":"Error in acceptFriendRequestAndCreateConversation","timestamp":"2025-05-03T04:54:51.438Z","userId":"a9aa65c3-af78-4dc2-98d1-7f95059d5f5f"}
+{"error":"AppError is not defined","level":"error","message":"[acceptFriendRequestController] Error","timestamp":"2025-05-03T04:54:51.442Z"}
+{"error":"The provided key element does not match the schema","level":"error","message":"Error in acceptFriendRequestAndCreateConversation","timestamp":"2025-05-03T04:54:54.541Z","userId":"a9aa65c3-af78-4dc2-98d1-7f95059d5f5f"}
+{"error":"AppError is not defined","level":"error","message":"[acceptFriendRequestController] Error","timestamp":"2025-05-03T04:54:54.543Z"}
+{"error":"userId is not defined","level":"error","message":"[acceptFriendRequestController] Error","timestamp":"2025-05-03T04:57:23.131Z"}
+{"error":"userId is not defined","level":"error","message":"[acceptFriendRequestController] Error","timestamp":"2025-05-03T04:57:38.734Z"}
+{"error":"userId is not defined","level":"error","message":"[acceptFriendRequestController] Error","timestamp":"2025-05-03T04:59:41.549Z"}
+{"error":"userId is not defined","level":"error","message":"[acceptFriendRequestController] Error","timestamp":"2025-05-03T05:07:24.674Z"}
+{"error":"userId is not defined","level":"error","message":"[acceptFriendRequestController] Error","timestamp":"2025-05-03T05:07:26.479Z"}
+{"error":"userId is not defined","level":"error","message":"[acceptFriendRequestController] Error","timestamp":"2025-05-03T05:07:44.623Z"}
+{"error":"createConversation is not a function","level":"error","message":"Error in acceptFriendRequestAndCreateConversation","requestId":"50ae4ea2-a40f-430c-91ac-79dea2d5f725#1746247998623","timestamp":"2025-05-03T05:10:08.792Z","userId":"a9aa65c3-af78-4dc2-98d1-7f95059d5f5f"}
+{"error":"AppError is not defined","level":"error","message":"[acceptFriendRequestController] Error","timestamp":"2025-05-03T05:10:08.793Z"}
+{"level":"error","message":"Friend request not found","requestId":"50ae4ea2-a40f-430c-91ac-79dea2d5f725#1746247998623","timestamp":"2025-05-03T05:12:46.433Z","userId":"a9aa65c3-af78-4dc2-98d1-7f95059d5f5f"}
+{"error":"Không tìm thấy yêu cầu kết bạn","level":"error","message":"Error in acceptFriendRequestAndCreateConversation","requestId":"50ae4ea2-a40f-430c-91ac-79dea2d5f725#1746247998623","timestamp":"2025-05-03T05:12:46.434Z","userId":"a9aa65c3-af78-4dc2-98d1-7f95059d5f5f"}
+{"error":"Lỗi khi chấp nhận yêu cầu kết bạn và tạo hội thoại: Không tìm thấy yêu cầu kết bạn","level":"error","message":"[acceptFriendRequestController] Error","timestamp":"2025-05-03T05:12:46.436Z"}
+{"level":"error","message":"Friend request not found","requestId":"50ae4ea2-a40f-430c-91ac-79dea2d5f725#1746247998623","timestamp":"2025-05-03T05:13:41.844Z","userId":"a9aa65c3-af78-4dc2-98d1-7f95059d5f5f"}
+{"error":"Không tìm thấy yêu cầu kết bạn","level":"error","message":"Error in acceptFriendRequestAndCreateConversation","requestId":"50ae4ea2-a40f-430c-91ac-79dea2d5f725#1746247998623","timestamp":"2025-05-03T05:13:41.845Z","userId":"a9aa65c3-af78-4dc2-98d1-7f95059d5f5f"}
+{"error":"Lỗi khi chấp nhận yêu cầu kết bạn và tạo hội thoại: Không tìm thấy yêu cầu kết bạn","level":"error","message":"[acceptFriendRequestController] Error","timestamp":"2025-05-03T05:13:41.845Z"}
+{"level":"error","message":"Thiếu requestId","timestamp":"2025-05-03T05:14:47.047Z","userId":"a9aa65c3-af78-4dc2-98d1-7f95059d5f5f"}
+{"error":"requestId không hợp lệ","level":"error","message":"[acceptFriendRequestController] Error","timestamp":"2025-05-03T05:14:47.048Z"}
+{"level":"error","message":"Friend request not found","requestId":"50ae4ea2-a40f-430c-91ac-79dea2d5f725#1746247998623","timestamp":"2025-05-03T05:15:38.565Z","userId":"a9aa65c3-af78-4dc2-98d1-7f95059d5f5f"}
+{"error":"Không tìm thấy yêu cầu kết bạn","level":"error","message":"Error in acceptFriendRequestAndCreateConversation","requestId":"50ae4ea2-a40f-430c-91ac-79dea2d5f725#1746247998623","timestamp":"2025-05-03T05:15:38.566Z","userId":"a9aa65c3-af78-4dc2-98d1-7f95059d5f5f"}
+{"error":"Lỗi khi chấp nhận yêu cầu kết bạn và tạo hội thoại: Không tìm thấy yêu cầu kết bạn","level":"error","message":"[acceptFriendRequestController] Error","timestamp":"2025-05-03T05:15:38.566Z"}
+{"error":"Bạn đã là bạn bè với người này","level":"error","message":"[sendFriendRequestController] Error","timestamp":"2025-05-03T05:20:54.778Z"}
+{"level":"error","message":"Không tìm thấy yêu cầu kết bạn","requestId":"50ae4ea2-a40f-430c-91ac-79dea2d5f725#1746249679069","timestamp":"2025-05-03T05:31:32.859Z","userId":"a9aa65c3-af78-4dc2-98d1-7f95059d5f5f"}
+{"error":"Không tìm thấy yêu cầu kết bạn","level":"error","message":"Lỗi trong acceptFriendRequest","requestId":"50ae4ea2-a40f-430c-91ac-79dea2d5f725#1746249679069","timestamp":"2025-05-03T05:31:32.860Z","userId":"a9aa65c3-af78-4dc2-98d1-7f95059d5f5f"}
+{"error":"Lỗi khi chấp nhận yêu cầu kết bạn và tạo hội thoại: Không tìm thấy yêu cầu kết bạn","level":"error","message":"[acceptFriendRequestController] Lỗi","timestamp":"2025-05-03T05:31:32.860Z"}
+{"error":"createConversation is not a function","level":"error","message":"Lỗi trong acceptFriendRequest","requestId":"50ae4ea2-a40f-430c-91ac-79dea2d5f725#1746250314095","timestamp":"2025-05-03T05:32:10.181Z","userId":"a9aa65c3-af78-4dc2-98d1-7f95059d5f5f"}
+{"error":"Lỗi khi chấp nhận yêu cầu kết bạn và tạo hội thoại: createConversation is not a function","level":"error","message":"[acceptFriendRequestController] Lỗi","timestamp":"2025-05-03T05:32:10.182Z"}
+{"level":"error","message":"Không tìm thấy yêu cầu kết bạn","requestId":"50ae4ea2-a40f-430c-91ac-79dea2d5f725#1746250314095","timestamp":"2025-05-03T05:37:22.717Z","userId":"a9aa65c3-af78-4dc2-98d1-7f95059d5f5f"}
+{"error":"Không tìm thấy yêu cầu kết bạn","level":"error","message":"Lỗi trong acceptFriendRequest","requestId":"50ae4ea2-a40f-430c-91ac-79dea2d5f725#1746250314095","timestamp":"2025-05-03T05:37:22.719Z","userId":"a9aa65c3-af78-4dc2-98d1-7f95059d5f5f"}
+{"error":"Lỗi khi chấp nhận yêu cầu kết bạn và tạo hội thoại: Không tìm thấy yêu cầu kết bạn","level":"error","message":"[acceptFriendRequestController] Lỗi","timestamp":"2025-05-03T05:37:22.720Z"}
+{"error":"createConversation is not a function","level":"error","message":"Lỗi trong acceptFriendRequest","requestId":"50ae4ea2-a40f-430c-91ac-79dea2d5f725#1746250649039","timestamp":"2025-05-03T05:37:37.841Z","userId":"a9aa65c3-af78-4dc2-98d1-7f95059d5f5f"}
+{"error":"Lỗi khi chấp nhận yêu cầu kết bạn và tạo hội thoại: createConversation is not a function","level":"error","message":"[acceptFriendRequestController] Lỗi","timestamp":"2025-05-03T05:37:37.841Z"}
+{"level":"error","message":"Không tìm thấy yêu cầu kết bạn","requestId":"50ae4ea2-a40f-430c-91ac-79dea2d5f725#1746250649039","timestamp":"2025-05-03T05:38:24.280Z","userId":"a9aa65c3-af78-4dc2-98d1-7f95059d5f5f"}
+{"error":"Không tìm thấy yêu cầu kết bạn","level":"error","message":"Lỗi trong acceptFriendRequest","requestId":"50ae4ea2-a40f-430c-91ac-79dea2d5f725#1746250649039","timestamp":"2025-05-03T05:38:24.281Z","userId":"a9aa65c3-af78-4dc2-98d1-7f95059d5f5f"}
+{"error":"Lỗi khi chấp nhận yêu cầu kết bạn và tạo hội thoại: Không tìm thấy yêu cầu kết bạn","level":"error","message":"[acceptFriendRequestController] Lỗi","timestamp":"2025-05-03T05:38:24.282Z"}
+{"error":"conversation.createConversation is not a function","level":"error","message":"Lỗi trong acceptFriendRequest","requestId":"50ae4ea2-a40f-430c-91ac-79dea2d5f725#1746250723640","timestamp":"2025-05-03T05:38:50.518Z","userId":"a9aa65c3-af78-4dc2-98d1-7f95059d5f5f"}
+{"error":"Lỗi khi chấp nhận yêu cầu kết bạn và tạo hội thoại: conversation.createConversation is not a function","level":"error","message":"[acceptFriendRequestController] Lỗi","timestamp":"2025-05-03T05:38:50.518Z"}

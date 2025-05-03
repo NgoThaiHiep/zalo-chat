@@ -534,44 +534,7 @@ const initializeDatabase = async () => {
     await createTableIfNotExists('Conversations', conversationsTableParams);
     await updateTableWithNewGSI('Conversations', conversationsTableParams);
 
-    // 11. Tạo bảng ReminderLogs
-    const reminderLogsTableParams = {
-      TableName: 'ReminderLogs',
-      AttributeDefinitions: [
-        { AttributeName: 'logId', AttributeType: 'S' },
-        { AttributeName: 'senderId', AttributeType: 'S' },
-        { AttributeName: 'receiverId', AttributeType: 'S' },
-        { AttributeName: 'timestamp', AttributeType: 'S' },
-      ],
-      KeySchema: [
-        { AttributeName: 'logId', KeyType: 'HASH' },
-      ],
-      GlobalSecondaryIndexes: [
-        {
-          IndexName: 'ReminderIndex',
-          KeySchema: [
-            { AttributeName: 'ownerId', KeyType: 'HASH' },
-            { AttributeName: 'reminder', KeyType: 'RANGE' },
-          ],
-          Projection: { ProjectionType: 'ALL' },
-
-        },
-        {
-          IndexName: 'UserIdTimestampIndex',
-          KeySchema: [
-            { AttributeName: 'senderId', KeyType: 'HASH' },
-            { AttributeName: 'timestamp', KeyType: 'RANGE' },
-          ],
-          Projection: {
-            ProjectionType: 'ALL',
-          },
-        },
-      ],
-      BillingMode: 'PAY_PER_REQUEST',
-    };
-    await createTableIfNotExists('ReminderLogs', reminderLogsTableParams);
-    await updateTableWithNewGSI('ReminderLogs', reminderLogsTableParams);
-    await enableTTL('ReminderLogs', 'ttl');
+   
     //12. Tạo bảng nicknames
     const NicknamesTableParams = {
       TableName: 'Nicknames',

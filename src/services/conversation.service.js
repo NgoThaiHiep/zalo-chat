@@ -645,17 +645,18 @@ const getPinnedConversations = async (userId) => {
 
 // Hàm tạo hội thoại
 const createConversation = async (userId, targetUserId) => {
-  if (!userId || !targetUserId) {
-    logger.error('Invalid userId or targetUserId', { userId, targetUserId });
-    throw new AppError('userId hoặc targetUserId không hợp lệ!', 400);
-  }
+  logger.info('Bắt đầu tạo hội thoại', { userId, targetUserId });
 
-  logger.info('Creating conversation', { userId, targetUserId });
+  // Kiểm tra đầu vào
+  if (!userId || !targetUserId) {
+    logger.error('Thiếu userId hoặc targetUserId', { userId, targetUserId });
+    throw new AppError('userId hoặc targetUserId không hợp lệ', 400);
+  }
 
   const now = new Date().toISOString();
   const conversationId = uuidv4();
 
-  // Check if targetUserId is a groupId (assume groupIds are stored in Groups table)
+  // Kiểm tra targetUserId có phải là groupId
   const isGroup = await dynamoDB.get({
     TableName: 'Groups',
     Key: { groupId: targetUserId },
@@ -668,7 +669,8 @@ const createConversation = async (userId, targetUserId) => {
       Key: { userId },
     }).promise();
     if (!userSettings.Item) {
-      throw new AppError('Người dùng không tồn tại!', 404);
+      logger.error('Người dùng không tồn tại', { userId });
+      throw new AppError('Người dùng không tồn tại', 404);
     }
     userRestrict = userSettings.Item.restrictStrangerMessages || false;
   }
@@ -697,17 +699,18 @@ const createConversation = async (userId, targetUserId) => {
       Item: conversation,
       ConditionExpression: 'attribute_not_exists(userId) AND attribute_not_exists(targetUserId)',
     }).promise();
-    logger.info('Conversation created successfully', { conversationId, userId, targetUserId });
+    logger.info('Tạo hội thoại thành công', { conversationId, userId, targetUserId });
     return { success: true, conversationId };
   } catch (error) {
     if (error.code === 'ConditionalCheckFailedException') {
-      logger.warn('Conversation already exists', { userId, targetUserId });
+      logger.warn('Hội thoại đã tồn tại', { userId, targetUserId });
       return { success: true, conversationId: null };
     }
-    logger.error('Failed to create conversation', { userId, targetUserId, error: error.message });
+    logger.error('Lỗi khi tạo hội thoại', { userId, targetUserId, error: error.message });
     throw new AppError(`Không thể tạo hội thoại: ${error.message}`, 500);
   }
 };
+
 
 // Hàm lấy cài đặt tự động xóa
 const getAutoDeleteSetting = async (userId, targetUserId) => {
