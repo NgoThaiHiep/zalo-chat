@@ -41,16 +41,43 @@ const initializeFriendSocket = (friendIo) => {
         }
         const result = await FriendService.acceptFriendRequest(userId, requestId);
         callback({ success: true, data: { message: result.message, conversationIds: result.conversationIds } });
-
+    
         const senderId = requestId.split('#')[0];
+    
+        // Lấy thông tin người dùng để lấy tên
+        const [userInfo, senderInfo] = await Promise.all([
+          FriendService.getUserName(userId, userId), // Lấy tên của userId (bạn)
+          FriendService.getUserName(userId, senderId), // Lấy tên của senderId (AnhKhoa)
+        ]);
+    
+        // Phát sự kiện friend:requestAccepted cho senderId
         friendIo.to(senderId).emit('friend:requestAccepted', {
           accepterId: userId,
           conversationId: result.conversationIds[senderId],
         });
-
+    
+        // Phát sự kiện thông báo "Bạn và AnhKhoa đã trở thành bạn bè" cho cả hai
+        const messageForUser = `Bạn và ${senderInfo.name} đã trở thành bạn bè`;
+        const messageForSender = `Bạn và ${userInfo.name} đã trở thành bạn bè`;
+    
+        friendIo.to(userId).emit('friend:friendshipEstablished', {
+          friendId: senderId,
+          friendName: senderInfo.name,
+          message: messageForUser,
+          conversationId: result.conversationIds[userId],
+        });
+    
+        friendIo.to(senderId).emit('friend:friendshipEstablished', {
+          friendId: userId,
+          friendName: userInfo.name,
+          message: messageForSender,
+          conversationId: result.conversationIds[senderId],
+        });
+    
+        // Tạo hội thoại cho cả hai người dùng
         await ConversationService.createConversation(userId, senderId);
         await ConversationService.createConversation(senderId, userId);
-
+    
         logger.info(`[FriendSocket] User ${userId} accepted friend request ${requestId}`);
       } catch (error) {
         logger.error(`[FriendSocket] Error accepting friend request for ${userId}`, { error: error.message });

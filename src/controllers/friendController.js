@@ -66,17 +66,43 @@ const acceptFriendRequestController = async (req, res) => {
       throw new AppError('requestId không hợp lệ', 400);
     }
 
+    // Lấy thông tin người dùng để lấy tên
+    const [userInfo, senderInfo] = await Promise.all([
+      FriendService.getUserName(userId, userId), // Lấy tên của userId (bạn)
+      FriendService.getUserName(userId, senderId), // Lấy tên của senderId (AnhKhoa)
+    ]);
+
     // Phát sự kiện Socket.IO
     req.io.of('/friend').to(`user:${userId}`).emit('friend:acceptRequest:success', {
       message: result.message,
       conversationIds: result.conversationIds,
     });
+
     req.io.of('/friend').to(`user:${senderId}`).emit('friend:requestAccepted', {
       accepterId: userId,
       conversationId: result.conversationIds[senderId] || 'existing',
     });
+
+    // Phát sự kiện friend:friendshipEstablished cho cả hai
+    const messageForUser = `Bạn và ${senderInfo.name} đã trở thành bạn bè`;
+    const messageForSender = `Bạn và ${userInfo.name} đã trở thành bạn bè`;
+
+    req.io.of('/friend').to(`user:${userId}`).emit('friend:friendshipEstablished', {
+      friendId: senderId,
+      friendName: senderInfo.name,
+      message: messageForUser,
+      conversationId: result.conversationIds[userId],
+    });
+
+    req.io.of('/friend').to(`user:${senderId}`).emit('friend:friendshipEstablished', {
+      friendId: userId,
+      friendName: userInfo.name,
+      message: messageForSender,
+      conversationId: result.conversationIds[senderId] || 'existing',
+    });
+
     logger.info(
-      `[FriendController] Đã phát sự kiện friend:acceptRequest:success cho user:${userId} và friend:requestAccepted cho user:${senderId}`
+      `[FriendController] Đã phát sự kiện friend:acceptRequest:success và friend:friendshipEstablished cho user:${userId} và friend:requestAccepted và friend:friendshipEstablished cho user:${senderId}`
     );
 
     return res.status(200).json(result);

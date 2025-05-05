@@ -975,7 +975,7 @@ const getConversationSummary = async (userId, options = {}) => {
         if (userId !== targetUserId) {
           const targetUser = userMap.get(targetUserId);
           restrictStrangerMessages = targetUser?.settings?.restrictStrangerMessages || false;
-
+      
           if (restrictStrangerMessages) {
             const friendResult = await dynamoDB.get({
               TableName: 'Friends',
@@ -984,13 +984,13 @@ const getConversationSummary = async (userId, options = {}) => {
             isFriend = !!friendResult.Item;
           }
         }
-
+      
         const lastMessage = minimal ? null : conv.lastMessage;
-
+      
         if (
-          userId === targetUserId ||
-          (isFriend && lastMessage) ||
-          (!restrictStrangerMessages && lastMessage)
+          userId === targetUserId || // Hội thoại với chính mình
+          isFriend || // Là bạn bè
+          !restrictStrangerMessages // Không hạn chế tin nhắn từ người lạ
         ) {
           let name, phoneNumber, avatar;
           const targetUser = userMap.get(targetUserId);
@@ -1003,18 +1003,18 @@ const getConversationSummary = async (userId, options = {}) => {
               const userNameResult = await FriendService.getUserName(userId, targetUserId);
               name = userNameResult.name;
               phoneNumber = userNameResult.phoneNumber;
-              avatar = userNameResult.avatar || targetUser?.avatar || null; // Ưu tiên avatar từ FriendService, nếu không có thì lấy từ targetUser
+              avatar = userNameResult.avatar || targetUser?.avatar || null;
             } catch (error) {
               logger.error(`Lỗi lấy thông tin cho ${targetUserId}:`, error);
               name = targetUserId;
               phoneNumber = targetUser?.phoneNumber || null;
-              avatar = targetUser?.avatar || null; // Lấy trực tiếp từ targetUser nếu FriendService lỗi
+              avatar = targetUser?.avatar || null;
             }
           }
-
+      
           const isMuted = mutedConversations.some(mc => mc.mutedUserId === targetUserId);
           const isPinned = pinnedConversations.some(pc => pc.pinnedUserId === targetUserId);
-
+      
           conversationList.push({
             otherUserId: targetUserId,
             displayName: name,
