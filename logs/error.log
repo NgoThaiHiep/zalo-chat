@@ -1536,3 +1536,4 @@
 {"error":"Lỗi khi chấp nhận yêu cầu kết bạn và tạo hội thoại: Không tìm thấy yêu cầu kết bạn","level":"error","message":"[acceptFriendRequestController] Lỗi","timestamp":"2025-05-03T05:38:24.282Z"}
 {"error":"conversation.createConversation is not a function","level":"error","message":"Lỗi trong acceptFriendRequest","requestId":"50ae4ea2-a40f-430c-91ac-79dea2d5f725#1746250723640","timestamp":"2025-05-03T05:38:50.518Z","userId":"a9aa65c3-af78-4dc2-98d1-7f95059d5f5f"}
 {"error":"Lỗi khi chấp nhận yêu cầu kết bạn và tạo hội thoại: conversation.createConversation is not a function","level":"error","message":"[acceptFriendRequestController] Lỗi","timestamp":"2025-05-03T05:38:50.518Z"}
+{"error":"Cannot destructure property 'targetUserId' of 'req.prams' as it is undefined.","level":"error","message":"[getUserStatusController] Error","timestamp":"2025-05-05T03:13:58.765Z"}

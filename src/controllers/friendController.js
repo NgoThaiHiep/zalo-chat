@@ -355,7 +355,7 @@ const getFriendSuggestionsController = async (req, res) => {
 const getUserStatusController = async (req, res) => {
   try {
     const userId = req.user.id;
-    const { targetUserId } = req.prams;
+    const { targetUserId } = req.params;
 
     if (!targetUserId) {
       return res.status(400).json({ message: 'targetUserId là bắt buộc!' });
@@ -372,7 +372,7 @@ const getUserStatusController = async (req, res) => {
 const getUserProfileController = async (req, res) => {
   try {
     const userId = req.user.id;
-    const { targetUserId } = req.prams;
+    const { targetUserId } = req.params;
 
     if (!targetUserId) {
       return res.status(400).json({ message: 'targetUserId là bắt buộc!' });
