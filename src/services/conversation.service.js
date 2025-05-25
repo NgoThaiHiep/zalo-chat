@@ -860,7 +860,6 @@ const getConversationSummary = async (userId, options = {}) => {
   const { minimal = false } = options;
 
   try {
-    // 1. Lấy danh sách hội thoại cá nhân và nhóm từ bảng Conversations
     const result = await dynamoDB.query({
       TableName: 'Conversations',
       KeyConditionExpression: 'userId = :userId',
@@ -873,7 +872,7 @@ const getConversationSummary = async (userId, options = {}) => {
       const groupSummaries = groups.map(group => ({
         groupId: group.groupId,
         name: group.name,
-        avatar: group.avatar || null, // Thêm kiểm tra null
+        avatar: group.avatar || null,
         memberCount: group.members.length,
         createdAt: group.createdAt,
         userRole: group.roles[userId],
@@ -891,12 +890,11 @@ const getConversationSummary = async (userId, options = {}) => {
 
     const hiddenConversations = (await getHiddenConversations(userId)).hiddenConversations || [];
     const mutedConversations = (await getMutedConversations(userId)).mutedConversations || [];
-    const pinnedConversations = (await getPinnedConversations(userId)).pinnedConversations || [];
+    // Không cần gọi getPinnedConversations nữa, sẽ kiểm tra trực tiếp từ dữ liệu hội thoại
 
     const conversationList = [];
     const groupSummaries = [];
 
-    // Chuẩn bị batchGet để lấy thông tin người dùng và nhóm
     const userIdsToFetch = new Set();
     const groupIdsToFetch = new Set();
     conversations.forEach(conv => {
@@ -911,26 +909,21 @@ const getConversationSummary = async (userId, options = {}) => {
       }
     });
 
-    // BatchGet cho Users
     const usersData = await batchGetUsers(Array.from(userIdsToFetch));
     const userMap = new Map(usersData.map(user => [user.userId, user]));
 
-    // BatchGet cho Groups
     const groupsData = await batchGetGroups(Array.from(groupIdsToFetch));
     const groupMap = new Map(groupsData.map(group => [group.groupId, group]));
 
-    // 2. Xử lý danh sách hội thoại (cá nhân và nhóm)
     for (const conv of conversations) {
       const targetUserId = conv.targetUserId;
       const isGroup = conv.settings?.isGroup || false;
 
-      // Bỏ qua hội thoại bị ẩn
       if (hiddenConversations.some(hc => hc.hiddenUserId === targetUserId)) {
         continue;
       }
 
       if (isGroup) {
-        // Xử lý hội thoại nhóm
         const group = groupMap.get(targetUserId);
         if (!group) {
           logger.warn('Nhóm không tồn tại trong Conversations', { userId, targetUserId });
@@ -943,7 +936,7 @@ const getConversationSummary = async (userId, options = {}) => {
           groupSummaries.push({
             groupId: group.groupId,
             name: group.name,
-            avatar: group.avatar || null, // Thêm kiểm tra null
+            avatar: group.avatar || null,
             memberCount: group.members.length,
             createdAt: group.createdAt,
             userRole: group.roles[userId],
@@ -952,7 +945,7 @@ const getConversationSummary = async (userId, options = {}) => {
           groupSummaries.push({
             groupId: group.groupId,
             name: group.name,
-            avatar: group.avatar || null, // Thêm kiểm tra null
+            avatar: group.avatar || null,
             memberCount: group.members.length,
             createdAt: group.createdAt,
             userRole: group.roles[userId],
@@ -969,13 +962,12 @@ const getConversationSummary = async (userId, options = {}) => {
           });
         }
       } else {
-        // Xử lý hội thoại cá nhân
         let restrictStrangerMessages = false;
         let isFriend = true;
         if (userId !== targetUserId) {
           const targetUser = userMap.get(targetUserId);
           restrictStrangerMessages = targetUser?.settings?.restrictStrangerMessages || false;
-      
+
           if (restrictStrangerMessages) {
             const friendResult = await dynamoDB.get({
               TableName: 'Friends',
@@ -984,13 +976,13 @@ const getConversationSummary = async (userId, options = {}) => {
             isFriend = !!friendResult.Item;
           }
         }
-      
+
         const lastMessage = minimal ? null : conv.lastMessage;
-      
+
         if (
-          userId === targetUserId || // Hội thoại với chính mình
-          isFriend || // Là bạn bè
-          !restrictStrangerMessages // Không hạn chế tin nhắn từ người lạ
+          userId === targetUserId ||
+          isFriend ||
+          !restrictStrangerMessages
         ) {
           let name, phoneNumber, avatar;
           const targetUser = userMap.get(targetUserId);
@@ -1011,10 +1003,10 @@ const getConversationSummary = async (userId, options = {}) => {
               avatar = targetUser?.avatar || null;
             }
           }
-      
+
           const isMuted = mutedConversations.some(mc => mc.mutedUserId === targetUserId);
-          const isPinned = pinnedConversations.some(pc => pc.pinnedUserId === targetUserId);
-      
+          const isPinned = conv.settings?.isPinned || false; // Kiểm tra trực tiếp từ dữ liệu hội thoại
+
           conversationList.push({
             otherUserId: targetUserId,
             displayName: name,
@@ -1040,7 +1032,6 @@ const getConversationSummary = async (userId, options = {}) => {
       }
     }
 
-    // 3. Sắp xếp danh sách hội thoại
     if (!minimal) {
       conversationList.sort((a, b) => {
         if (a.isPinned && !b.isPinned) return -1;
