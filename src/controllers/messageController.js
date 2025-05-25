@@ -2,9 +2,10 @@ const { log } = require('winston');
 const MessageService = require('../services/message.service');
 const multer = require('multer');
 const { isValidUUID } = require('../utils/helpers');
-const  logger = require('../config/logger');
+const logger = require('../config/logger');
 const upload = require('../middlewares/upload');
 const { AppError } = require('../utils/errorHandler');
+
 const sendMessageController = async (req, res) => {
   try {
     const senderId = req.user.id;
@@ -19,7 +20,7 @@ const sendMessageController = async (req, res) => {
     if (!isValidUUID(receiverId)) {
       throw new AppError('receiverId không hợp lệ', 400);
     }
-    if (['image', 'file', 'video', 'voice', 'sticker','gif'].includes(type) && !req.file) {
+    if (['image', 'file', 'video', 'voice', 'sticker', 'gif'].includes(type) && !req.file) {
       throw new AppError(`File là bắt buộc cho loại tin nhắn ${type}`, 400);
     }
 
@@ -48,6 +49,7 @@ const sendMessageController = async (req, res) => {
     throw new AppError(error.message || 'Lỗi khi gửi tin nhắn', error.statusCode || 500);
   }
 };
+
 const getMessagesBetweenController = async (req, res) => {
   try {
     const { userId } = req.params;
@@ -71,7 +73,6 @@ const getMessagesBetweenController = async (req, res) => {
   }
 };
 
-
 const forwardMessageController = async (req, res) => {
   try {
     const { messageId, targetReceiverId } = req.body;
@@ -85,7 +86,6 @@ const forwardMessageController = async (req, res) => {
 
     const result = await MessageService.forwardMessage(senderId, messageId, targetReceiverId);
 
-    // Phát sự kiện Socket.IO đến người gửi và người nhận
     try {
       req.io.of('/chat').to(`user:${senderId}`).emit('receiveMessage', {
         success: true,
@@ -118,7 +118,6 @@ const forwardMessageController = async (req, res) => {
   }
 };
 
-// Controller cho 1-group
 const forwardMessageToGroupController = async (req, res) => {
   try {
     const { messageId, targetGroupId } = req.body;
@@ -132,7 +131,6 @@ const forwardMessageToGroupController = async (req, res) => {
 
     const result = await MessageService.forwardMessageToGroup(senderId, messageId, targetGroupId);
 
-    // Phát sự kiện Socket.IO đến nhóm đích
     req.io.of('/group').to(`group:${targetGroupId}`).emit('newGroupMessage', {
       success: true,
       data: {
@@ -141,7 +139,6 @@ const forwardMessageToGroupController = async (req, res) => {
       },
     });
 
-    // Thông báo cho người gửi
     try {
       req.io.of('/chat').to(`user:${senderId}`).emit('receiveMessage', {
         success: true,
@@ -193,12 +190,23 @@ const recallMessageController = async (req, res) => {
     throw new AppError(error.message || 'Lỗi khi thu hồi tin nhắn', error.statusCode || 403);
   }
 };
+
 const pinMessageController = async (req, res) => {
   try {
     const { messageId } = req.params;
     const senderId = req.user.id;
 
     const result = await MessageService.pinMessage(senderId, messageId);
+
+    // Phát sự kiện messagePinned tới phòng conversation
+    const message = await MessageService.getMessageById(messageId, senderId);
+    if (message) {
+      const otherUserId = message.senderId === senderId ? message.receiverId : message.senderId;
+      const room = `conversation:${[senderId, otherUserId].sort().join(':')}`;
+      req.io.of('/chat').to(room).emit('messagePinned', { messageId, otherUserId });
+      logger.info('[MessageController] Emitted messagePinned to room', { room, messageId });
+    }
+
     res.status(200).json({ success: true, ...result });
   } catch (error) {
     res.status(403).json({ success: false, message: error.message });
@@ -217,6 +225,16 @@ const unpinMessageController = async (req, res) => {
     console.log('Unpin message request:', { userId, messageId });
 
     const result = await MessageService.unpinMessage(userId, messageId);
+
+    // Phát sự kiện messageUnpinned tới phòng conversation
+    const message = await MessageService.getMessageById(messageId, userId);
+    if (message) {
+      const otherUserId = message.senderId === userId ? message.receiverId : message.senderId;
+      const room = `conversation:${[userId, otherUserId].sort().join(':')}`;
+      req.io.of('/chat').to(room).emit('messageUnpinned', { messageId, otherUserId });
+      logger.info('[MessageController] Emitted messageUnpinned to room', { room, messageId });
+    }
+
     res.status(200).json({ success: true, ...result });
   } catch (error) {
     res.status(403).json({ success: false, message: error.message });
@@ -241,8 +259,6 @@ const getPinnedMessagesController = async (req, res) => {
     res.status(500).json({ success: false, message: error.message || 'Không thể lấy tin nhắn ghim' });
   }
 };
-
-
 
 const deleteMessageController = async (req, res) => {
   try {
@@ -342,11 +358,9 @@ const checkBlockStatusController = async (req, res) => {
   }
 };
 
-
 module.exports = {
   sendMessageController: [upload.single('file'), sendMessageController],
   getMessagesBetweenController,
-  // getConversationSummaryController,
   forwardMessageController,
   forwardMessageToGroupController,
   recallMessageController,
@@ -358,5 +372,4 @@ module.exports = {
   retryMessageController,
   markMessageAsSeenController,
   checkBlockStatusController,
-
 };

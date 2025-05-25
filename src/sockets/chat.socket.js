@@ -13,6 +13,24 @@ const initializeChatSocket = (chatIo) => {
     socket.join(`user:${userId}`);
     logger.info('[ChatSocket] User joined room', { userId, room: `user:${userId}` });
 
+    // Tham gia các phòng cuộc trò chuyện của user
+    const joinConversationRooms = async () => {
+      try {
+        const conversations = await MessageService.getConversationsForUser(userId);
+        logger.info('[ChatSocket] Conversations found for user', { userId, conversationCount: conversations.length });
+        conversations.forEach((conversation) => {
+          const otherUserId = conversation.targetUserId;
+          const room = `conversation:${[userId, otherUserId].sort().join(':')}`;
+          socket.join(room);
+          logger.info('[ChatSocket] User joined conversation room', { userId, room });
+        });
+      } catch (error) {
+        logger.error('[ChatSocket] Error joining conversation rooms', { userId, error: error.message });
+      }
+    };
+
+    joinConversationRooms();
+
     const updateMessagesOnConnect = async () => {
       try {
         await MessageService.updateMessageStatusOnConnect(userId);
@@ -26,6 +44,12 @@ const initializeChatSocket = (chatIo) => {
     };
 
     updateMessagesOnConnect();
+
+    socket.on('joinRoom', (data) => {
+      const { room } = data;
+      socket.join(room);
+      logger.info('[ChatSocket] User joined room via joinRoom event', { userId, room });
+    });
 
     socket.on('sendMessage', async (data, callback) => {
       try {
@@ -45,7 +69,7 @@ const initializeChatSocket = (chatIo) => {
           throw new AppError('receiverId and type are required', 400);
         }
 
-        if (['image', 'file', 'video', 'voice', 'sticker','gif'].includes(type) && !file) {
+        if (['image', 'file', 'video', 'voice', 'sticker', 'gif'].includes(type) && !file) {
           throw new AppError(`File is required for message type ${type}`, 400);
         }
 
@@ -144,12 +168,9 @@ const initializeChatSocket = (chatIo) => {
 
         const result = await MessageService.recallMessage(userId, messageId);
 
-        // Lấy thông tin tin nhắn để xác định receiverId
         const message = await MessageService.getMessageById(messageId, userId);
         if (message) {
-          // Emit tới người gửi
           chatIo.to(`user:${userId}`).emit('messageRecalled', { messageId });
-          // Emit tới người nhận hoặc nhóm
           if (message.groupId) {
             chatIo.to(`group:${message.groupId}`).emit('messageRecalled', { messageId });
           } else if (message.receiverId && message.receiverId !== userId) {
@@ -163,54 +184,6 @@ const initializeChatSocket = (chatIo) => {
         callback({ success: true, data: result });
       } catch (error) {
         logger.error('[ChatSocket] Error recalling message', { error: error.message });
-        callback({ success: false, message: error.message });
-      }
-    });
-
-    socket.on('pinMessage', async (data, callback) => {
-      try {
-        const { messageId } = data;
-        if (!messageId) {
-          throw new AppError('messageId is required', 400);
-        }
-
-        const result = await MessageService.pinMessage(userId, messageId);
-
-        const message = await MessageService.getMessageById(messageId, userId);
-        if (message) {
-          chatIo.to(`user:${userId}`).emit('messagePinned', { messageId });
-          const otherUserId = message.senderId === userId ? message.receiverId : message.senderId;
-          chatIo.to(`user:${otherUserId}`).emit('messagePinned', { messageId });
-        }
-
-        logger.info('[ChatSocket] Message pinned', { messageId, userId });
-        callback({ success: true, data: result });
-      } catch (error) {
-        logger.error('[ChatSocket] Error pinning message', { error: error.message });
-        callback({ success: false, message: error.message });
-      }
-    });
-
-    socket.on('unpinMessage', async (data, callback) => {
-      try {
-        const { messageId } = data;
-        if (!messageId) {
-          throw new AppError('messageId is required', 400);
-        }
-
-        const result = await MessageService.unpinMessage(userId, messageId);
-
-        const message = await MessageService.getMessageById(messageId, userId);
-        if (message) {
-          chatIo.to(`user:${userId}`).emit('messageUnpinned', { messageId });
-          const otherUserId = message.senderId === userId ? message.receiverId : message.senderId;
-          chatIo.to(`user:${otherUserId}`).emit('messageUnpinned', { messageId });
-        }
-
-        logger.info('[ChatSocket] Message unpinned', { messageId, userId });
-        callback({ success: true, data: result });
-      } catch (error) {
-        logger.error('[ChatSocket] Error unpinning message', { error: error.message });
         callback({ success: false, message: error.message });
       }
     });
