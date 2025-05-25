@@ -519,25 +519,45 @@ const pinGroupMessageController = async (req, res) => {
   try {
     const { groupId, messageId } = req.params;
     const senderId = req.user.id;
-    const result = await groupService.pinGroupMessage(groupId, senderId, messageId);
 
-    // Phát sự kiện Socket.IO khi tin nhắn được ghim
-    req.io.of('/group').to(`group:${groupId}`).emit('messagePinned', {
-      groupId,
-      messageId,
-      pinnedBy: senderId,
-    });
+    if (req.method === 'PUT') {
+      const result = await groupService.pinGroupMessage(groupId, senderId, messageId);
 
-    res.status(200).json({
-      success: true,
-      message: result.message,
-      data: result,
-    });
+      // Phát sự kiện Socket.IO khi tin nhắn được ghim
+      req.io.of('/group').to(`group:${groupId}`).emit('messagePinned', {
+        groupId,
+        messageId,
+        pinnedBy: senderId,
+      });
+
+      res.status(200).json({
+        success: true,
+        message: result.message,
+        data: result,
+      });
+    } else if (req.method === 'DELETE') {
+      const result = await groupService.unpinGroupMessage(groupId, senderId, messageId);
+
+      // Phát sự kiện Socket.IO khi tin nhắn được bỏ ghim
+      req.io.of('/group').to(`group:${groupId}`).emit('messageUnpinned', {
+        groupId,
+        messageId,
+        unpinnedBy: senderId,
+      });
+
+      res.status(200).json({
+        success: true,
+        message: result.message,
+        data: result,
+      });
+    } else {
+      throw new AppError('Phương thức không được hỗ trợ!', 405);
+    }
   } catch (error) {
-    logger.error('Lỗi khi ghim tin nhắn nhóm', { error: error.message });
+    logger.error('Lỗi khi xử lý ghim/bỏ ghim tin nhắn nhóm', { error: error.message });
     res.status(error.statusCode || 500).json({
       success: false,
-      message: error.message || 'Lỗi server khi ghim tin nhắn nhóm',
+      message: error.message || 'Lỗi server khi xử lý ghim/bỏ ghim tin nhắn nhóm',
     });
   }
 };

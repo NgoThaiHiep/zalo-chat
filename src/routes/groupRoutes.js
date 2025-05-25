@@ -103,4 +103,8 @@ router.get('/listGroup', getUserGroupsController);
 // Lấy tin nhắn nhóm
 router.get('/messages/:groupId', getGroupMessagesController);
 
+// Xóa tin nhắn ghim trong nhóm
+router.delete('/pin/messages/:groupId/:messageId', pinGroupMessageController);
+
+router.delete('/pin/messages/:groupId/:messageId', pinGroupMessageController); // Bỏ ghim tin nhắn nhóm
 module.exports = router;

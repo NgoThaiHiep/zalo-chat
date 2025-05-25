@@ -198,13 +198,21 @@ const pinMessageController = async (req, res) => {
 
     const result = await MessageService.pinMessage(senderId, messageId);
 
-    // Phát sự kiện messagePinned tới phòng conversation
+    // Phát sự kiện tới phòng phù hợp
     const message = await MessageService.getMessageById(messageId, senderId);
     if (message) {
-      const otherUserId = message.senderId === senderId ? message.receiverId : message.senderId;
-      const room = `conversation:${[senderId, otherUserId].sort().join(':')}`;
-      req.io.of('/chat').to(room).emit('messagePinned', { messageId, otherUserId });
-      logger.info('[MessageController] Emitted messagePinned to room', { room, messageId });
+      if (message.groupId) {
+        // Chat nhóm: Phát sự kiện tới phòng group
+        const room = `group:${message.groupId}`;
+        req.io.of('/group').to(room).emit('messagePinned', { messageId });
+        logger.info('[MessageController] Emitted messagePinned to group room', { room, messageId });
+      } else {
+        // Chat 1-1: Phát sự kiện tới phòng conversation
+        const otherUserId = message.senderId === senderId ? message.receiverId : message.senderId;
+        const room = `conversation:${[senderId, otherUserId].sort().join(':')}`;
+        req.io.of('/chat').to(room).emit('messagePinned', { messageId, otherUserId });
+        logger.info('[MessageController] Emitted messagePinned to room', { room, messageId });
+      }
     }
 
     res.status(200).json({ success: true, ...result });
@@ -226,13 +234,21 @@ const unpinMessageController = async (req, res) => {
 
     const result = await MessageService.unpinMessage(userId, messageId);
 
-    // Phát sự kiện messageUnpinned tới phòng conversation
+    // Phát sự kiện tới phòng phù hợp
     const message = await MessageService.getMessageById(messageId, userId);
     if (message) {
-      const otherUserId = message.senderId === userId ? message.receiverId : message.senderId;
-      const room = `conversation:${[userId, otherUserId].sort().join(':')}`;
-      req.io.of('/chat').to(room).emit('messageUnpinned', { messageId, otherUserId });
-      logger.info('[MessageController] Emitted messageUnpinned to room', { room, messageId });
+      if (message.groupId) {
+        // Chat nhóm: Phát sự kiện tới phòng group
+        const room = `group:${message.groupId}`;
+        req.io.of('/group').to(room).emit('messageUnpinned', { messageId });
+        logger.info('[MessageController] Emitted messageUnpinned to group room', { room, messageId });
+      } else {
+        // Chat 1-1: Phát sự kiện tới phòng conversation
+        const otherUserId = message.senderId === userId ? message.receiverId : message.senderId;
+        const room = `conversation:${[userId, otherUserId].sort().join(':')}`;
+        req.io.of('/chat').to(room).emit('messageUnpinned', { messageId, otherUserId });
+        logger.info('[MessageController] Emitted messageUnpinned to room', { room, messageId });
+      }
     }
 
     res.status(200).json({ success: true, ...result });

@@ -1538,20 +1538,110 @@ const pinGroupMessage = async (groupId, senderId, messageId) => {
     throw new AppError('Nhóm không tồn tại hoặc bạn không có quyền!', 403);
   }
 
-  const pinnedMessages = group.Item.pinnedMessages || [];
-  if (!pinnedMessages.includes(messageId)) {
-    pinnedMessages.push(messageId);
-    await dynamoDB.update({
+  // Kiểm tra tin nhắn
+  const messageResult = await dynamoDB.query({
+    TableName: TABLE_NAME,
+    IndexName: 'groupId-messageId-index',
+    KeyConditionExpression: 'groupId = :groupId AND messageId = :messageId',
+    ExpressionAttributeValues: {
+      ':groupId': groupId,
+      ':messageId': messageId,
+    },
+    Limit: 1,
+  }).promise();
+
+  if (!messageResult.Items || messageResult.Items.length === 0) {
+    throw new AppError('Tin nhắn không tồn tại!', 404);
+  }
+
+  const message = messageResult.Items[0];
+  if (message.isPinned) {
+    throw new AppError('Tin nhắn đã được ghim!', 400);
+  }
+  if (message.status === MESSAGE_STATUSES.RECALLED || message.status === MESSAGE_STATUSES.FAILED) {
+    throw new AppError('Không thể ghim tin nhắn đã thu hồi hoặc thất bại!', 400);
+  }
+
+  const pinnedMessages = group.Item.settings?.pinnedMessages || [];
+  if (pinnedMessages.length >= 3) {
+    throw new AppError('Nhóm chỉ có thể ghim tối đa 3 tin nhắn!', 400);
+  }
+
+  // Cập nhật bảng GroupMessages và Groups
+  await Promise.all([
+    dynamoDB.update({
+      TableName: TABLE_NAME,
+      Key: { groupId, timestamp: message.timestamp },
+      UpdateExpression: 'SET isPinned = :p, pinnedBy = :userId',
+      ExpressionAttributeValues: { ':p': true, ':userId': senderId },
+    }).promise(),
+    dynamoDB.update({
       TableName: GROUP_TABLE,
       Key: { groupId },
-      UpdateExpression: 'SET pinnedMessages = :p',
-      ExpressionAttributeValues: { ':p': pinnedMessages },
-    }).promise();
-   
-  }
+      UpdateExpression: 'SET settings.pinnedMessages = list_append(if_not_exists(settings.pinnedMessages, :empty), :msg)',
+      ExpressionAttributeValues: {
+        ':msg': [messageId],
+        ':empty': [],
+      },
+    }).promise(),
+  ]);
 
   return { success: true, message: 'Tin nhắn đã được ghim!' };
 };
+
+const unpinGroupMessage = async (groupId, senderId, messageId) => {
+  if (!groupId || !isValidUUID(groupId) || !senderId || !isValidUUID(senderId) || !messageId || !isValidUUID(messageId)) {
+    throw new AppError('Tham số không hợp lệ cho unpinGroupMessage', 400);
+  }
+
+  const group = await dynamoDB.get({ TableName: GROUP_TABLE, Key: { groupId } }).promise();
+  if (!group.Item || !group.Item.members.includes(senderId)) {
+    throw new AppError('Nhóm không tồn tại hoặc bạn không có quyền!', 403);
+  }
+
+  // Kiểm tra tin nhắn
+  const messageResult = await dynamoDB.query({
+    TableName: TABLE_NAME,
+    IndexName: 'groupId-messageId-index',
+    KeyConditionExpression: 'groupId = :groupId AND messageId = :messageId',
+    ExpressionAttributeValues: {
+      ':groupId': groupId,
+      ':messageId': messageId,
+    },
+    Limit: 1,
+  }).promise();
+
+  if (!messageResult.Items || messageResult.Items.length === 0) {
+    throw new AppError('Tin nhắn không tồn tại!', 404);
+  }
+
+  const message = messageResult.Items[0];
+  if (!message.isPinned) {
+    throw new AppError('Tin nhắn chưa được ghim!', 400);
+  }
+
+  // Cập nhật bảng GroupMessages và Groups
+  await Promise.all([
+    dynamoDB.update({
+      TableName: TABLE_NAME,
+      Key: { groupId, timestamp: message.timestamp },
+      UpdateExpression: 'SET isPinned = :false REMOVE pinnedBy',
+      ExpressionAttributeValues: { ':false': false },
+    }).promise(),
+    dynamoDB.update({
+      TableName: GROUP_TABLE,
+      Key: { groupId },
+      UpdateExpression: 'SET settings.pinnedMessages = :msgs',
+      ExpressionAttributeValues: {
+        ':msgs': group.Item.settings?.pinnedMessages?.filter(id => id !== messageId) || [],
+      },
+    }).promise(),
+  ]);
+
+  return { success: true, message: 'Tin nhắn đã được bỏ ghim!' };
+};
+
+
 
 const getGroupMembers = async (groupId, userId) => {
   if (!groupId || !isValidUUID(groupId) || !userId || !isValidUUID(userId)) {
@@ -1960,4 +2050,5 @@ module.exports = {
   forwardGroupMessage,
   isUserAdmin,
   isUserGroupMember,
+  unpinGroupMessage,
 };

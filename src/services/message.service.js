@@ -791,11 +791,15 @@ const forwardMessageToGroup = async (senderId, messageId, targetGroupId) => {
   return await forwardMessageUnified(senderId, messageId, false, true, null, targetGroupId);
 };
 
-// Hàm ghim tin nhắn
 const pinMessage = async (userId, messageId) => {
   logger.info('Pinning message:', { messageId, userId });
 
   let message;
+  let isGroupMessage = false;
+  let groupId;
+  let messageTimestamp;
+
+  // 1. Kiểm tra tin nhắn trong bảng Messages (chat 1-1)
   try {
     const result = await dynamoDB.get({
       TableName: 'Messages',
@@ -807,39 +811,72 @@ const pinMessage = async (userId, messageId) => {
     throw new AppError('Lỗi truy vấn tin nhắn', 500);
   }
 
+  // 2. Nếu không tìm thấy trong bảng Messages, kiểm tra trong bảng GroupMessages (chat nhóm)
   if (!message) {
-    const searchIndexes = [
-      { IndexName: 'ReceiverSenderIndex', keyAttr: 'receiverId' },
-      { IndexName: 'SenderReceiverIndex', keyAttr: 'senderId' },
-    ];
+    try {
+      // Truy vấn tất cả các nhóm mà userId là thành viên để lấy danh sách groupId
+      const groupMemberResult = await dynamoDB.query({
+        TableName: 'GroupMembers',
+        IndexName: 'userId-index',
+        KeyConditionExpression: 'userId = :userId',
+        ExpressionAttributeValues: {
+          ':userId': userId,
+        },
+      }).promise();
 
-    for (const { IndexName, keyAttr } of searchIndexes) {
-      try {
-        const result = await dynamoDB.query({
-          TableName: 'Messages',
-          IndexName,
-          KeyConditionExpression: `${keyAttr} = :userId AND messageId = :messageId`,
+      const groupIds = groupMemberResult.Items?.map(item => item.groupId) || [];
+
+      // Thử lấy tin nhắn từ bảng GroupMessages với từng groupId
+      for (const gid of groupIds) {
+        const groupMessagesResult = await dynamoDB.query({
+          TableName: 'GroupMessages',
+          IndexName: 'groupId-messageId-index',
+          KeyConditionExpression: 'groupId = :groupId AND messageId = :messageId',
           ExpressionAttributeValues: {
-            ':userId': userId,
+            ':groupId': gid,
             ':messageId': messageId,
           },
           Limit: 1,
         }).promise();
 
-        if (result.Items?.length > 0) {
-          message = result.Items[0];
+        if (groupMessagesResult.Items?.length > 0) {
+          message = groupMessagesResult.Items[0];
+          groupId = gid;
+          messageTimestamp = message.timestamp; // Lưu timestamp để sử dụng làm sort key
+          isGroupMessage = true;
           break;
         }
-      } catch (err) {
-        logger.error(`Lỗi truy vấn ${IndexName}:`, err);
       }
+
+      if (!message) {
+        throw new AppError('Tin nhắn không tồn tại!', 404);
+      }
+    } catch (err) {
+      logger.error('Lỗi truy vấn GroupMessages:', err);
+      throw new AppError('Lỗi truy vấn tin nhắn nhóm: ' + err.message, 500);
     }
   }
 
   if (!message) throw new AppError('Tin nhắn không tồn tại!', 404);
-  if (message.senderId !== userId && message.receiverId !== userId) {
-    throw new AppError('Bạn không có quyền ghim tin nhắn này!', 403);
+
+  // 3. Kiểm tra quyền và trạng thái tin nhắn
+  if (isGroupMessage) {
+    // Chat nhóm: Kiểm tra xem userId có phải thành viên nhóm không
+    const group = await dynamoDB.get({
+      TableName: 'Groups',
+      Key: { groupId: groupId },
+    }).promise();
+
+    if (!group.Item || !group.Item.members.includes(userId)) {
+      throw new AppError('Bạn không phải thành viên nhóm này!', 403);
+    }
+  } else {
+    // Chat 1-1: Kiểm tra xem userId có thuộc cuộc trò chuyện không
+    if (message.senderId !== userId && message.receiverId !== userId) {
+      throw new AppError('Bạn không có quyền ghim tin nhắn này!', 403);
+    }
   }
+
   if (message.isPinned) {
     throw new AppError('Tin nhắn đã được ghim!', 400);
   }
@@ -847,56 +884,87 @@ const pinMessage = async (userId, messageId) => {
     throw new AppError('Không thể ghim tin nhắn đã thu hồi hoặc thất bại!', 400);
   }
 
-  const otherUserId = message.senderId === userId ? message.receiverId : message.senderId;
+  let otherUserId;
+  if (!isGroupMessage) {
+    otherUserId = message.senderId === userId ? message.receiverId : message.senderId;
+  }
 
-  // Kiểm tra số lượng tin nhắn ghim
-  const conversation = await dynamoDB.get({
-    TableName: 'Conversations',
-    Key: { userId, targetUserId: otherUserId },
-  }).promise();
+  // 4. Kiểm tra số lượng tin nhắn ghim
+  let pinnedMessageIds = [];
+  if (isGroupMessage) {
+    const group = await dynamoDB.get({
+      TableName: 'Groups',
+      Key: { groupId: groupId },
+    }).promise();
+    pinnedMessageIds = group.Item?.settings?.pinnedMessages || [];
+  } else {
+    const conversation = await dynamoDB.get({
+      TableName: 'Conversations',
+      Key: { userId, targetUserId: otherUserId },
+    }).promise();
+    pinnedMessageIds = conversation.Item?.settings?.pinnedMessages || [];
+  }
 
-  const pinnedMessageIds = conversation.Item?.settings?.pinnedMessages || [];
   if (pinnedMessageIds.length >= 3) {
     throw new AppError('Hội thoại chỉ có thể ghim tối đa 3 tin nhắn!', 400);
   }
 
-  // Cập nhật Messages và Conversations
+  // 5. Cập nhật bảng Messages hoặc GroupMessages và Conversations
   try {
-    await Promise.all([
-      dynamoDB.update({
-        TableName: 'Messages',
-        Key: { messageId, ownerId: userId },
+    if (isGroupMessage) {
+      // Cập nhật bảng GroupMessages
+      await dynamoDB.update({
+        TableName: 'GroupMessages',
+        Key: { groupId: groupId, timestamp: messageTimestamp },
         UpdateExpression: 'SET isPinned = :p, pinnedBy = :userId',
         ExpressionAttributeValues: { ':p': true, ':userId': userId },
-      }).promise(),
-      dynamoDB.update({
-        TableName: 'Messages',
-        Key: { messageId, ownerId: otherUserId },
-        UpdateExpression: 'SET isPinned = :p, pinnedBy = :userId',
-        ExpressionAttributeValues: { ':p': true, ':userId': userId },
-      }).promise().catch(() => {}),
-      dynamoDB.update({
-        TableName: 'Conversations',
-        Key: { userId, targetUserId: otherUserId },
+      }).promise();
+
+      // Cập nhật danh sách pinnedMessages trong Groups
+      await dynamoDB.update({
+        TableName: 'Groups',
+        Key: { groupId: groupId },
         UpdateExpression: 'SET settings.pinnedMessages = list_append(if_not_exists(settings.pinnedMessages, :empty), :msg)',
         ExpressionAttributeValues: {
           ':msg': [messageId],
           ':empty': [],
         },
-      }).promise(),
-      dynamoDB.update({
-        TableName: 'Conversations',
-        Key: { userId: otherUserId, targetUserId: userId },
-        UpdateExpression: 'SET settings.pinnedMessages = list_append(if_not_exists(settings.pinnedMessages, :empty), :msg)',
-        ExpressionAttributeValues: {
-          ':msg': [messageId],
-          ':empty': [],
-        },
-      }).promise(),
-    ]);
-
-
-
+      }).promise();
+    } else {
+      // Cập nhật bảng Messages và Conversations
+      await Promise.all([
+        dynamoDB.update({
+          TableName: 'Messages',
+          Key: { messageId, ownerId: userId },
+          UpdateExpression: 'SET isPinned = :p, pinnedBy = :userId',
+          ExpressionAttributeValues: { ':p': true, ':userId': userId },
+        }).promise(),
+        dynamoDB.update({
+          TableName: 'Messages',
+          Key: { messageId, ownerId: otherUserId },
+          UpdateExpression: 'SET isPinned = :p, pinnedBy = :userId',
+          ExpressionAttributeValues: { ':p': true, ':userId': userId },
+        }).promise().catch(() => {}),
+        dynamoDB.update({
+          TableName: 'Conversations',
+          Key: { userId, targetUserId: otherUserId },
+          UpdateExpression: 'SET settings.pinnedMessages = list_append(if_not_exists(settings.pinnedMessages, :empty), :msg)',
+          ExpressionAttributeValues: {
+            ':msg': [messageId],
+            ':empty': [],
+          },
+        }).promise(),
+        dynamoDB.update({
+          TableName: 'Conversations',
+          Key: { userId: otherUserId, targetUserId: userId },
+          UpdateExpression: 'SET settings.pinnedMessages = list_append(if_not_exists(settings.pinnedMessages, :empty), :msg)',
+          ExpressionAttributeValues: {
+            ':msg': [messageId],
+            ':empty': [],
+          },
+        }).promise(),
+      ]);
+    }
 
     return { success: true, message: `Tin nhắn đã được ghim bởi ${userId}` };
   } catch (err) {
@@ -905,58 +973,137 @@ const pinMessage = async (userId, messageId) => {
   }
 };
 
-// Hàm bỏ ghim tin nhắn
 const unpinMessage = async (userId, messageId) => {
   logger.info('Unpinning message:', { userId, messageId });
 
-  const message = await dynamoDB.get({
+  let message;
+  let isGroupMessage = false;
+  let groupId;
+  let messageTimestamp;
+
+  // 1. Kiểm tra tin nhắn trong bảng Messages (chat 1-1)
+  const messageRes = await dynamoDB.get({
     TableName: 'Messages',
     Key: { messageId, ownerId: userId },
   }).promise();
+  message = messageRes.Item;
 
-  if (!message.Item) throw new AppError('Tin nhắn không tồn tại!', 404);
-  if (!message.Item.isPinned) throw new AppError('Tin nhắn chưa được ghim!', 400);
+  // 2. Nếu không tìm thấy trong bảng Messages, kiểm tra trong bảng GroupMessages (chat nhóm)
+  if (!message) {
+    try {
+      // Truy vấn tất cả các nhóm mà userId là thành viên để lấy danh sách groupId
+      const groupMemberResult = await dynamoDB.query({
+        TableName: 'GroupMembers',
+        IndexName: 'userId-index',
+        KeyConditionExpression: 'userId = :userId',
+        ExpressionAttributeValues: {
+          ':userId': userId,
+        },
+      }).promise();
 
-  const otherUserId = message.Item.senderId === userId ? message.Item.receiverId : message.Item.senderId;
+      const groupIds = groupMemberResult.Items?.map(item => item.groupId) || [];
 
+      // Thử lấy tin nhắn từ bảng GroupMessages với từng groupId
+      for (const gid of groupIds) {
+        const groupMessagesResult = await dynamoDB.query({
+          TableName: 'GroupMessages',
+          IndexName: 'groupId-messageId-index',
+          KeyConditionExpression: 'groupId = :groupId AND messageId = :messageId',
+          ExpressionAttributeValues: {
+            ':groupId': gid,
+            ':messageId': messageId,
+          },
+          Limit: 1,
+        }).promise();
+
+        if (groupMessagesResult.Items?.length > 0) {
+          message = groupMessagesResult.Items[0];
+          groupId = gid;
+          messageTimestamp = message.timestamp; // Lưu timestamp để sử dụng làm sort key
+          isGroupMessage = true;
+          break;
+        }
+      }
+
+      if (!message) {
+        throw new AppError('Tin nhắn không tồn tại!', 404);
+      }
+    } catch (err) {
+      logger.error('Lỗi truy vấn GroupMessages:', err);
+      throw new AppError('Lỗi truy vấn tin nhắn nhóm: ' + err.message, 500);
+    }
+  }
+
+  if (!message) throw new AppError('Tin nhắn không tồn tại!', 404);
+  if (!message.isPinned) throw new AppError('Tin nhắn chưa được ghim!', 400);
+
+  let otherUserId;
+  if (!isGroupMessage) {
+    otherUserId = message.senderId === userId ? message.receiverId : message.senderId;
+  }
+
+  // 3. Cập nhật bảng Messages hoặc GroupMessages và Conversations
   try {
-    await Promise.all([
-      dynamoDB.update({
-        TableName: 'Messages',
-        Key: { messageId, ownerId: userId },
+    if (isGroupMessage) {
+      // Cập nhật bảng GroupMessages
+      await dynamoDB.update({
+        TableName: 'GroupMessages',
+        Key: { groupId: groupId, timestamp: messageTimestamp },
         UpdateExpression: 'SET isPinned = :false REMOVE pinnedBy',
         ExpressionAttributeValues: { ':false': false },
-      }).promise(),
-      dynamoDB.update({
-        TableName: 'Messages',
-        Key: { messageId, ownerId: otherUserId },
-        UpdateExpression: 'SET isPinned = :false REMOVE pinnedBy',
-        ExpressionAttributeValues: { ':false': false },
-      }).promise().catch(() => {}),
-      dynamoDB.update({
-        TableName: 'Conversations',
-        Key: { userId, targetUserId: otherUserId },
-        UpdateExpression: 'SET settings.pinnedMessages = :msgs',
-        ExpressionAttributeValues: {
-          ':msgs': (await dynamoDB.get({
-            TableName: 'Conversations',
-            Key: { userId, targetUserId: otherUserId },
-          }).promise()).Item?.settings?.pinnedMessages?.filter(id => id !== messageId) || [],
-        },
-      }).promise(),
-      dynamoDB.update({
-        TableName: 'Conversations',
-        Key: { userId: otherUserId, targetUserId: userId },
-        UpdateExpression: 'SET settings.pinnedMessages = :msgs',
-        ExpressionAttributeValues: {
-          ':msgs': (await dynamoDB.get({
-            TableName: 'Conversations',
-            Key: { userId: otherUserId, targetUserId: userId },
-          }).promise()).Item?.settings?.pinnedMessages?.filter(id => id !== messageId) || [],
-        },
-      }).promise(),
-    ]);
+      }).promise();
 
+      // Cập nhật danh sách pinnedMessages trong Groups
+      await dynamoDB.update({
+        TableName: 'Groups',
+        Key: { groupId: groupId },
+        UpdateExpression: 'SET settings.pinnedMessages = :msgs',
+        ExpressionAttributeValues: {
+          ':msgs': (await dynamoDB.get({
+            TableName: 'Groups',
+            Key: { groupId: groupId },
+          }).promise()).Item?.settings?.pinnedMessages?.filter(id => id !== messageId) || [],
+        },
+      }).promise();
+    } else {
+      // Cập nhật bảng Messages và Conversations
+      await Promise.all([
+        dynamoDB.update({
+          TableName: 'Messages',
+          Key: { messageId, ownerId: userId },
+          UpdateExpression: 'SET isPinned = :false REMOVE pinnedBy',
+          ExpressionAttributeValues: { ':false': false },
+        }).promise(),
+        dynamoDB.update({
+          TableName: 'Messages',
+          Key: { messageId, ownerId: otherUserId },
+          UpdateExpression: 'SET isPinned = :false REMOVE pinnedBy',
+          ExpressionAttributeValues: { ':false': false },
+        }).promise().catch(() => {}),
+        dynamoDB.update({
+          TableName: 'Conversations',
+          Key: { userId, targetUserId: otherUserId },
+          UpdateExpression: 'SET settings.pinnedMessages = :msgs',
+          ExpressionAttributeValues: {
+            ':msgs': (await dynamoDB.get({
+              TableName: 'Conversations',
+              Key: { userId, targetUserId: otherUserId },
+            }).promise()).Item?.settings?.pinnedMessages?.filter(id => id !== messageId) || [],
+          },
+        }).promise(),
+        dynamoDB.update({
+          TableName: 'Conversations',
+          Key: { userId: otherUserId, targetUserId: userId },
+          UpdateExpression: 'SET settings.pinnedMessages = :msgs',
+          ExpressionAttributeValues: {
+            ':msgs': (await dynamoDB.get({
+              TableName: 'Conversations',
+              Key: { userId: otherUserId, targetUserId: userId },
+            }).promise()).Item?.settings?.pinnedMessages?.filter(id => id !== messageId) || [],
+          },
+        }).promise(),
+      ]);
+    }
 
     return { success: true, message: `Đã bỏ ghim tin nhắn bởi ${userId}` };
   } catch (err) {
@@ -970,25 +1117,62 @@ const getPinnedMessages = async (userId, otherUserId) => {
   logger.info('Lấy tin nhắn ghim của:', { userId, otherUserId });
 
   try {
-    const conversation = await dynamoDB.get({
-      TableName: 'Conversations',
-      Key: { userId, targetUserId: otherUserId },
+    let pinnedMessageIds = [];
+    let isGroupChat = false;
+
+    // Kiểm tra xem otherUserId có phải là groupId không
+    const group = await dynamoDB.get({
+      TableName: 'Groups',
+      Key: { groupId: otherUserId },
     }).promise();
 
-    const pinnedMessageIds = conversation.Item?.settings?.pinnedMessages || [];
+    if (group.Item) {
+      // Đây là chat nhóm
+      isGroupChat = true;
+      pinnedMessageIds = group.Item?.settings?.pinnedMessages || [];
+    } else {
+      // Chat 1-1
+      const conversation = await dynamoDB.get({
+        TableName: 'Conversations',
+        Key: { userId, targetUserId: otherUserId },
+      }).promise();
+      pinnedMessageIds = conversation.Item?.settings?.pinnedMessages || [];
+    }
+
     if (!pinnedMessageIds.length) {
       return { success: true, messages: [] };
     }
 
-    const messages = await Promise.all(
-      pinnedMessageIds.map(async messageId => {
-        const message = await dynamoDB.get({
-          TableName: 'Messages',
-          Key: { messageId, ownerId: userId },
-        }).promise();
-        return message.Item;
-      })
-    );
+    let messages = [];
+    if (isGroupChat) {
+      // Lấy tin nhắn từ bảng GroupMessages bằng chỉ mục groupId-messageId-index
+      messages = await Promise.all(
+        pinnedMessageIds.map(async messageId => {
+          const messageResult = await dynamoDB.query({
+            TableName: 'GroupMessages',
+            IndexName: 'groupId-messageId-index',
+            KeyConditionExpression: 'groupId = :groupId AND messageId = :messageId',
+            ExpressionAttributeValues: {
+              ':groupId': otherUserId, // groupId là otherUserId
+              ':messageId': messageId,
+            },
+            Limit: 1,
+          }).promise();
+          return messageResult.Items?.[0] || null;
+        })
+      );
+    } else {
+      // Lấy tin nhắn từ bảng Messages
+      messages = await Promise.all(
+        pinnedMessageIds.map(async messageId => {
+          const message = await dynamoDB.get({
+            TableName: 'Messages',
+            Key: { messageId, ownerId: userId },
+          }).promise();
+          return message.Item;
+        })
+      );
+    }
 
     const validMessages = messages
       .filter(msg => msg && msg.isPinned && msg.status !== MESSAGE_STATUSES.RECALLED)
