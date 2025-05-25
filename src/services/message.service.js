@@ -1291,6 +1291,25 @@ const getMessageById = async (messageId, ownerId) => {
     throw new AppError(`Không thể lấy tin nhắn: ${error.message}`, 500);
   }
 };
+
+const getConversationsForUser = async (userId) => {
+  logger.info('Fetching conversations for user', { userId });
+
+  try {
+    const result = await dynamoDB.query({
+      TableName: 'Conversations',
+      KeyConditionExpression: 'userId = :userId',
+      ExpressionAttributeValues: {
+        ':userId': userId,
+      },
+    }).promise();
+
+    return result.Items || [];
+  } catch (error) {
+    logger.error('Error fetching conversations for user', { userId, error: error.message });
+    throw new AppError(`Failed to fetch conversations: ${error.message}`, 500);
+  }
+};
 module.exports = {
   createMessage,
   getMessagesBetweenUsers,
@@ -1308,7 +1327,7 @@ module.exports = {
   updateMessageStatusOnConnect,
   canSendMessageToUser,
   checkBlockStatus,
-  getMessageById
- 
+  getMessageById,
+  getConversationsForUser
   
 };
