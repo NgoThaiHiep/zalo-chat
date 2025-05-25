@@ -253,7 +253,8 @@ const unpinMessageController = async (req, res) => {
 
     res.status(200).json({ success: true, ...result });
   } catch (error) {
-    res.status(403).json({ success: false, message: error.message });
+    const statusCode = error.message.includes('không tồn tại') ? 404 : error.message.includes('quyền') ? 403 : 500;
+    res.status(statusCode).json({ success: false, message: error.message });
   }
 };
 
