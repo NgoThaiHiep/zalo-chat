@@ -47,21 +47,45 @@ module.exports = (groupIo) => {
 
     socket.on('sendGroupMessage', async (data, callback = () => {}) => {
       try {
-        if (!data.groupId || !data.type) {
+        const { groupId, type, content, file, fileName, mimeType, metadata, isAnonymous = false, isSecret = false, quality, replyToMessageId } = data;
+
+        if (!groupId || !type) {
           callback({ success: false, message: 'groupId and type are required' });
           logger.error('[GroupSocket] Error sending group message', { error: 'groupId and type are required' });
           return;
         }
-        const message = await groupService.sendGroupMessage(data.groupId, userId, data);
-        groupIo.to(`group:${data.groupId}`).emit('newGroupMessage', { groupId: data.groupId, message });
-        // Phát tín hiệu để cập nhật danh sách chat-item
-        groupIo.to(`group:${data.groupId}`).emit('updateChatList', {
-          conversationId: data.groupId,
+
+        if (['image', 'file', 'video', 'voice', 'sticker', 'gif'].includes(type) && !file) {
+          callback({ success: false, message: `File is required for message type ${type}` });
+          logger.error('[GroupSocket] Error sending group message', { error: `File is required for message type ${type}` });
+          return;
+        }
+
+        const messageData = {
+          type,
+          content: content || null,
+          file: file ? Buffer.from(file.data) : null, // Chuyển đổi file.data thành Buffer
+          fileName: file ? file.name : null,
+          mimeType: file ? file.mimeType : null,
+          metadata,
+          isAnonymous: !!isAnonymous,
+          isSecret: !!isSecret,
+          quality,
+          replyToMessageId,
+        };
+
+        logger.info('[GroupSocket] Preparing to send group message', { groupId, userId, messageData });
+
+        const message = await groupService.sendGroupMessage(groupId, userId, messageData);
+        groupIo.to(`group:${groupId}`).emit('newGroupMessage', { groupId, message });
+        groupIo.to(`group:${groupId}`).emit('updateChatList', {
+          conversationId: groupId,
           message,
         });
+
         callback({ success: true, data: message });
         logger.info('[GroupSocket] Group message sent', {
-          groupId: data.groupId,
+          groupId,
           messageId: message.messageId,
           senderId: userId,
         });

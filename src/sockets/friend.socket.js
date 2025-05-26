@@ -41,43 +41,39 @@ const initializeFriendSocket = (friendIo) => {
         }
         const result = await FriendService.acceptFriendRequest(userId, requestId);
         callback({ success: true, data: { message: result.message, conversationIds: result.conversationIds } });
-    
+
         const senderId = requestId.split('#')[0];
-    
-        // Lấy thông tin người dùng để lấy tên
+
         const [userInfo, senderInfo] = await Promise.all([
-          FriendService.getUserName(userId, userId), // Lấy tên của userId (bạn)
-          FriendService.getUserName(userId, senderId), // Lấy tên của senderId (AnhKhoa)
+          FriendService.getUserName(userId, userId),
+          FriendService.getUserName(userId, senderId),
         ]);
-    
-        // Phát sự kiện friend:requestAccepted cho senderId
+
         friendIo.to(senderId).emit('friend:requestAccepted', {
           accepterId: userId,
           conversationId: result.conversationIds[senderId],
         });
-    
-        // Phát sự kiện thông báo "Bạn và AnhKhoa đã trở thành bạn bè" cho cả hai
+
         const messageForUser = `Bạn và ${senderInfo.name} đã trở thành bạn bè`;
         const messageForSender = `Bạn và ${userInfo.name} đã trở thành bạn bè`;
-    
+
         friendIo.to(userId).emit('friend:friendshipEstablished', {
           friendId: senderId,
           friendName: senderInfo.name,
           message: messageForUser,
           conversationId: result.conversationIds[userId],
         });
-    
+
         friendIo.to(senderId).emit('friend:friendshipEstablished', {
           friendId: userId,
           friendName: userInfo.name,
           message: messageForSender,
           conversationId: result.conversationIds[senderId],
         });
-    
-        // Tạo hội thoại cho cả hai người dùng
+
         await ConversationService.createConversation(userId, senderId);
         await ConversationService.createConversation(senderId, userId);
-    
+
         logger.info(`[FriendSocket] User ${userId} accepted friend request ${requestId}`);
       } catch (error) {
         logger.error(`[FriendSocket] Error accepting friend request for ${userId}`, { error: error.message });
@@ -107,10 +103,9 @@ const initializeFriendSocket = (friendIo) => {
         if (!requestId) {
           throw new AppError('requestId is required', 400);
         }
-        const result = await FriendService.cancelFriendRequest(userId, requestId);
-        callback({ success: true, message: result.message });
 
-        const receiverId = (await dynamoDB.query({
+        // Truy vấn receiverId trước khi xóa
+        const checkResult = await dynamoDB.query({
           TableName: 'FriendRequests',
           IndexName: 'SenderIdIndex',
           KeyConditionExpression: 'senderId = :senderId AND requestId = :requestId',
@@ -118,10 +113,23 @@ const initializeFriendSocket = (friendIo) => {
             ':senderId': userId,
             ':requestId': requestId,
           },
-        }).promise()).Items[0]?.userId;
-        if (receiverId) {
-          friendIo.to(receiverId).emit('friend:requestCancelled', { senderId: userId });
+        }).promise();
+
+        if (!checkResult.Items.length) {
+          throw new AppError('Không tìm thấy yêu cầu kết bạn', 404);
         }
+
+        const receiverId = checkResult.Items[0]?.userId;
+        if (!receiverId) {
+          throw new AppError('Không tìm thấy người nhận yêu cầu kết bạn', 404);
+        }
+
+        // Gọi hàm cancelFriendRequest để xóa yêu cầu
+        const result = await FriendService.cancelFriendRequest(userId, requestId);
+        callback({ success: true, message: result.message });
+
+        // Phát sự kiện tới người nhận
+        friendIo.to(receiverId).emit('friend:requestCancelled', { senderId: userId });
         logger.info(`[FriendSocket] User ${userId} cancelled friend request ${requestId}`);
       } catch (error) {
         logger.error(`[FriendSocket] Error cancelling friend request for ${userId}`, { error: error.message });

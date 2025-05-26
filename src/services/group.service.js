@@ -1148,6 +1148,8 @@ const sendGroupMessage = async (groupId, senderId, messageData) => {
 
   const { type, content, file, fileName, mimeType, metadata, isAnonymous = false, isSecret = false, quality, replyToMessageId } = messageData;
 
+  logger.info('Sending group message:', { groupId, senderId, type, fileName });
+
   const groupResult = await dynamoDB.get({ TableName: GROUP_TABLE, Key: { groupId } }).promise();
   if (!groupResult.Item) {
     throw new AppError('Nhóm không tồn tại!', 404);
@@ -1190,14 +1192,14 @@ const sendGroupMessage = async (groupId, senderId, messageData) => {
   };
 
   const savedMessage = await sendMessageCore(newMessage, TABLE_NAME, bucketName);
-  console.log('Saved message:', savedMessage);
+  logger.info('Saved group message:', { messageId: savedMessage.messageId });
+
   if (savedMessage.status !== MESSAGE_STATUSES.SENT) {
     logger.warn('Message saved with incorrect status:', { messageId: savedMessage.messageId, status: savedMessage.status });
   }
-  // Cập nhật lastMessage cho tất cả thành viên trong nhóm
+
   await updateLastMessageForGroup(groupId, savedMessage);
 
- 
   return savedMessage;
 };
 

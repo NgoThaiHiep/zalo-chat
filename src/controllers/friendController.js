@@ -25,31 +25,28 @@ const sendFriendRequestController = async (req, res) => {
       requestId: result.requestId,
       senderId,
       message,
-      
     });
     logger.info(`[FriendController] Emitted friend:sendRequest to user:${senderId} and friend:requestReceived to user:${receiverId}`);
     res.status(200).json({ success: true, data: result });
   } catch (error) {
     logger.error('[sendFriendRequestController] Error', { error: error.message });
-  
     return res.status(error.statusCode || 500).json({
       success: false,
       error: error.message || 'Lỗi khi gửi yêu cầu kết bạn',
     });
   }
 };
+
 const acceptFriendRequestController = async (req, res) => {
   const { requestId } = req.query;
   const userId = req.user.id;
   logger.info(`Xử lý POST /api/friends/accept`, { requestId, userId });
 
-  // Kiểm tra đầu vào
   if (!requestId || !userId) {
     logger.error('Thiếu requestId hoặc userId', { requestId, userId });
     return res.status(400).json({ message: 'Yêu cầu phải có requestId và userId' });
   }
 
-  // Kiểm tra định dạng requestId
   const requestIdPattern = /^[0-9a-f-]{36}#\d+$/;
   if (!requestIdPattern.test(requestId)) {
     logger.error('Định dạng requestId không hợp lệ', { requestId });
@@ -59,20 +56,17 @@ const acceptFriendRequestController = async (req, res) => {
   try {
     const result = await FriendService.acceptFriendRequest(userId, requestId);
 
-    // Trích xuất senderId
     const senderId = requestId.split('#')[0];
     if (!senderId) {
       logger.error('Không thể trích xuất senderId từ requestId', { requestId });
       throw new AppError('requestId không hợp lệ', 400);
     }
 
-    // Lấy thông tin người dùng để lấy tên
     const [userInfo, senderInfo] = await Promise.all([
-      FriendService.getUserName(userId, userId), // Lấy tên của userId (bạn)
-      FriendService.getUserName(userId, senderId), // Lấy tên của senderId (AnhKhoa)
+      FriendService.getUserName(userId, userId),
+      FriendService.getUserName(userId, senderId),
     ]);
 
-    // Phát sự kiện Socket.IO
     req.io.of('/friend').to(`user:${userId}`).emit('friend:acceptRequest:success', {
       message: result.message,
       conversationIds: result.conversationIds,
@@ -83,7 +77,6 @@ const acceptFriendRequestController = async (req, res) => {
       conversationId: result.conversationIds[senderId] || 'existing',
     });
 
-    // Phát sự kiện friend:friendshipEstablished cho cả hai
     const messageForUser = `Bạn và ${senderInfo.name} đã trở thành bạn bè`;
     const messageForSender = `Bạn và ${userInfo.name} đã trở thành bạn bè`;
 
@@ -121,7 +114,6 @@ const acceptFriendRequestController = async (req, res) => {
   }
 };
 
-
 const rejectFriendRequestController = async (req, res) => {
   const { requestId } = req.body;
   const userId = req.user.id;
@@ -129,7 +121,6 @@ const rejectFriendRequestController = async (req, res) => {
   try {
     const result = await FriendService.rejectFriendRequest(userId, requestId);
 
-    // Phát sự kiện qua Socket.IO trong namespace /friend
     const senderId = requestId.split('#')[0];
     req.io.of('/friend').to(`user:${userId}`).emit('friend:rejectRequest:success', {
       message: result.message,
@@ -153,16 +144,22 @@ const cancelFriendRequestController = async (req, res) => {
   try {
     const result = await FriendService.cancelFriendRequest(senderId, requestId);
 
-    // Phát sự kiện qua Socket.IO trong namespace /friend
-    const receiverId = (await dynamoDB.query({
+    // Truy vấn receiverId trước khi xóa
+    const checkResult = await dynamoDB.query({
       TableName: 'FriendRequests',
       IndexName: 'SenderIdIndex',
-      KeyConditionExpression: 'senderId = :senderId AND requestId = :requestId',
+      KeyConditionExpression: 'senderId = :senderId',
+      FilterExpression: 'requestId = :requestId', // Chuyển requestId vào FilterExpression
       ExpressionAttributeValues: {
         ':senderId': senderId,
         ':requestId': requestId,
       },
-    }).promise()).Items[0]?.userId;
+    }).promise();
+
+    let receiverId;
+    if (checkResult.Items.length > 0) {
+      receiverId = checkResult.Items[0]?.userId;
+    }
 
     if (receiverId) {
       req.io.of('/friend').to(`user:${senderId}`).emit('friend:cancelRequest:success', {
@@ -177,7 +174,7 @@ const cancelFriendRequestController = async (req, res) => {
     res.status(200).json(result);
   } catch (error) {
     logger.error('[cancelFriendRequestController] Error', { error: error.message });
-    res.status(500).json({ message: 'Error canceling friend request', error: error.message });
+    res.status(error.statusCode || 500).json({ message: error.message || 'Lỗi khi thu hồi lời mời kết bạn', error: error.message });
   }
 };
 
@@ -188,7 +185,6 @@ const blockUserController = async (req, res) => {
   try {
     const result = await FriendService.blockUser(userId, blockedUserId);
 
-    // Phát sự kiện qua Socket.IO trong namespace /friend
     req.io.of('/friend').to(`user:${userId}`).emit('friend:block:success', {
       message: result.message,
       blockedUserId,
@@ -215,7 +211,6 @@ const unblockUserController = async (req, res) => {
   try {
     const result = await FriendService.unblockUser(userId, blockedUserId);
 
-    // Phát sự kiện qua Socket.IO trong namespace /friend
     req.io.of('/friend').to(`user:${userId}`).emit('friend:unblock:success', {
       message: result.message,
       blockedUserId,
@@ -236,7 +231,6 @@ const markFavoriteController = async (req, res) => {
   try {
     const result = await FriendService.markFavorite(userId, friendId);
 
-    // Phát sự kiện qua Socket.IO trong namespace /friend
     req.io.of('/friend').to(`user:${userId}`).emit('friend:markFavorite:success', {
       message: result.message,
       friendId,
@@ -257,7 +251,6 @@ const unmarkFavoriteController = async (req, res) => {
   try {
     const result = await FriendService.unmarkFavorite(userId, friendId);
 
-    // Phát sự kiện qua Socket.IO trong namespace /friend
     req.io.of('/friend').to(`user:${userId}`).emit('friend:unmarkFavorite:success', {
       message: result.message,
       friendId,
@@ -282,7 +275,6 @@ const setConversationNicknameController = async (req, res) => {
 
     const result = await FriendService.setConversationNickname(userId, targetUserId, nickname);
 
-    // Phát sự kiện qua Socket.IO trong namespace /friend
     req.io.of('/friend').to(`user:${userId}`).emit('friend:setNickname:success', {
       message: result.message,
       targetUserId,

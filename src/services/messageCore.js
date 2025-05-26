@@ -43,48 +43,102 @@ const sendMessageCore = async (message, tableName, bucketName) => {
   }
 
   // Validate input based on message type
-  const validateInput = () => {
-    switch (type) {
-      case 'text':
-        if (!content || typeof content !== 'string' || content.trim() === '') {
-          throw new AppError('Nội dung văn bản không hợp lệ!', 400);
-        }
-        break;
-      case 'image':
-      case 'file':
-      case 'video':
-      case 'voice':
-      case 'sticker':
-      case 'gif':
-        if (!mediaUrl && (!file || !Buffer.isBuffer(file) || !mimeType)) {
-          throw new AppError('File hoặc MIME type không hợp lệ!', 400);
-        }
-        if (mediaUrl && !mimeType) {
-          throw new AppError('MIME type không hợp lệ khi có mediaUrl!', 400);
-        }
-        break;
-      case 'location':
-        if (!metadata?.latitude || !metadata?.longitude) {
-          throw new AppError('Vị trí cần có latitude và longitude!', 400);
-        }
-        break;
-      case 'contact':
-        if (!metadata?.name || !metadata?.phone) {
-          throw new AppError('Danh bạ cần có tên và số điện thoại!', 400);
-        }
-        break;
-      case 'poll':
-        if (!metadata?.question || !Array.isArray(metadata.options)) {
-          throw new AppError('Khảo sát cần có câu hỏi và danh sách tùy chọn!', 400);
-        }
-        break;
-      case 'event':
-        if (!metadata?.title || !metadata?.date) {
-          throw new AppError('Sự kiện cần có tiêu đề và ngày!', 400);
-        }
-        break;
-    }
-  };
+const validateInput = () => {
+  switch (type) {
+    case 'text':
+      if (!content || typeof content !== 'string' || content.trim() === '') {
+        throw new AppError('Nội dung văn bản không hợp lệ!', 400);
+      }
+      break;
+    case 'image':
+      if (!mediaUrl && (!file || !Buffer.isBuffer(file) || !mimeType)) {
+        throw new AppError('File hoặc MIME type không hợp lệ!', 400);
+      }
+      if (mediaUrl && !mimeType) {
+        throw new AppError('MIME type không hợp lệ khi có mediaUrl!', 400);
+      }
+      if (file && !['image/jpeg', 'image/png', 'image/heic', 'image/gif'].includes(mimeType)) {
+        throw new AppError('Định dạng ảnh không được hỗ trợ!', 400);
+      }
+      break;
+    case 'file':
+      if (!mediaUrl && (!file || !Buffer.isBuffer(file) || !mimeType)) {
+        throw new AppError('File hoặc MIME type không hợp lệ!', 400);
+      }
+      if (mediaUrl && !mimeType) {
+        throw new AppError('MIME type không hợp lệ khi có mediaUrl!', 400);
+      }
+      // Kiểm tra MIME type cho file văn phòng
+      if (file && ![
+        'application/pdf',
+        'application/zip', 'application/x-rar-compressed', 'application/vnd.rar',
+        'text/plain',
+        'application/msword',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'application/vnd.ms-powerpoint',
+        'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+        'application/vnd.ms-excel',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      ].includes(mimeType)) {
+        throw new AppError('Định dạng file không được hỗ trợ!', 400);
+      }
+      break;
+    case 'video':
+      if (!mediaUrl && (!file || !Buffer.isBuffer(file) || !mimeType)) {
+        throw new AppError('File hoặc MIME type không hợp lệ!', 400);
+      }
+      if (mediaUrl && !mimeType) {
+        throw new AppError('MIME type không hợp lệ khi có mediaUrl!', 400);
+      }
+      if (file && mimeType !== 'video/mp4') {
+        throw new AppError('Định dạng video không được hỗ trợ!', 400);
+      }
+      break;
+    case 'voice':
+      if (!mediaUrl && (!file || !Buffer.isBuffer(file) || !mimeType)) {
+        throw new AppError('File hoặc MIME type không hợp lệ!', 400);
+      }
+      if (mediaUrl && !mimeType) {
+        throw new AppError('MIME type không hợp lệ khi có mediaUrl!', 400);
+      }
+      if (file && !['audio/mpeg', 'audio/wav', 'audio/mp4'].includes(mimeType)) {
+        throw new AppError('Định dạng âm thanh không được hỗ trợ!', 400);
+      }
+      break;
+    case 'sticker':
+    case 'gif':
+      if (!mediaUrl && (!file || !Buffer.isBuffer(file) || !mimeType)) {
+        throw new AppError('File hoặc MIME type không hợp lệ!', 400);
+      }
+      if (mediaUrl && !mimeType) {
+        throw new AppError('MIME type không hợp lệ khi có mediaUrl!', 400);
+      }
+      if (file && mimeType !== 'image/gif') {
+        throw new AppError('Định dạng sticker/gif không được hỗ trợ!', 400);
+      }
+      break;
+    case 'location':
+      if (!metadata?.latitude || !metadata?.longitude) {
+        throw new AppError('Vị trí cần có latitude và longitude!', 400);
+      }
+      break;
+    case 'contact':
+      if (!metadata?.name || !metadata?.phone) {
+        throw new AppError('Danh bạ cần có tên và số điện thoại!', 400);
+      }
+      break;
+    case 'poll':
+      if (!metadata?.question || !Array.isArray(metadata.options)) {
+        throw new AppError('Khảo sát cần có câu hỏi và danh sách tùy chọn!', 400);
+      }
+      break;
+    case 'event':
+      if (!metadata?.title || !metadata?.date) {
+        throw new AppError('Sự kiện cần có tiêu đề và ngày!', 400);
+      }
+      break;
+  }
+};
   validateInput();
 
   // Parse emojis for text messages

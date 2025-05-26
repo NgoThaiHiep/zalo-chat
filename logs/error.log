@@ -1596,3 +1596,815 @@
 {"[__type]":"See error.__type for details.","code":"ValidationException","level":"error","message":"Lỗi khi ghim tin nhắn: The document path provided in the update expression is invalid for update","requestId":"VMFLS3V5O2G1CUA2S9KUDQ35MBVV4KQNSO5AEMVJF66Q9ASUAAJG","retryDelay":24.952062645155316,"retryable":false,"stack":"ValidationException: The document path provided in the update expression is invalid for update\n    at Request.extractError (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\node_modules\\aws-sdk\\lib\\protocol\\json.js:80:27)\n    at Request.callListeners (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\node_modules\\aws-sdk\\lib\\sequential_executor.js:106:20)\n    at Request.emit (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\node_modules\\aws-sdk\\lib\\sequential_executor.js:78:10)\n    at Request.emit (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\node_modules\\aws-sdk\\lib\\request.js:686:14)\n    at Request.transition (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\node_modules\\aws-sdk\\lib\\request.js:22:10)\n    at AcceptorStateMachine.runTo (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\node_modules\\aws-sdk\\lib\\state_machine.js:14:12)\n    at D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\node_modules\\aws-sdk\\lib\\state_machine.js:26:10\n    at Request.<anonymous> (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\node_modules\\aws-sdk\\lib\\request.js:38:9)\n    at Request.<anonymous> (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\node_modules\\aws-sdk\\lib\\request.js:688:12)\n    at Request.callListeners (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\node_modules\\aws-sdk\\lib\\sequential_executor.js:116:18)","statusCode":400,"time":"2025-05-26T08:34:06.677Z","timestamp":"2025-05-26T08:34:06.677Z"}
 {"[__type]":"See error.__type for details.","code":"ValidationException","level":"error","message":"Lỗi khi ghim tin nhắn: The document path provided in the update expression is invalid for update","requestId":"8GT9UIIJ9TG6SMM2LP5QJJC10JVV4KQNSO5AEMVJF66Q9ASUAAJG","retryDelay":8.109588549877245,"retryable":false,"stack":"ValidationException: The document path provided in the update expression is invalid for update\n    at Request.extractError (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\node_modules\\aws-sdk\\lib\\protocol\\json.js:80:27)\n    at Request.callListeners (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\node_modules\\aws-sdk\\lib\\sequential_executor.js:106:20)\n    at Request.emit (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\node_modules\\aws-sdk\\lib\\sequential_executor.js:78:10)\n    at Request.emit (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\node_modules\\aws-sdk\\lib\\request.js:686:14)\n    at Request.transition (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\node_modules\\aws-sdk\\lib\\request.js:22:10)\n    at AcceptorStateMachine.runTo (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\node_modules\\aws-sdk\\lib\\state_machine.js:14:12)\n    at D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\node_modules\\aws-sdk\\lib\\state_machine.js:26:10\n    at Request.<anonymous> (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\node_modules\\aws-sdk\\lib\\request.js:38:9)\n    at Request.<anonymous> (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\node_modules\\aws-sdk\\lib\\request.js:688:12)\n    at Request.callListeners (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\node_modules\\aws-sdk\\lib\\sequential_executor.js:116:18)","statusCode":400,"time":"2025-05-26T08:35:09.910Z","timestamp":"2025-05-26T08:35:09.910Z"}
 {"[__type]":"See error.__type for details.","code":"ValidationException","level":"error","message":"Lỗi khi bỏ ghim tin nhắn: The document path provided in the update expression is invalid for update","requestId":"ELPLLRS9UGFK58MLUSG7O6VQKNVV4KQNSO5AEMVJF66Q9ASUAAJG","retryDelay":19.465823237110325,"retryable":false,"stack":"ValidationException: The document path provided in the update expression is invalid for update\n    at Request.extractError (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\node_modules\\aws-sdk\\lib\\protocol\\json.js:80:27)\n    at Request.callListeners (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\node_modules\\aws-sdk\\lib\\sequential_executor.js:106:20)\n    at Request.emit (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\node_modules\\aws-sdk\\lib\\sequential_executor.js:78:10)\n    at Request.emit (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\node_modules\\aws-sdk\\lib\\request.js:686:14)\n    at Request.transition (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\node_modules\\aws-sdk\\lib\\request.js:22:10)\n    at AcceptorStateMachine.runTo (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\node_modules\\aws-sdk\\lib\\state_machine.js:14:12)\n    at D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\node_modules\\aws-sdk\\lib\\state_machine.js:26:10\n    at Request.<anonymous> (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\node_modules\\aws-sdk\\lib\\request.js:38:9)\n    at Request.<anonymous> (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\node_modules\\aws-sdk\\lib\\request.js:688:12)\n    at Request.callListeners (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\node_modules\\aws-sdk\\lib\\sequential_executor.js:116:18)","statusCode":400,"time":"2025-05-26T08:35:55.402Z","timestamp":"2025-05-26T08:35:55.402Z"}
+{"error":"File hoặc MIME type không hợp lệ!","level":"error","message":"[GroupSocket] Error sending group message","timestamp":"2025-05-26T13:49:33.031Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:52:29.900Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:52:30.308Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:52:30.728Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:52:31.118Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:52:31.429Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:52:31.510Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:52:31.922Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:52:32.319Z"}
+{"level":"error","message":"Lỗi lấy thông tin cho 7ba3dabc-9bfd-4ce3-8ef9-a5a9509dd532: Người dùng không tồn tại!","stack":"Error: Người dùng không tồn tại!\n    at Object.getUserName (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\src\\services\\friend.service.js:467:17)\n    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)\n    at async Object.getConversationSummary (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\src\\services\\conversation.service.js:1039:38)\n    at async getConversationSummaryController (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\src\\controllers\\conversationController.js:285:20)","timestamp":"2025-05-26T13:52:32.600Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:52:32.702Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:52:32.997Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:52:33.101Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:52:33.484Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:52:33.871Z"}
+{"level":"error","message":"Lỗi lấy thông tin cho 7ba3dabc-9bfd-4ce3-8ef9-a5a9509dd532: Người dùng không tồn tại!","stack":"Error: Người dùng không tồn tại!\n    at Object.getUserName (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\src\\services\\friend.service.js:467:17)\n    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)\n    at async Object.getConversationSummary (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\src\\services\\conversation.service.js:1039:38)\n    at async getConversationSummaryController (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\src\\controllers\\conversationController.js:285:20)","timestamp":"2025-05-26T13:52:34.196Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:52:34.294Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:52:34.599Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:52:34.685Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:52:35.070Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:52:35.484Z"}
+{"level":"error","message":"Lỗi lấy thông tin cho 7ba3dabc-9bfd-4ce3-8ef9-a5a9509dd532: Người dùng không tồn tại!","stack":"Error: Người dùng không tồn tại!\n    at Object.getUserName (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\src\\services\\friend.service.js:467:17)\n    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)\n    at async Object.getConversationSummary (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\src\\services\\conversation.service.js:1039:38)\n    at async getConversationSummaryController (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\src\\controllers\\conversationController.js:285:20)","timestamp":"2025-05-26T13:52:35.797Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:52:35.846Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:52:36.224Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:52:36.226Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:52:36.605Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:52:36.962Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:52:37.350Z"}
+{"level":"error","message":"Lỗi lấy thông tin cho 7ba3dabc-9bfd-4ce3-8ef9-a5a9509dd532: Người dùng không tồn tại!","stack":"Error: Người dùng không tồn tại!\n    at Object.getUserName (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\src\\services\\friend.service.js:467:17)\n    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)\n    at async Object.getConversationSummary (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\src\\services\\conversation.service.js:1039:38)\n    at async getConversationSummaryController (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\src\\controllers\\conversationController.js:285:20)","timestamp":"2025-05-26T13:52:37.387Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:52:37.779Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:52:37.816Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:52:38.184Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:52:38.580Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:52:38.945Z"}
+{"level":"error","message":"Lỗi lấy thông tin cho 7ba3dabc-9bfd-4ce3-8ef9-a5a9509dd532: Người dùng không tồn tại!","stack":"Error: Người dùng không tồn tại!\n    at Object.getUserName (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\src\\services\\friend.service.js:467:17)\n    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)\n    at async Object.getConversationSummary (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\src\\services\\conversation.service.js:1039:38)\n    at async getConversationSummaryController (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\src\\controllers\\conversationController.js:285:20)","timestamp":"2025-05-26T13:52:39.051Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:52:39.383Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:52:39.460Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:52:39.784Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:52:40.205Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:52:40.567Z"}
+{"level":"error","message":"Lỗi lấy thông tin cho 7ba3dabc-9bfd-4ce3-8ef9-a5a9509dd532: Người dùng không tồn tại!","stack":"Error: Người dùng không tồn tại!\n    at Object.getUserName (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\src\\services\\friend.service.js:467:17)\n    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)\n    at async Object.getConversationSummary (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\src\\services\\conversation.service.js:1039:38)\n    at async getConversationSummaryController (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\src\\controllers\\conversationController.js:285:20)","timestamp":"2025-05-26T13:52:40.626Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:52:40.972Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:52:41.070Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:52:41.407Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:52:41.797Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:52:42.200Z"}
+{"level":"error","message":"Lỗi lấy thông tin cho 7ba3dabc-9bfd-4ce3-8ef9-a5a9509dd532: Người dùng không tồn tại!","stack":"Error: Người dùng không tồn tại!\n    at Object.getUserName (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\src\\services\\friend.service.js:467:17)\n    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)\n    at async Object.getConversationSummary (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\src\\services\\conversation.service.js:1039:38)\n    at async getConversationSummaryController (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\src\\controllers\\conversationController.js:285:20)","timestamp":"2025-05-26T13:52:42.203Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:52:42.599Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:52:42.637Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:52:43.012Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:52:43.406Z"}
+{"level":"error","message":"Lỗi lấy thông tin cho 7ba3dabc-9bfd-4ce3-8ef9-a5a9509dd532: Người dùng không tồn tại!","stack":"Error: Người dùng không tồn tại!\n    at Object.getUserName (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\src\\services\\friend.service.js:467:17)\n    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)\n    at async Object.getConversationSummary (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\src\\services\\conversation.service.js:1039:38)\n    at async getConversationSummaryController (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\src\\controllers\\conversationController.js:285:20)","timestamp":"2025-05-26T13:52:43.800Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:52:43.843Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:52:44.222Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:52:44.239Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:52:44.674Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:52:45.082Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:52:45.488Z"}
+{"level":"error","message":"Lỗi lấy thông tin cho 7ba3dabc-9bfd-4ce3-8ef9-a5a9509dd532: Người dùng không tồn tại!","stack":"Error: Người dùng không tồn tại!\n    at Object.getUserName (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\src\\services\\friend.service.js:467:17)\n    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)\n    at async Object.getConversationSummary (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\src\\services\\conversation.service.js:1039:38)\n    at async getConversationSummaryController (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\src\\controllers\\conversationController.js:285:20)","timestamp":"2025-05-26T13:52:45.511Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:52:45.881Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:52:45.947Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:52:46.282Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:52:46.681Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:52:47.074Z"}
+{"level":"error","message":"Lỗi lấy thông tin cho 7ba3dabc-9bfd-4ce3-8ef9-a5a9509dd532: Người dùng không tồn tại!","stack":"Error: Người dùng không tồn tại!\n    at Object.getUserName (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\src\\services\\friend.service.js:467:17)\n    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)\n    at async Object.getConversationSummary (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\src\\services\\conversation.service.js:1039:38)\n    at async getConversationSummaryController (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\src\\controllers\\conversationController.js:285:20)","timestamp":"2025-05-26T13:52:47.148Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:52:47.526Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:52:47.535Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:52:47.927Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:52:48.322Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:52:48.705Z"}
+{"level":"error","message":"Lỗi lấy thông tin cho 7ba3dabc-9bfd-4ce3-8ef9-a5a9509dd532: Người dùng không tồn tại!","stack":"Error: Người dùng không tồn tại!\n    at Object.getUserName (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\src\\services\\friend.service.js:467:17)\n    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)\n    at async Object.getConversationSummary (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\src\\services\\conversation.service.js:1039:38)\n    at async getConversationSummaryController (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\src\\controllers\\conversationController.js:285:20)","timestamp":"2025-05-26T13:52:48.772Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:52:49.144Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:52:49.195Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:52:49.541Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:52:49.928Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:52:50.372Z"}
+{"level":"error","message":"Lỗi lấy thông tin cho 7ba3dabc-9bfd-4ce3-8ef9-a5a9509dd532: Người dùng không tồn tại!","stack":"Error: Người dùng không tồn tại!\n    at Object.getUserName (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\src\\services\\friend.service.js:467:17)\n    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)\n    at async Object.getConversationSummary (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\src\\services\\conversation.service.js:1039:38)\n    at async getConversationSummaryController (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\src\\controllers\\conversationController.js:285:20)","timestamp":"2025-05-26T13:52:50.508Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:52:50.795Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:52:50.927Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:52:51.215Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:52:51.609Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:52:52.039Z"}
+{"level":"error","message":"Lỗi lấy thông tin cho 7ba3dabc-9bfd-4ce3-8ef9-a5a9509dd532: Người dùng không tồn tại!","stack":"Error: Người dùng không tồn tại!\n    at Object.getUserName (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\src\\services\\friend.service.js:467:17)\n    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)\n    at async Object.getConversationSummary (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\src\\services\\conversation.service.js:1039:38)\n    at async getConversationSummaryController (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\src\\controllers\\conversationController.js:285:20)","timestamp":"2025-05-26T13:52:52.084Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:52:52.445Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:52:52.533Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:52:52.866Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:52:53.274Z"}
+{"level":"error","message":"Lỗi lấy thông tin cho 7ba3dabc-9bfd-4ce3-8ef9-a5a9509dd532: Người dùng không tồn tại!","stack":"Error: Người dùng không tồn tại!\n    at Object.getUserName (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\src\\services\\friend.service.js:467:17)\n    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)\n    at async Object.getConversationSummary (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\src\\services\\conversation.service.js:1039:38)\n    at async getConversationSummaryController (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\src\\controllers\\conversationController.js:285:20)","timestamp":"2025-05-26T13:52:53.698Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:52:53.728Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:52:54.126Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:52:54.127Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:52:54.569Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:52:54.977Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:52:55.373Z"}
+{"level":"error","message":"Lỗi lấy thông tin cho 7ba3dabc-9bfd-4ce3-8ef9-a5a9509dd532: Người dùng không tồn tại!","stack":"Error: Người dùng không tồn tại!\n    at Object.getUserName (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\src\\services\\friend.service.js:467:17)\n    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)\n    at async Object.getConversationSummary (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\src\\services\\conversation.service.js:1039:38)\n    at async getConversationSummaryController (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\src\\controllers\\conversationController.js:285:20)","timestamp":"2025-05-26T13:52:55.385Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:52:55.805Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:52:55.849Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:52:56.195Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:52:56.629Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:52:57.019Z"}
+{"level":"error","message":"Lỗi lấy thông tin cho 7ba3dabc-9bfd-4ce3-8ef9-a5a9509dd532: Người dùng không tồn tại!","stack":"Error: Người dùng không tồn tại!\n    at Object.getUserName (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\src\\services\\friend.service.js:467:17)\n    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)\n    at async Object.getConversationSummary (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\src\\services\\conversation.service.js:1039:38)\n    at async getConversationSummaryController (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\src\\controllers\\conversationController.js:285:20)","timestamp":"2025-05-26T13:52:57.044Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:52:57.455Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:52:57.459Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:52:57.861Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:52:58.269Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:52:58.663Z"}
+{"level":"error","message":"Lỗi lấy thông tin cho 7ba3dabc-9bfd-4ce3-8ef9-a5a9509dd532: Người dùng không tồn tại!","stack":"Error: Người dùng không tồn tại!\n    at Object.getUserName (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\src\\services\\friend.service.js:467:17)\n    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)\n    at async Object.getConversationSummary (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\src\\services\\conversation.service.js:1039:38)\n    at async getConversationSummaryController (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\src\\controllers\\conversationController.js:285:20)","timestamp":"2025-05-26T13:52:58.668Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:52:59.088Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:52:59.098Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:52:59.496Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:52:59.890Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:53:00.293Z"}
+{"level":"error","message":"Lỗi lấy thông tin cho 7ba3dabc-9bfd-4ce3-8ef9-a5a9509dd532: Người dùng không tồn tại!","stack":"Error: Người dùng không tồn tại!\n    at Object.getUserName (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\src\\services\\friend.service.js:467:17)\n    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)\n    at async Object.getConversationSummary (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\src\\services\\conversation.service.js:1039:38)\n    at async getConversationSummaryController (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\src\\controllers\\conversationController.js:285:20)","timestamp":"2025-05-26T13:53:00.320Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:53:00.696Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:53:00.742Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:53:01.089Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:53:01.481Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:53:01.881Z"}
+{"level":"error","message":"Lỗi lấy thông tin cho 7ba3dabc-9bfd-4ce3-8ef9-a5a9509dd532: Người dùng không tồn tại!","stack":"Error: Người dùng không tồn tại!\n    at Object.getUserName (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\src\\services\\friend.service.js:467:17)\n    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)\n    at async Object.getConversationSummary (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\src\\services\\conversation.service.js:1039:38)\n    at async getConversationSummaryController (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\src\\controllers\\conversationController.js:285:20)","timestamp":"2025-05-26T13:53:02.012Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:53:02.295Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:53:02.498Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:53:02.705Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:53:03.135Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:53:03.528Z"}
+{"level":"error","message":"Lỗi lấy thông tin cho 7ba3dabc-9bfd-4ce3-8ef9-a5a9509dd532: Người dùng không tồn tại!","stack":"Error: Người dùng không tồn tại!\n    at Object.getUserName (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\src\\services\\friend.service.js:467:17)\n    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)\n    at async Object.getConversationSummary (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\src\\services\\conversation.service.js:1039:38)\n    at async getConversationSummaryController (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\src\\controllers\\conversationController.js:285:20)","timestamp":"2025-05-26T13:53:03.636Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:53:04.006Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:53:04.072Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:53:04.404Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:53:04.803Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:53:05.213Z"}
+{"level":"error","message":"Lỗi lấy thông tin cho 7ba3dabc-9bfd-4ce3-8ef9-a5a9509dd532: Người dùng không tồn tại!","stack":"Error: Người dùng không tồn tại!\n    at Object.getUserName (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\src\\services\\friend.service.js:467:17)\n    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)\n    at async Object.getConversationSummary (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\src\\services\\conversation.service.js:1039:38)\n    at async getConversationSummaryController (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\src\\controllers\\conversationController.js:285:20)","timestamp":"2025-05-26T13:53:05.248Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:53:05.647Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:53:05.688Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:53:06.068Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:53:06.484Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:53:06.890Z"}
+{"level":"error","message":"Lỗi lấy thông tin cho 7ba3dabc-9bfd-4ce3-8ef9-a5a9509dd532: Người dùng không tồn tại!","stack":"Error: Người dùng không tồn tại!\n    at Object.getUserName (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\src\\services\\friend.service.js:467:17)\n    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)\n    at async Object.getConversationSummary (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\src\\services\\conversation.service.js:1039:38)\n    at async getConversationSummaryController (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\src\\controllers\\conversationController.js:285:20)","timestamp":"2025-05-26T13:53:06.907Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:53:07.286Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:53:07.369Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:53:07.683Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:53:08.075Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:53:08.490Z"}
+{"level":"error","message":"Lỗi lấy thông tin cho 7ba3dabc-9bfd-4ce3-8ef9-a5a9509dd532: Người dùng không tồn tại!","stack":"Error: Người dùng không tồn tại!\n    at Object.getUserName (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\src\\services\\friend.service.js:467:17)\n    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)\n    at async Object.getConversationSummary (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\src\\services\\conversation.service.js:1039:38)\n    at async getConversationSummaryController (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\src\\controllers\\conversationController.js:285:20)","timestamp":"2025-05-26T13:53:08.626Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:53:08.967Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:53:09.066Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:53:09.409Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:53:09.833Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:53:10.227Z"}
+{"level":"error","message":"Lỗi lấy thông tin cho 7ba3dabc-9bfd-4ce3-8ef9-a5a9509dd532: Người dùng không tồn tại!","stack":"Error: Người dùng không tồn tại!\n    at Object.getUserName (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\src\\services\\friend.service.js:467:17)\n    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)\n    at async Object.getConversationSummary (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\src\\services\\conversation.service.js:1039:38)\n    at async getConversationSummaryController (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\src\\controllers\\conversationController.js:285:20)","timestamp":"2025-05-26T13:53:10.281Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:53:10.613Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:53:11.004Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:53:11.411Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:53:11.801Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:53:12.204Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:53:12.606Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:53:13.011Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:53:13.428Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:53:13.818Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:53:14.287Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:53:14.690Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:53:15.111Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:53:15.506Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:53:15.904Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:53:16.297Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:53:16.703Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:53:17.099Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:53:17.520Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:53:17.912Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:53:18.298Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:53:18.690Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:53:19.081Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:53:19.508Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:53:19.981Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:53:20.361Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:53:20.748Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:53:21.167Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:53:21.623Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:53:22.021Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:53:22.438Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:53:22.836Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:53:23.260Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:53:23.654Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:53:24.043Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:53:24.429Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:53:24.809Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:53:25.193Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:53:25.579Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:53:25.968Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:53:26.392Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:53:26.823Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:53:27.239Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:53:27.621Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:53:28.011Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:53:28.426Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:53:28.853Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:53:29.248Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:53:29.658Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:53:30.082Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:53:30.466Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:53:30.857Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:53:31.236Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:53:31.652Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:53:32.042Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:53:32.460Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:53:32.850Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:53:33.241Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:53:33.668Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:53:34.050Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:53:34.517Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:53:34.986Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:53:35.421Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:53:35.819Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:53:36.211Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:53:36.595Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:53:36.985Z"}
+{"level":"error","message":"Lỗi lấy thông tin cho 7ba3dabc-9bfd-4ce3-8ef9-a5a9509dd532: Người dùng không tồn tại!","stack":"Error: Người dùng không tồn tại!\n    at Object.getUserName (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\src\\services\\friend.service.js:467:17)\n    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)\n    at async Object.getConversationSummary (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\src\\services\\conversation.service.js:1039:38)\n    at async getConversationSummaryController (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\src\\controllers\\conversationController.js:285:20)","timestamp":"2025-05-26T13:53:37.137Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:53:37.402Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:53:37.794Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:53:38.176Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:53:38.565Z"}
+{"level":"error","message":"Lỗi lấy thông tin cho 7ba3dabc-9bfd-4ce3-8ef9-a5a9509dd532: Người dùng không tồn tại!","stack":"Error: Người dùng không tồn tại!\n    at Object.getUserName (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\src\\services\\friend.service.js:467:17)\n    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)\n    at async Object.getConversationSummary (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\src\\services\\conversation.service.js:1039:38)\n    at async getConversationSummaryController (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\src\\controllers\\conversationController.js:285:20)","timestamp":"2025-05-26T13:53:38.767Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:53:38.963Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:53:39.359Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:53:39.748Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:53:40.171Z"}
+{"level":"error","message":"Lỗi lấy thông tin cho 7ba3dabc-9bfd-4ce3-8ef9-a5a9509dd532: Người dùng không tồn tại!","stack":"Error: Người dùng không tồn tại!\n    at Object.getUserName (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\src\\services\\friend.service.js:467:17)\n    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)\n    at async Object.getConversationSummary (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\src\\services\\conversation.service.js:1039:38)\n    at async getConversationSummaryController (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\src\\controllers\\conversationController.js:285:20)","timestamp":"2025-05-26T13:53:40.373Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:53:40.556Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:53:40.947Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:53:41.369Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:53:41.759Z"}
+{"level":"error","message":"Lỗi lấy thông tin cho 7ba3dabc-9bfd-4ce3-8ef9-a5a9509dd532: Người dùng không tồn tại!","stack":"Error: Người dùng không tồn tại!\n    at Object.getUserName (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\src\\services\\friend.service.js:467:17)\n    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)\n    at async Object.getConversationSummary (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\src\\services\\conversation.service.js:1039:38)\n    at async getConversationSummaryController (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\src\\controllers\\conversationController.js:285:20)","timestamp":"2025-05-26T13:53:42.060Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:53:42.187Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:53:42.588Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:53:42.983Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:53:43.403Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:53:43.829Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:53:44.221Z"}
+{"level":"error","message":"Lỗi lấy thông tin cho 7ba3dabc-9bfd-4ce3-8ef9-a5a9509dd532: Người dùng không tồn tại!","stack":"Error: Người dùng không tồn tại!\n    at Object.getUserName (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\src\\services\\friend.service.js:467:17)\n    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)\n    at async Object.getConversationSummary (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\src\\services\\conversation.service.js:1039:38)\n    at async getConversationSummaryController (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\src\\controllers\\conversationController.js:285:20)","timestamp":"2025-05-26T13:53:44.292Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:53:44.607Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:53:45.004Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:53:45.391Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:53:45.793Z"}
+{"level":"error","message":"Lỗi lấy thông tin cho 7ba3dabc-9bfd-4ce3-8ef9-a5a9509dd532: Người dùng không tồn tại!","stack":"Error: Người dùng không tồn tại!\n    at Object.getUserName (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\src\\services\\friend.service.js:467:17)\n    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)\n    at async Object.getConversationSummary (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\src\\services\\conversation.service.js:1039:38)\n    at async getConversationSummaryController (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\src\\controllers\\conversationController.js:285:20)","timestamp":"2025-05-26T13:53:45.858Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:53:46.178Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:53:46.593Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:53:46.983Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:53:47.404Z"}
+{"level":"error","message":"Lỗi lấy thông tin cho 7ba3dabc-9bfd-4ce3-8ef9-a5a9509dd532: Người dùng không tồn tại!","stack":"Error: Người dùng không tồn tại!\n    at Object.getUserName (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\src\\services\\friend.service.js:467:17)\n    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)\n    at async Object.getConversationSummary (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\src\\services\\conversation.service.js:1039:38)\n    at async getConversationSummaryController (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\src\\controllers\\conversationController.js:285:20)","timestamp":"2025-05-26T13:53:47.455Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:53:47.825Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:53:48.240Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:53:48.640Z"}
+{"level":"error","message":"Lỗi lấy thông tin cho 7ba3dabc-9bfd-4ce3-8ef9-a5a9509dd532: Người dùng không tồn tại!","stack":"Error: Người dùng không tồn tại!\n    at Object.getUserName (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\src\\services\\friend.service.js:467:17)\n    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)\n    at async Object.getConversationSummary (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\src\\services\\conversation.service.js:1039:38)\n    at async getConversationSummaryController (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\src\\controllers\\conversationController.js:285:20)","timestamp":"2025-05-26T13:53:49.003Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:53:49.061Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:53:49.451Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:53:49.855Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:53:50.251Z"}
+{"level":"error","message":"Lỗi lấy thông tin cho 7ba3dabc-9bfd-4ce3-8ef9-a5a9509dd532: Người dùng không tồn tại!","stack":"Error: Người dùng không tồn tại!\n    at Object.getUserName (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\src\\services\\friend.service.js:467:17)\n    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)\n    at async Object.getConversationSummary (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\src\\services\\conversation.service.js:1039:38)\n    at async getConversationSummaryController (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\src\\controllers\\conversationController.js:285:20)","timestamp":"2025-05-26T13:53:50.633Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:53:50.665Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:54:02.660Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:54:03.074Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:54:03.488Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:54:03.874Z"}
+{"level":"error","message":"Lỗi lấy thông tin cho 7ba3dabc-9bfd-4ce3-8ef9-a5a9509dd532: Người dùng không tồn tại!","stack":"Error: Người dùng không tồn tại!\n    at Object.getUserName (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\src\\services\\friend.service.js:467:17)\n    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)\n    at async Object.getConversationSummary (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\src\\services\\conversation.service.js:1039:38)\n    at async getConversationSummaryController (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\src\\controllers\\conversationController.js:285:20)","timestamp":"2025-05-26T13:54:03.896Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:54:04.257Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:54:04.649Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:54:05.073Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:54:05.463Z"}
+{"level":"error","message":"Lỗi lấy thông tin cho 7ba3dabc-9bfd-4ce3-8ef9-a5a9509dd532: Người dùng không tồn tại!","stack":"Error: Người dùng không tồn tại!\n    at Object.getUserName (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\src\\services\\friend.service.js:467:17)\n    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)\n    at async Object.getConversationSummary (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\src\\services\\conversation.service.js:1039:38)\n    at async getConversationSummaryController (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\src\\controllers\\conversationController.js:285:20)","timestamp":"2025-05-26T13:54:05.482Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:54:05.861Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:54:06.243Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:54:06.630Z"}
+{"level":"error","message":"Lỗi lấy thông tin cho 7ba3dabc-9bfd-4ce3-8ef9-a5a9509dd532: Người dùng không tồn tại!","stack":"Error: Người dùng không tồn tại!\n    at Object.getUserName (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\src\\services\\friend.service.js:467:17)\n    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)\n    at async Object.getConversationSummary (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\src\\services\\conversation.service.js:1039:38)\n    at async getConversationSummaryController (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\src\\controllers\\conversationController.js:285:20)","timestamp":"2025-05-26T13:54:07.022Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:54:07.055Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:54:07.457Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:54:07.921Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:54:08.327Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:54:08.754Z"}
+{"level":"error","message":"Lỗi lấy thông tin cho 7ba3dabc-9bfd-4ce3-8ef9-a5a9509dd532: Người dùng không tồn tại!","stack":"Error: Người dùng không tồn tại!\n    at Object.getUserName (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\src\\services\\friend.service.js:467:17)\n    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)\n    at async Object.getConversationSummary (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\src\\services\\conversation.service.js:1039:38)\n    at async getConversationSummaryController (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\src\\controllers\\conversationController.js:285:20)","timestamp":"2025-05-26T13:54:08.860Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:54:09.219Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:54:09.614Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:54:10.016Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:54:10.432Z"}
+{"level":"error","message":"Lỗi lấy thông tin cho 7ba3dabc-9bfd-4ce3-8ef9-a5a9509dd532: Người dùng không tồn tại!","stack":"Error: Người dùng không tồn tại!\n    at Object.getUserName (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\src\\services\\friend.service.js:467:17)\n    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)\n    at async Object.getConversationSummary (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\src\\services\\conversation.service.js:1039:38)\n    at async getConversationSummaryController (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\src\\controllers\\conversationController.js:285:20)","timestamp":"2025-05-26T13:54:10.489Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:54:10.841Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:54:11.262Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:54:11.648Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:54:12.040Z"}
+{"level":"error","message":"Lỗi lấy thông tin cho 7ba3dabc-9bfd-4ce3-8ef9-a5a9509dd532: Người dùng không tồn tại!","stack":"Error: Người dùng không tồn tại!\n    at Object.getUserName (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\src\\services\\friend.service.js:467:17)\n    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)\n    at async Object.getConversationSummary (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\src\\services\\conversation.service.js:1039:38)\n    at async getConversationSummaryController (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\src\\controllers\\conversationController.js:285:20)","timestamp":"2025-05-26T13:54:12.107Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:54:12.430Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:54:12.844Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:54:13.231Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:54:13.634Z"}
+{"level":"error","message":"Lỗi lấy thông tin cho 7ba3dabc-9bfd-4ce3-8ef9-a5a9509dd532: Người dùng không tồn tại!","stack":"Error: Người dùng không tồn tại!\n    at Object.getUserName (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\src\\services\\friend.service.js:467:17)\n    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)\n    at async Object.getConversationSummary (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\src\\services\\conversation.service.js:1039:38)\n    at async getConversationSummaryController (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\src\\controllers\\conversationController.js:285:20)","timestamp":"2025-05-26T13:54:13.713Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:54:14.014Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:54:14.452Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:54:14.849Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:54:15.280Z"}
+{"level":"error","message":"Lỗi lấy thông tin cho 7ba3dabc-9bfd-4ce3-8ef9-a5a9509dd532: Người dùng không tồn tại!","stack":"Error: Người dùng không tồn tại!\n    at Object.getUserName (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\src\\services\\friend.service.js:467:17)\n    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)\n    at async Object.getConversationSummary (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\src\\services\\conversation.service.js:1039:38)\n    at async getConversationSummaryController (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\src\\controllers\\conversationController.js:285:20)","timestamp":"2025-05-26T13:54:15.332Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:54:15.675Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:54:16.065Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:54:16.453Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:54:16.878Z"}
+{"level":"error","message":"Lỗi lấy thông tin cho 7ba3dabc-9bfd-4ce3-8ef9-a5a9509dd532: Người dùng không tồn tại!","stack":"Error: Người dùng không tồn tại!\n    at Object.getUserName (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\src\\services\\friend.service.js:467:17)\n    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)\n    at async Object.getConversationSummary (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\src\\services\\conversation.service.js:1039:38)\n    at async getConversationSummaryController (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\src\\controllers\\conversationController.js:285:20)","timestamp":"2025-05-26T13:54:16.905Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:54:17.268Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:54:17.690Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:54:18.089Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:54:18.509Z"}
+{"level":"error","message":"Lỗi lấy thông tin cho 7ba3dabc-9bfd-4ce3-8ef9-a5a9509dd532: Người dùng không tồn tại!","stack":"Error: Người dùng không tồn tại!\n    at Object.getUserName (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\src\\services\\friend.service.js:467:17)\n    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)\n    at async Object.getConversationSummary (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\src\\services\\conversation.service.js:1039:38)\n    at async getConversationSummaryController (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\src\\controllers\\conversationController.js:285:20)","timestamp":"2025-05-26T13:54:18.554Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:54:18.920Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:54:19.340Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:54:19.748Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:54:20.150Z"}
+{"level":"error","message":"Lỗi lấy thông tin cho 7ba3dabc-9bfd-4ce3-8ef9-a5a9509dd532: Người dùng không tồn tại!","stack":"Error: Người dùng không tồn tại!\n    at Object.getUserName (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\src\\services\\friend.service.js:467:17)\n    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)\n    at async Object.getConversationSummary (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\src\\services\\conversation.service.js:1039:38)\n    at async getConversationSummaryController (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\src\\controllers\\conversationController.js:285:20)","timestamp":"2025-05-26T13:54:20.154Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:54:20.570Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:54:21.012Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:54:21.414Z"}
+{"level":"error","message":"Lỗi lấy thông tin cho 7ba3dabc-9bfd-4ce3-8ef9-a5a9509dd532: Người dùng không tồn tại!","stack":"Error: Người dùng không tồn tại!\n    at Object.getUserName (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\src\\services\\friend.service.js:467:17)\n    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)\n    at async Object.getConversationSummary (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\src\\services\\conversation.service.js:1039:38)\n    at async getConversationSummaryController (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\src\\controllers\\conversationController.js:285:20)","timestamp":"2025-05-26T13:54:21.757Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:54:21.800Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:54:22.230Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:54:22.618Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:54:23.007Z"}
+{"level":"error","message":"Lỗi lấy thông tin cho 7ba3dabc-9bfd-4ce3-8ef9-a5a9509dd532: Người dùng không tồn tại!","stack":"Error: Người dùng không tồn tại!\n    at Object.getUserName (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\src\\services\\friend.service.js:467:17)\n    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)\n    at async Object.getConversationSummary (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\src\\services\\conversation.service.js:1039:38)\n    at async getConversationSummaryController (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\src\\controllers\\conversationController.js:285:20)","timestamp":"2025-05-26T13:54:23.348Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:54:23.466Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:54:23.848Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:54:24.274Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:54:24.702Z"}
+{"level":"error","message":"Lỗi lấy thông tin cho 7ba3dabc-9bfd-4ce3-8ef9-a5a9509dd532: Người dùng không tồn tại!","stack":"Error: Người dùng không tồn tại!\n    at Object.getUserName (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\src\\services\\friend.service.js:467:17)\n    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)\n    at async Object.getConversationSummary (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\src\\services\\conversation.service.js:1039:38)\n    at async getConversationSummaryController (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\src\\controllers\\conversationController.js:285:20)","timestamp":"2025-05-26T13:54:25.006Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:54:25.093Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:54:25.486Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:54:25.885Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:54:26.271Z"}
+{"level":"error","message":"Lỗi lấy thông tin cho 7ba3dabc-9bfd-4ce3-8ef9-a5a9509dd532: Người dùng không tồn tại!","stack":"Error: Người dùng không tồn tại!\n    at Object.getUserName (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\src\\services\\friend.service.js:467:17)\n    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)\n    at async Object.getConversationSummary (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\src\\services\\conversation.service.js:1039:38)\n    at async getConversationSummaryController (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\src\\controllers\\conversationController.js:285:20)","timestamp":"2025-05-26T13:54:26.581Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:54:26.675Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:54:27.076Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:54:27.484Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:54:27.900Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:54:28.340Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:54:28.730Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:54:29.145Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:54:29.545Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:54:29.968Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:54:30.349Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:54:30.756Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:54:31.171Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:54:31.561Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:54:31.950Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:54:32.365Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:54:32.772Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:54:33.196Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:54:33.588Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:54:33.991Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:54:34.390Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:54:34.829Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:54:35.211Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:54:35.630Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:54:36.060Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:54:36.453Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:54:36.848Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:54:37.261Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:54:37.650Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:54:38.042Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:54:38.444Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:54:38.830Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:54:39.222Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:54:39.612Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:54:40.017Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:54:40.411Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:54:40.838Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:54:41.237Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:54:41.628Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:54:42.141Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:54:42.532Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:54:42.927Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:54:43.324Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:54:43.719Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:54:44.142Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:54:44.588Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:54:45.017Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:54:45.423Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:54:45.823Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:54:46.254Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:54:46.687Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:54:47.102Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:54:47.557Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:54:48.043Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:54:48.507Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:54:48.921Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:54:49.300Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:54:49.826Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:54:50.280Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:54:50.690Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:54:51.075Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:54:51.536Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:54:51.918Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:54:52.309Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:54:53.432Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:54:53.819Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:54:55.322Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:54:55.739Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:54:56.115Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:54:56.500Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:54:56.950Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:54:57.342Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:54:57.719Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:54:58.104Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:54:58.587Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:54:59.074Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:54:59.526Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:54:59.982Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:55:00.478Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:55:00.861Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:55:01.239Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:55:01.642Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:55:02.034Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:55:02.422Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:55:02.835Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:55:03.314Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:55:03.770Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:55:04.182Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:55:04.627Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:55:05.006Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:55:05.485Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:55:06.185Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:55:06.608Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:55:07.160Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:55:07.618Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:55:08.036Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:55:08.424Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:55:08.814Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:55:09.295Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:55:09.695Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:55:10.125Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:55:10.561Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:55:10.950Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:55:11.373Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:55:11.787Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:55:12.196Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:55:12.612Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:55:13.040Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:55:13.442Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:55:13.849Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:55:14.252Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:55:14.645Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:55:15.042Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:55:15.465Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:55:15.870Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:55:16.344Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:55:16.735Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:55:17.127Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:55:17.518Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:55:17.901Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:55:18.326Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:55:18.740Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:55:19.159Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:55:19.556Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:55:19.973Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:55:20.393Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:55:20.778Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:55:21.205Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:55:21.640Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:55:22.117Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:55:22.530Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:55:22.965Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:55:23.389Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:55:23.774Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:55:24.169Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:55:24.557Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:55:24.952Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:55:25.349Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:55:25.752Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:55:26.153Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:55:26.574Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:55:27.025Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:55:27.461Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:55:27.859Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:55:28.255Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:55:28.652Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:55:29.057Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:55:29.476Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:55:29.910Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:55:30.305Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:55:30.704Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:55:31.106Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:55:31.536Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:55:31.928Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:55:32.326Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:55:32.714Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:55:33.104Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:55:33.496Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:55:33.896Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:55:34.289Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:55:34.676Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:55:35.067Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:55:35.469Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:55:35.897Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:55:36.301Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:55:36.703Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:55:37.109Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:55:37.597Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:55:37.987Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:55:38.369Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:55:38.760Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:55:39.190Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:55:39.579Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:55:39.986Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:55:40.406Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:55:40.799Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:55:41.199Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:55:41.620Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:55:42.016Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:55:42.425Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:55:42.817Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:55:43.252Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:55:43.657Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:55:44.055Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:55:44.457Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:55:44.866Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:55:45.297Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:55:45.718Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:55:46.145Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:55:46.570Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:55:47.043Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:55:47.459Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:55:47.857Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:55:48.245Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:55:48.688Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:55:49.092Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:55:49.480Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:55:49.871Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:55:50.264Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:55:50.652Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:55:51.041Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:55:51.424Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:55:51.846Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:55:52.233Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:55:52.628Z"}
+{"error":"The provided starting key does not match the range key predicate","level":"error","message":"Error fetching messages","otherUserId":"0885194a-a7a6-4c63-8c55-4000643c9fde","timestamp":"2025-05-26T13:55:52.950Z","userId":"135540ce-e348-4852-bd8b-626bfe1b8b6b"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:55:53.014Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:55:53.418Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:55:53.814Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:55:54.215Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:55:54.637Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:55:55.027Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:55:55.443Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:55:55.835Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:55:56.236Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:55:56.641Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:55:57.020Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:55:57.429Z"}
+{"error":"The provided starting key does not match the range key predicate","level":"error","message":"Error fetching messages","otherUserId":"0885194a-a7a6-4c63-8c55-4000643c9fde","timestamp":"2025-05-26T13:55:57.740Z","userId":"135540ce-e348-4852-bd8b-626bfe1b8b6b"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:55:57.868Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:56:00.090Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:56:00.513Z"}
+{"error":"The provided starting key does not match the range key predicate","level":"error","message":"Error fetching messages","otherUserId":"0885194a-a7a6-4c63-8c55-4000643c9fde","timestamp":"2025-05-26T13:56:00.526Z","userId":"135540ce-e348-4852-bd8b-626bfe1b8b6b"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:56:00.914Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:56:01.316Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:56:01.715Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:56:02.142Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:56:02.580Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:56:02.977Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:56:03.372Z"}
+{"error":"The provided starting key does not match the range key predicate","level":"error","message":"Error fetching messages","otherUserId":"0885194a-a7a6-4c63-8c55-4000643c9fde","timestamp":"2025-05-26T13:56:03.661Z","userId":"135540ce-e348-4852-bd8b-626bfe1b8b6b"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:56:03.772Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:56:04.170Z"}
+{"error":"The provided starting key does not match the range key predicate","level":"error","message":"Error fetching messages","otherUserId":"0885194a-a7a6-4c63-8c55-4000643c9fde","timestamp":"2025-05-26T13:56:04.472Z","userId":"135540ce-e348-4852-bd8b-626bfe1b8b6b"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:56:04.561Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:56:04.972Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:56:05.356Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:56:05.739Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:56:06.118Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:56:06.511Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:56:06.954Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:56:07.344Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:56:07.729Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:56:08.114Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:56:08.503Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:56:08.930Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:56:09.323Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:56:09.734Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:56:10.120Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:56:11.129Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:56:11.516Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:56:11.905Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:56:12.292Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:56:12.711Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:56:13.118Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:56:13.513Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:56:13.907Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:56:14.297Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:56:14.719Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:56:15.151Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:56:15.581Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:56:15.972Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:56:16.389Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:56:16.780Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:56:17.172Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:56:17.593Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:56:18.011Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:56:18.436Z"}
+{"error":"The provided starting key does not match the range key predicate","level":"error","message":"Error fetching messages","otherUserId":"0885194a-a7a6-4c63-8c55-4000643c9fde","timestamp":"2025-05-26T13:56:18.765Z","userId":"135540ce-e348-4852-bd8b-626bfe1b8b6b"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:56:18.850Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:56:19.241Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:56:19.623Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:56:20.021Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:56:20.414Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:56:20.821Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:56:21.224Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:56:21.610Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:56:21.992Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:56:22.382Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:56:22.812Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:56:23.230Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:56:23.658Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:56:24.059Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:56:24.477Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:56:24.876Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:56:25.269Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:56:25.654Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:56:26.037Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:56:26.433Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:56:26.834Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:56:27.235Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:56:27.628Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:56:28.034Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:56:28.419Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:56:28.836Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:56:29.217Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:56:29.644Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:56:30.032Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:56:30.417Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:56:30.796Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:56:31.180Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:56:31.564Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:56:31.978Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:56:32.367Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:56:32.750Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:56:33.143Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:56:33.532Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:56:33.961Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:56:34.364Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:56:34.751Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:56:35.159Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:56:35.580Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:56:35.986Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:56:36.400Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:56:36.821Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:56:37.256Z"}
+{"error":"The provided starting key does not match the range key predicate","level":"error","message":"Error fetching messages","otherUserId":"0885194a-a7a6-4c63-8c55-4000643c9fde","timestamp":"2025-05-26T13:56:37.552Z","userId":"135540ce-e348-4852-bd8b-626bfe1b8b6b"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:56:37.654Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:56:38.058Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:56:38.486Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:56:38.900Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:56:39.286Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:56:39.718Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:56:40.115Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:56:40.510Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:56:40.924Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:56:41.337Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:56:41.733Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:56:42.173Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:56:42.607Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:56:43.000Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:56:43.386Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:56:43.792Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:56:44.194Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:56:44.584Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:56:44.998Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:56:45.415Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:56:45.847Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:56:46.263Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:56:46.654Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:56:47.070Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:56:47.482Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:56:47.878Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:56:48.281Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:56:48.713Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:56:49.109Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:56:49.501Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:56:49.942Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:56:50.327Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:56:50.730Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:56:51.127Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:56:51.549Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:56:51.955Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:56:52.383Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:56:52.808Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:56:53.232Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:56:53.646Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:56:54.107Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:56:54.516Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:56:54.937Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:56:55.344Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:56:56.277Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:56:57.504Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:56:58.837Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:57:00.105Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:57:01.330Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:57:02.617Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:57:03.940Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:57:05.190Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:57:06.391Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:57:07.648Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:57:09.041Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:57:10.408Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:57:11.876Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:57:13.116Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:57:14.582Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:57:15.887Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:57:17.118Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:57:18.445Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:57:20.315Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:57:21.549Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:57:22.800Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:57:25.641Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:57:26.860Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:57:28.063Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:57:29.327Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:57:30.561Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:57:31.881Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:57:33.275Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:57:34.432Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:57:35.834Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:57:37.209Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:57:38.604Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:57:39.872Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:57:41.224Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:57:42.612Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:57:43.882Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:57:45.260Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:57:46.512Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:57:47.984Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:57:49.262Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:57:50.611Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T13:57:51.888Z"}
+{"level":"error","message":"Không thể tạo hội thoại với chính mình","timestamp":"2025-05-26T14:21:35.592Z","userId":"135540ce-e348-4852-bd8b-626bfe1b8b6b"}
+{"error":"Không thể tạo hội thoại với chính mình","level":"error","message":"[ChatSocket] Error sending message","timestamp":"2025-05-26T14:21:35.593Z"}
+{"error":"The provided starting key is invalid","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T14:24:20.810Z"}
+{"error":"The provided starting key is invalid","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T14:24:21.615Z"}
+{"error":"The provided starting key is invalid","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T14:24:28.034Z"}
+{"error":"The provided starting key is invalid","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T14:24:28.826Z"}
+{"error":"The provided starting key is invalid","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T14:25:45.191Z"}
+{"error":"The provided starting key is invalid","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T15:06:26.585Z"}
+{"error":"The provided starting key is invalid","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T15:07:37.632Z"}
+{"error":"The provided starting key is invalid","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T15:08:00.607Z"}
+{"error":"The provided starting key is invalid","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T15:18:57.933Z"}
+{"error":"The provided starting key is invalid","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T15:18:58.718Z"}
+{"error":"The provided starting key is invalid","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T15:19:03.833Z"}
+{"error":"The provided starting key is invalid","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T15:19:04.638Z"}
+{"error":"The provided starting key is invalid","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T15:19:13.770Z"}
+{"error":"The provided starting key is invalid","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T15:19:14.535Z"}
+{"error":"The provided starting key is invalid","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T15:19:16.546Z"}
+{"error":"The provided starting key is invalid","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T15:19:17.320Z"}
+{"error":"The provided starting key is invalid","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T15:19:27.969Z"}
+{"error":"The provided starting key is invalid","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T15:19:28.734Z"}
+{"error":"The provided starting key is invalid","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T15:19:29.995Z"}
+{"error":"The provided starting key is invalid","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T15:19:30.789Z"}
+{"error":"The provided starting key is invalid","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T15:19:38.865Z"}
+{"error":"The provided starting key is invalid","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T15:19:39.627Z"}
+{"level":"error","message":"Không thể tạo hội thoại với chính mình","timestamp":"2025-05-26T15:47:25.830Z","userId":"0885194a-a7a6-4c63-8c55-4000643c9fde"}
+{"error":"Không thể tạo hội thoại với chính mình","level":"error","message":"[ChatSocket] Error sending message","timestamp":"2025-05-26T15:47:25.831Z"}
+{"error":"Loại tin nhắn không hợp lệ: pdf","level":"error","message":"[GroupSocket] Error sending group message","timestamp":"2025-05-26T16:25:41.787Z"}
+{"error":"Loại tin nhắn không hợp lệ: pdf","level":"error","message":"Error creating message","messageId":"99d1e5c0-cc86-4102-a441-343fa1f92cad","stack":"Error: Loại tin nhắn không hợp lệ: pdf\n    at sendMessageCore (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\src\\services\\messageCore.js:42:11)\n    at Object.createMessage (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\src\\services\\message.service.js:91:7)\n    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)\n    at async Socket.<anonymous> (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\src\\sockets\\chat.socket.js:88:28)","timestamp":"2025-05-26T16:28:50.844Z"}
+{"error":"Không thể gửi tin nhắn: Loại tin nhắn không hợp lệ: pdf","level":"error","message":"[ChatSocket] Error sending message","timestamp":"2025-05-26T16:28:50.845Z"}
+{"error":"Loại tin nhắn không hợp lệ: pdf","level":"error","message":"[GroupSocket] Error sending group message","timestamp":"2025-05-26T16:40:18.499Z"}
+{"error":"Loại tin nhắn không hợp lệ: doc","level":"error","message":"[GroupSocket] Error sending group message","timestamp":"2025-05-26T16:55:36.954Z"}
+{"error":"Loại tin nhắn không hợp lệ: doc","level":"error","message":"[GroupSocket] Error sending group message","timestamp":"2025-05-26T16:55:55.238Z"}
+{"error":"Loại tin nhắn không hợp lệ: pdf","level":"error","message":"[GroupSocket] Error sending group message","timestamp":"2025-05-26T16:56:15.827Z"}
+{"error":"Loại tin nhắn không hợp lệ: xls","level":"error","message":"[GroupSocket] Error sending group message","timestamp":"2025-05-26T16:56:26.274Z"}
+{"error":"Sai số điện thoại hoặc mật khẩu!","level":"error","message":"[loginController] Error","timestamp":"2025-05-26T17:10:41.920Z"}
+{"error":"MIME type không được hỗ trợ: application/vnd.openxmlformats-officedocument.wordprocessingml.document","level":"error","message":"Error creating message","messageId":"6a9fd702-074b-48d5-b418-2d3914311008","stack":"Error: MIME type không được hỗ trợ: application/vnd.openxmlformats-officedocument.wordprocessingml.document\n    at uploadS3File (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\src\\utils\\messageUtils.js:51:24)\n    at sendMessageCore (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\src\\services\\messageCore.js:153:49)\n    at Object.createMessage (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\src\\services\\message.service.js:91:7)\n    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)\n    at async Socket.<anonymous> (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\src\\sockets\\chat.socket.js:88:28)","timestamp":"2025-05-26T17:11:27.726Z"}
+{"error":"Không thể gửi tin nhắn: MIME type không được hỗ trợ: application/vnd.openxmlformats-officedocument.wordprocessingml.document","level":"error","message":"[ChatSocket] Error sending message","timestamp":"2025-05-26T17:11:27.727Z"}
+{"error":"MIME type không được hỗ trợ: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet","level":"error","message":"Error creating message","messageId":"b9faf2c2-1cf5-4613-ba36-2c32299159f9","stack":"Error: MIME type không được hỗ trợ: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet\n    at uploadS3File (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\src\\utils\\messageUtils.js:51:24)\n    at sendMessageCore (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\src\\services\\messageCore.js:153:49)\n    at Object.createMessage (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\src\\services\\message.service.js:91:7)\n    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)\n    at async Socket.<anonymous> (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\src\\sockets\\chat.socket.js:88:28)","timestamp":"2025-05-26T17:11:50.375Z"}
+{"error":"Không thể gửi tin nhắn: MIME type không được hỗ trợ: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet","level":"error","message":"[ChatSocket] Error sending message","timestamp":"2025-05-26T17:11:50.375Z"}
+{"error":"Người dùng không tồn tại!","level":"error","message":"[pinConversationController] Error","timestamp":"2025-05-26T19:03:28.135Z"}
+{"error":"Hội thoại chưa được ghim!","level":"error","message":"[unpinConversationController] Error","timestamp":"2025-05-26T19:20:51.091Z"}
+{"error":"Hội thoại chưa được ghim!","level":"error","message":"[unpinConversationController] Error","timestamp":"2025-05-26T19:20:55.927Z"}
+{"error":"Hội thoại chưa được ghim!","level":"error","message":"[unpinConversationController] Error","timestamp":"2025-05-26T19:21:15.448Z"}
+{"error":"Hội thoại chưa được ghim!","level":"error","message":"[unpinConversationController] Error","timestamp":"2025-05-26T19:21:22.743Z"}
+{"error":"Hội thoại chưa được ghim!","level":"error","message":"[unpinConversationController] Error","timestamp":"2025-05-26T19:21:29.578Z"}
+{"error":"Hội thoại đã được ghim!","level":"error","message":"[pinConversationController] Error","timestamp":"2025-05-26T19:21:52.397Z"}
+{"error":"Người nhận không tồn tại!","level":"error","message":"[ChatSocket] Error forwarding message","timestamp":"2025-05-26T21:04:45.043Z"}
+{"error":"Người nhận không tồn tại!","level":"error","message":"[ChatSocket] Error forwarding message","timestamp":"2025-05-26T21:04:55.817Z"}
+{"error":"The provided starting key does not match the range key predicate","level":"error","message":"Error fetching messages","otherUserId":"7f03f57d-9ad5-4448-a495-388fe8ec8c63","timestamp":"2025-05-26T21:07:50.907Z","userId":"135540ce-e348-4852-bd8b-626bfe1b8b6b"}
+{"error":"The provided starting key does not match the range key predicate","level":"error","message":"Error fetching messages","otherUserId":"7f03f57d-9ad5-4448-a495-388fe8ec8c63","timestamp":"2025-05-26T21:08:05.089Z","userId":"135540ce-e348-4852-bd8b-626bfe1b8b6b"}
+{"error":"The provided starting key is invalid","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T21:08:19.713Z"}
+{"error":"The provided starting key is invalid","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T21:08:20.727Z"}
+{"error":"The provided starting key does not match the range key predicate","level":"error","message":"Error fetching messages","otherUserId":"7f03f57d-9ad5-4448-a495-388fe8ec8c63","timestamp":"2025-05-26T21:16:45.134Z","userId":"135540ce-e348-4852-bd8b-626bfe1b8b6b"}
+{"error":"The provided starting key does not match the range key predicate","level":"error","message":"Error fetching messages","otherUserId":"7f03f57d-9ad5-4448-a495-388fe8ec8c63","timestamp":"2025-05-26T21:16:54.101Z","userId":"135540ce-e348-4852-bd8b-626bfe1b8b6b"}
+{"error":"The provided starting key does not match the range key predicate","level":"error","message":"Error fetching messages","otherUserId":"7f03f57d-9ad5-4448-a495-388fe8ec8c63","timestamp":"2025-05-26T21:18:47.582Z","userId":"135540ce-e348-4852-bd8b-626bfe1b8b6b"}
+{"error":"The provided starting key does not match the range key predicate","level":"error","message":"Error fetching messages","otherUserId":"7f03f57d-9ad5-4448-a495-388fe8ec8c63","timestamp":"2025-05-26T21:19:28.805Z","userId":"135540ce-e348-4852-bd8b-626bfe1b8b6b"}
+{"error":"The provided starting key does not match the range key predicate","level":"error","message":"Error fetching messages","otherUserId":"7f03f57d-9ad5-4448-a495-388fe8ec8c63","timestamp":"2025-05-26T21:26:13.178Z","userId":"135540ce-e348-4852-bd8b-626bfe1b8b6b"}
+{"error":"The provided starting key does not match the range key predicate","level":"error","message":"Error fetching messages","otherUserId":"7f03f57d-9ad5-4448-a495-388fe8ec8c63","timestamp":"2025-05-26T21:26:33.678Z","userId":"135540ce-e348-4852-bd8b-626bfe1b8b6b"}
+{"error":"The provided starting key does not match the range key predicate","level":"error","message":"Error fetching messages","otherUserId":"7f03f57d-9ad5-4448-a495-388fe8ec8c63","timestamp":"2025-05-26T21:26:34.852Z","userId":"135540ce-e348-4852-bd8b-626bfe1b8b6b"}
+{"error":"The provided starting key does not match the range key predicate","level":"error","message":"Error fetching messages","otherUserId":"7f03f57d-9ad5-4448-a495-388fe8ec8c63","timestamp":"2025-05-26T21:26:42.947Z","userId":"135540ce-e348-4852-bd8b-626bfe1b8b6b"}
+{"error":"The provided starting key does not match the range key predicate","level":"error","message":"Error fetching messages","otherUserId":"7f03f57d-9ad5-4448-a495-388fe8ec8c63","timestamp":"2025-05-26T21:26:57.933Z","userId":"135540ce-e348-4852-bd8b-626bfe1b8b6b"}
+{"error":"Cannot read properties of undefined (reading 'to')","level":"error","message":"Error recalling message","messageId":"ef348e61-ef57-4549-be2e-8befcd6f6f72","timestamp":"2025-05-26T21:37:06.255Z"}
+{"error":"Failed to recall message: Cannot read properties of undefined (reading 'to')","level":"error","message":"[ChatSocket] Error recalling message","timestamp":"2025-05-26T21:37:06.255Z"}
+{"error":"Tin nhắn đã bị thu hồi","level":"error","message":"[ChatSocket] Error recalling message","timestamp":"2025-05-26T21:37:18.489Z"}
+{"error":"Tin nhắn đã bị thu hồi","level":"error","message":"[ChatSocket] Error recalling message","timestamp":"2025-05-26T21:38:01.680Z"}
+{"error":"Cannot read properties of undefined (reading 'to')","level":"error","message":"Error recalling message","messageId":"6ed2dee3-a2f2-4604-8cc0-a8b2f4eaea02","timestamp":"2025-05-26T21:42:35.777Z"}
+{"error":"Failed to recall message: Cannot read properties of undefined (reading 'to')","level":"error","message":"[ChatSocket] Error recalling message","timestamp":"2025-05-26T21:42:35.778Z"}
+{"error":"Cannot read properties of undefined (reading 'to')","level":"error","message":"Error recalling message","messageId":"76cc0b8d-e6d2-4927-90f3-e7c24e985dff","stack":"TypeError: Cannot read properties of undefined (reading 'to')\n    at Object.recallMessage (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\src\\services\\message.service.js:495:12)\n    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)\n    at async Socket.<anonymous> (D:\\2024 2025\\3. CONG NGHE MOI\\hiepproject\\zalo-chat\\src\\sockets\\chat.socket.js:187:24)","timestamp":"2025-05-26T21:55:16.560Z","userId":"135540ce-e348-4852-bd8b-626bfe1b8b6b"}
+{"error":"Failed to recall message: Cannot read properties of undefined (reading 'to')","level":"error","message":"[ChatSocket] Error recalling message","timestamp":"2025-05-26T21:55:16.560Z"}
+{"error":"The provided starting key does not match the range key predicate","level":"error","message":"Error fetching messages","otherUserId":"7f03f57d-9ad5-4448-a495-388fe8ec8c63","timestamp":"2025-05-26T21:57:56.291Z","userId":"135540ce-e348-4852-bd8b-626bfe1b8b6b"}
+{"error":"The provided starting key does not match the range key predicate","level":"error","message":"Error fetching messages","otherUserId":"7f03f57d-9ad5-4448-a495-388fe8ec8c63","timestamp":"2025-05-26T21:57:57.073Z","userId":"135540ce-e348-4852-bd8b-626bfe1b8b6b"}
+{"error":"The provided starting key is invalid","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-26T21:57:58.393Z"}
+{"error":"The provided starting key does not match the range key predicate","level":"error","message":"Error fetching messages","otherUserId":"0885194a-a7a6-4c63-8c55-4000643c9fde","timestamp":"2025-05-26T22:02:03.524Z","userId":"135540ce-e348-4852-bd8b-626bfe1b8b6b"}
+{"error":"Query key condition not supported","level":"error","message":"[cancelFriendRequestController] Error","timestamp":"2025-05-26T22:08:35.076Z"}
+{"error":"The provided starting key does not match the range key predicate","level":"error","message":"Error fetching messages","otherUserId":"0723a43d-3e02-4ca4-9429-fea3d74c2417","timestamp":"2025-05-26T22:25:31.252Z","userId":"135540ce-e348-4852-bd8b-626bfe1b8b6b"}
+{"error":"The provided starting key does not match the range key predicate","level":"error","message":"Error fetching messages","otherUserId":"0723a43d-3e02-4ca4-9429-fea3d74c2417","timestamp":"2025-05-26T22:25:32.381Z","userId":"135540ce-e348-4852-bd8b-626bfe1b8b6b"}
+{"error":"Query key condition not supported","level":"error","message":"[FriendSocket] Error cancelling friend request for 135540ce-e348-4852-bd8b-626bfe1b8b6b","timestamp":"2025-05-26T22:25:46.263Z"}
+{"error":"Query key condition not supported","level":"error","message":"[cancelFriendRequestController] Error","timestamp":"2025-05-26T22:25:47.070Z"}
