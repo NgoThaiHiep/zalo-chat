@@ -53,6 +53,7 @@ const sendMessageController = async (req, res) => {
 const getMessagesBetweenController = async (req, res) => {
   try {
     const { userId } = req.params;
+    const { limit = 20, lastEvaluatedKey } = req.query;
     const currentUserId = req.user.id;
 
     if (!userId) {
@@ -61,7 +62,12 @@ const getMessagesBetweenController = async (req, res) => {
 
     console.log('Đang lấy tin nhắn cho:', { currentUserId, userId });
 
-    const messages = await MessageService.getMessagesBetweenUsers(currentUserId, userId);
+    const messages = await MessageService.getMessagesBetweenUsers(
+      currentUserId,
+      userId,
+      parseInt(limit),
+      lastEvaluatedKey ? JSON.parse(lastEvaluatedKey) : null
+    );
     if (!messages.success) {
       return res.status(500).json({ success: false, message: messages.error });
     }

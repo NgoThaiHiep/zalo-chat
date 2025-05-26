@@ -485,40 +485,30 @@ const recallMessage = async (userId, messageId) => {
   }
 };
 // Hàm lấy tin nhắn giữa hai người dùng
-const getMessagesBetweenUsers = async (user1, user2) => {
-  logger.info(`Fetching messages between users`, { user1, user2 });
-
+const getMessagesBetweenUsers = async (userId, otherUserId, limit = 20, lastEvaluatedKey = null) => {
   try {
     const now = Math.floor(Date.now() / 1000);
-
-    // Kiểm tra trạng thái bạn bè và cài đặt restrictStrangerMessages
     let isFriend = true;
     let restrictStrangerMessages = false;
-    if (user1 !== user2) {
+    if (userId !== otherUserId) {
       const [friendResult, userResult] = await Promise.all([
-        dynamoDB.get({
-          TableName: 'Friends',
-          Key: { userId: user1, friendId: user2 },
-        }).promise(),
-        dynamoDB.get({
-          TableName: 'Users',
-          Key: { userId: user1 },
-        }).promise(),
+        dynamoDB.get({ TableName: 'Friends', Key: { userId, friendId: otherUserId } }).promise(),
+        dynamoDB.get({ TableName: 'Users', Key: { userId } }).promise(),
       ]);
       isFriend = !!friendResult.Item;
       restrictStrangerMessages = userResult.Item?.settings?.restrictStrangerMessages || false;
     }
 
-    // Nếu bật restrictStrangerMessages và không phải bạn bè, chỉ lấy tin nhắn do user1 gửi
     const queryPromises = [];
     queryPromises.push(
       dynamoDB.query({
         TableName: 'Messages',
         IndexName: 'SenderReceiverIndex',
         KeyConditionExpression: 'senderId = :user1 AND receiverId = :user2',
-        ExpressionAttributeValues: { ':user1': user1, ':user2': user2 },
-        Limit: 100,
+        ExpressionAttributeValues: { ':user1': userId, ':user2': otherUserId },
+        Limit: limit,
         ScanIndexForward: false,
+        ExclusiveStartKey: lastEvaluatedKey,
       }).promise()
     );
 
@@ -528,9 +518,10 @@ const getMessagesBetweenUsers = async (user1, user2) => {
           TableName: 'Messages',
           IndexName: 'ReceiverSenderIndex',
           KeyConditionExpression: 'receiverId = :user1 AND senderId = :user2',
-          ExpressionAttributeValues: { ':user1': user1, ':user2': user2 },
-          Limit: 100,
+          ExpressionAttributeValues: { ':user1': userId, ':user2': otherUserId },
+          Limit: limit,
           ScanIndexForward: false,
+          ExclusiveStartKey: lastEvaluatedKey,
         }).promise()
       );
     }
@@ -542,76 +533,59 @@ const getMessagesBetweenUsers = async (user1, user2) => {
       ...(receiverResult ? receiverResult.Items || [] : []),
     ];
 
-    // Lọc tin nhắn: chỉ giữ những tin chưa expired, không bị xóa, thuộc user1
     const filteredMessages = allMessages.filter(
       msg =>
         (!msg.expiresAt || msg.expiresAt > now) &&
-        msg.ownerId === user1 &&
+        msg.ownerId === userId &&
         msg.status !== MESSAGE_STATUSES.DELETE &&
-        (msg.status !== MESSAGE_STATUSES.RESTRICTED || msg.senderId === user1)
+        (msg.status !== MESSAGE_STATUSES.RESTRICTED || msg.senderId === userId)
     );
 
-    // Loại bỏ trùng và sắp xếp
     const uniqueMessages = Array.from(
       new Map(filteredMessages.map(msg => [`${msg.messageId}:${msg.ownerId}`, msg])).values()
     ).sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
 
-    // Lấy thông tin người dùng (4 trường: userId, name, avatar, phoneNumber) cho mỗi senderId
-    const senderIds = [...new Set(uniqueMessages.map(msg => msg.senderId))]; // Lấy danh sách senderId duy nhất
+    // Lấy thông tin sender
+    const senderIds = [...new Set(uniqueMessages.map(msg => msg.senderId))];
     const userPromises = senderIds.map(senderId =>
-      dynamoDB
-        .get({
-          TableName: 'Users',
-          Key: { userId: senderId },
-        })
-        .promise()
-        .then(result => {
-          if (result.Item) {
-            // Chỉ lấy 4 trường cần thiết
-            const { userId, name, avatar, phoneNumber } = result.Item;
-            return { userId, name, avatar, phoneNumber }; // Trả về chỉ các trường này
-          } else {
-            // Log lỗi khi không có dữ liệu cho userId
-            logger.error('User not found', { userId: senderId });
-            return {
-              userId: senderId,
-              name: 'Chưa có tên',
-              avatar: 'default-avatar.png',
-              phoneNumber: 'Chưa có số điện thoại',
-            };
-          }
-        })
-        .catch(error => {
-          logger.error('Failed to fetch user info', { userId: senderId, error: error.message });
+      dynamoDB.get({ TableName: 'Users', Key: { userId: senderId } }).promise()
+      .then(result => {
+        if (result.Item) {
+          const { userId, name, avatar, phoneNumber } = result.Item;
+          return { userId, name, avatar, phoneNumber };
+        } else {
           return {
             userId: senderId,
             name: 'Chưa có tên',
             avatar: 'default-avatar.png',
             phoneNumber: 'Chưa có số điện thoại',
           };
-        })
+        }
+      })
     );
 
     const users = await Promise.all(userPromises);
     const userMap = users.reduce((map, user) => {
-      map[user.userId] = user; // Thêm toàn bộ dữ liệu người dùng vào map
+      map[user.userId] = user;
       return map;
     }, {});
 
-    // 6. Gắn thông tin người dùng vào tin nhắn
     const enrichedMessages = uniqueMessages.map(msg => ({
       ...msg,
-      sender: {
-        ...userMap[msg.senderId],
-      },
+      sender: { ...userMap[msg.senderId] },
     }));
 
-    return { success: true, messages: enrichedMessages };
+    return {
+      success: true,
+      messages: enrichedMessages,
+      lastEvaluatedKey: senderResult.LastEvaluatedKey || receiverResult?.LastEvaluatedKey,
+    };
   } catch (error) {
-    logger.error(`Error fetching messages`, { user1, user2, error: error.message });
+    logger.error(`Error fetching messages`, { userId, otherUserId, error: error.message });
     throw new AppError(`Failed to fetch messages: ${error.message}`, 500);
   }
 };
+
 const extractBucketFromMediaUrl = (mediaUrl) => {
   if (!mediaUrl || !mediaUrl.startsWith('s3://')) return null;
   const parts = mediaUrl.replace('s3://', '').split('/');
