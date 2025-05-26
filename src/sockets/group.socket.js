@@ -248,6 +248,64 @@ module.exports = (groupIo) => {
       }
     });
 
+    socket.on('pinGroupMessage', async (data, callback) => {
+      try {
+        const { groupId, messageId } = data;
+        if (!groupId || !messageId) {
+          throw new AppError('groupId and messageId are required', 400);
+        }
+
+        const result = await groupService.pinGroupMessage(groupId, userId, messageId);
+
+        // Lấy danh sách tin nhắn ghim mới
+        const pinnedMessages = await groupService.getGroupMessages(groupId, userId, 50); // Chỉ lấy tin nhắn ghim
+        const pinned = pinnedMessages.messages.filter(msg => msg.isPinned);
+
+        // Phát sự kiện đến tất cả thành viên trong nhóm
+        groupIo.to(`group:${groupId}`).emit('messagePinned', {
+          groupId,
+          messageId,
+          pinnedBy: userId,
+          messages: pinned, // Gửi danh sách tin nhắn ghim mới
+        });
+
+        logger.info('[GroupSocket] Group message pinned', { groupId, messageId, userId });
+        callback({ success: true, data: result });
+      } catch (error) {
+        logger.error('[GroupSocket] Error pinning group message', { error: error.message });
+        callback({ success: false, message: error.message });
+      }
+    });
+
+    socket.on('unpinGroupMessage', async (data, callback) => {
+      try {
+        const { groupId, messageId } = data;
+        if (!groupId || !messageId) {
+          throw new AppError('groupId and messageId are required', 400);
+        }
+
+        const result = await groupService.unpinGroupMessage(groupId, userId, messageId);
+
+        // Lấy danh sách tin nhắn ghim mới
+        const pinnedMessages = await groupService.getGroupMessages(groupId, userId, 50); // Chỉ lấy tin nhắn ghim
+        const pinned = pinnedMessages.messages.filter(msg => msg.isPinned);
+
+        // Phát sự kiện đến tất cả thành viên trong nhóm
+        groupIo.to(`group:${groupId}`).emit('messageUnpinned', {
+          groupId,
+          messageId,
+          unpinnedBy: userId,
+          messages: pinned, // Gửi danh sách tin nhắn ghim mới
+        });
+
+        logger.info('[GroupSocket] Group message unpinned', { groupId, messageId, userId });
+        callback({ success: true, data: result });
+      } catch (error) {
+        logger.error('[GroupSocket] Error unpinning group message', { error: error.message });
+        callback({ success: false, message: error.message });
+      }
+    });
+
     socket.on('disconnect', async () => {
       try {
         const groups = await groupService.getUserGroups(userId);

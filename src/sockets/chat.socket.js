@@ -344,6 +344,62 @@ const initializeChatSocket = (chatIo) => {
       }
     });
 
+    socket.on('pinMessage', async (data, callback) => {
+      try {
+        const { messageId, room } = data;
+        if (!messageId || !room) {
+          throw new AppError('messageId and room are required', 400);
+        }
+
+        const result = await MessageService.pinMessage(userId, messageId);
+        const message = await MessageService.getMessageById(messageId, userId);
+        const otherUserId = message.senderId === userId ? message.receiverId : message.senderId;
+
+        // Lấy danh sách tin nhắn ghim mới
+        const pinnedMessages = await MessageService.getPinnedMessages(userId, otherUserId);
+
+        // Phát sự kiện đến cả hai người dùng trong cuộc trò chuyện
+        chatIo.to(room).emit('messagePinned', {
+          messageId,
+          messages: pinnedMessages.messages, // Gửi danh sách tin nhắn ghim mới
+        });
+
+        logger.info('[ChatSocket] Message pinned', { messageId, userId, room });
+        callback({ success: true, data: result });
+      } catch (error) {
+        logger.error('[ChatSocket] Error pinning message', { error: error.message });
+        callback({ success: false, message: error.message });
+      }
+    });
+
+  socket.on('unpinMessage', async (data, callback) => {
+    try {
+      const { messageId, room } = data;
+      if (!messageId || !room) {
+        throw new AppError('messageId and room are required', 400);
+      }
+
+      const result = await MessageService.unpinMessage(userId, messageId);
+      const message = await MessageService.getMessageById(messageId, userId);
+      const otherUserId = message.senderId === userId ? message.receiverId : message.senderId;
+
+      // Lấy danh sách tin nhắn ghim mới
+      const pinnedMessages = await MessageService.getPinnedMessages(userId, otherUserId);
+
+      // Phát sự kiện đến cả hai người dùng trong cuộc trò chuyện
+      chatIo.to(room).emit('messageUnpinned', {
+        messageId,
+        messages: pinnedMessages.messages, // Gửi danh sách tin nhắn ghim mới
+      });
+
+      logger.info('[ChatSocket] Message unpinned', { messageId, userId, room });
+      callback({ success: true, data: result });
+    } catch (error) {
+      logger.error('[ChatSocket] Error unpinning message', { error: error.message });
+      callback({ success: false, message: error.message });
+    }
+  });
+
     socket.on('disconnect', () => {
       logger.info('[ChatSocket] User disconnected', { userId, socketId: socket.id });
     });
