@@ -653,10 +653,15 @@ const createConversation = async (userId, targetUserId) => {
     throw new AppError('userId hoặc targetUserId không hợp lệ', 400);
   }
 
+  if (userId === targetUserId) {
+    logger.error('Không thể tạo hội thoại với chính mình', { userId });
+    throw new AppError('Không thể tạo hội thoại với chính mình', 400);
+  }
+
   const now = new Date().toISOString();
   const conversationId = uuidv4();
 
-  // Kiểm tra targetUserId có phải là groupId
+  // Kiểm tra targetUserId có phải là groupId không
   const isGroup = await dynamoDB.get({
     TableName: 'Groups',
     Key: { groupId: targetUserId },
@@ -675,9 +680,9 @@ const createConversation = async (userId, targetUserId) => {
     userRestrict = userSettings.Item.restrictStrangerMessages || false;
   }
 
-  const createConversationRecord = (user, target, restrict) => ({
-    userId: user,
-    targetUserId: target,
+  const createConversationRecord = (ownerId, targetId, restrict) => ({
+    userId: ownerId,
+    targetUserId: targetId,
     conversationId,
     createdAt: now,
     updatedAt: now,
@@ -693,18 +698,34 @@ const createConversation = async (userId, targetUserId) => {
   });
 
   try {
-    const conversation = createConversationRecord(userId, targetUserId, userRestrict);
-    await dynamoDB.put({
-      TableName: 'Conversations',
-      Item: conversation,
-      ConditionExpression: 'attribute_not_exists(userId) AND attribute_not_exists(targetUserId)',
-    }).promise();
+    // Tạo bản ghi cho cả hai chiều
+    const conversation1 = createConversationRecord(userId, targetUserId, userRestrict);
+    const conversation2 = createConversationRecord(targetUserId, userId, userRestrict);
+
+    await Promise.all([
+      dynamoDB.put({
+        TableName: 'Conversations',
+        Item: conversation1,
+        ConditionExpression: 'attribute_not_exists(userId) AND attribute_not_exists(targetUserId)',
+      }).promise(),
+      dynamoDB.put({
+        TableName: 'Conversations',
+        Item: conversation2,
+        ConditionExpression: 'attribute_not_exists(userId) AND attribute_not_exists(targetUserId)',
+      }).promise(),
+    ]);
+
     logger.info('Tạo hội thoại thành công', { conversationId, userId, targetUserId });
     return { success: true, conversationId };
   } catch (error) {
     if (error.code === 'ConditionalCheckFailedException') {
       logger.warn('Hội thoại đã tồn tại', { userId, targetUserId });
-      return { success: true, conversationId: null };
+      // Lấy conversationId từ bản ghi hiện có
+      const existing = await dynamoDB.get({
+        TableName: 'Conversations',
+        Key: { userId, targetUserId },
+      }).promise();
+      return { success: true, conversationId: existing.Item?.conversationId || null };
     }
     logger.error('Lỗi khi tạo hội thoại', { userId, targetUserId, error: error.message });
     throw new AppError(`Không thể tạo hội thoại: ${error.message}`, 500);
