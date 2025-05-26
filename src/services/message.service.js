@@ -1113,77 +1113,123 @@ const unpinMessage = async (userId, messageId) => {
 };
 
 // Hàm lấy tin nhắn ghim
-const getPinnedMessages = async (userId, otherUserId) => {
-  logger.info('Lấy tin nhắn ghim của:', { userId, otherUserId });
+  const getPinnedMessages = async (userId, otherUserId) => {
+    logger.info('Lấy tin nhắn ghim của:', { userId, otherUserId });
 
-  try {
-    let pinnedMessageIds = [];
-    let isGroupChat = false;
+    try {
+      let pinnedMessageIds = [];
+      let isGroupChat = false;
 
-    // Kiểm tra xem otherUserId có phải là groupId không
-    const group = await dynamoDB.get({
-      TableName: 'Groups',
-      Key: { groupId: otherUserId },
-    }).promise();
-
-    if (group.Item) {
-      // Đây là chat nhóm
-      isGroupChat = true;
-      pinnedMessageIds = group.Item?.settings?.pinnedMessages || [];
-    } else {
-      // Chat 1-1
-      const conversation = await dynamoDB.get({
-        TableName: 'Conversations',
-        Key: { userId, targetUserId: otherUserId },
+      // Kiểm tra xem otherUserId có phải là groupId không
+      const group = await dynamoDB.get({
+        TableName: 'Groups',
+        Key: { groupId: otherUserId },
       }).promise();
-      pinnedMessageIds = conversation.Item?.settings?.pinnedMessages || [];
-    }
 
-    if (!pinnedMessageIds.length) {
-      return { success: true, messages: [] };
-    }
+      if (group.Item) {
+        // Đây là chat nhóm
+        isGroupChat = true;
+        pinnedMessageIds = group.Item?.settings?.pinnedMessages || [];
+      } else {
+        // Chat 1-1
+        const conversation = await dynamoDB.get({
+          TableName: 'Conversations',
+          Key: { userId, targetUserId: otherUserId },
+        }).promise();
+        pinnedMessageIds = conversation.Item?.settings?.pinnedMessages || [];
+      }
 
-    let messages = [];
-    if (isGroupChat) {
-      // Lấy tin nhắn từ bảng GroupMessages bằng chỉ mục groupId-messageId-index
-      messages = await Promise.all(
-        pinnedMessageIds.map(async messageId => {
-          const messageResult = await dynamoDB.query({
-            TableName: 'GroupMessages',
-            IndexName: 'groupId-messageId-index',
-            KeyConditionExpression: 'groupId = :groupId AND messageId = :messageId',
-            ExpressionAttributeValues: {
-              ':groupId': otherUserId, // groupId là otherUserId
-              ':messageId': messageId,
-            },
-            Limit: 1,
-          }).promise();
-          return messageResult.Items?.[0] || null;
+      if (!pinnedMessageIds.length) {
+        return { success: true, messages: [] };
+      }
+
+      let messages = [];
+      if (isGroupChat) {
+        // Lấy tin nhắn từ bảng GroupMessages
+        messages = await Promise.all(
+          pinnedMessageIds.map(async messageId => {
+            const messageResult = await dynamoDB.query({
+              TableName: 'GroupMessages',
+              IndexName: 'groupId-messageId-index',
+              KeyConditionExpression: 'groupId = :groupId AND messageId = :messageId',
+              ExpressionAttributeValues: {
+                ':groupId': otherUserId,
+                ':messageId': messageId,
+              },
+              Limit: 1,
+            }).promise();
+            return messageResult.Items?.[0] || null;
+          })
+        );
+      } else {
+        // Lấy tin nhắn từ bảng Messages
+        messages = await Promise.all(
+          pinnedMessageIds.map(async messageId => {
+            const message = await dynamoDB.get({
+              TableName: 'Messages',
+              Key: { messageId, ownerId: userId },
+            }).promise();
+            return message.Item;
+          })
+        );
+      }
+
+      const validMessages = messages
+        .filter(msg => msg && msg.isPinned && msg.status !== MESSAGE_STATUSES.RECALLED);
+
+      // Lấy thông tin sender cho mỗi tin nhắn
+      const senderIds = [...new Set(validMessages.map(msg => msg.senderId).filter(id => id))];
+      const userPromises = senderIds.map(senderId =>
+        dynamoDB.get({
+          TableName: 'Users',
+          Key: { userId: senderId },
+        }).promise()
+        .then(result => {
+          if (result.Item) {
+            const { userId, name, avatar, phoneNumber } = result.Item;
+            return { userId, name, avatar, phoneNumber };
+          } else {
+            logger.error('User not found', { userId: senderId });
+            return {
+              userId: senderId,
+              name: 'Chưa có tên',
+              avatar: 'default-avatar.png',
+              phoneNumber: 'Chưa có số điện thoại',
+            };
+          }
+        })
+        .catch(error => {
+          logger.error('Failed to fetch user info', { userId: senderId, error: error.message });
+          return {
+            userId: senderId,
+            name: 'Chưa có tên',
+            avatar: 'default-avatar.png',
+            phoneNumber: 'Chưa có số điện thoại',
+          };
         })
       );
-    } else {
-      // Lấy tin nhắn từ bảng Messages
-      messages = await Promise.all(
-        pinnedMessageIds.map(async messageId => {
-          const message = await dynamoDB.get({
-            TableName: 'Messages',
-            Key: { messageId, ownerId: userId },
-          }).promise();
-          return message.Item;
-        })
-      );
+
+      const users = await Promise.all(userPromises);
+      const userMap = users.reduce((map, user) => {
+        map[user.userId] = user;
+        return map;
+      }, {});
+
+      // Gắn thông tin sender vào tin nhắn
+      const enrichedMessages = validMessages.map(msg => ({
+        ...msg,
+        sender: msg.senderId ? { ...userMap[msg.senderId] } : null,
+      }));
+
+      // Sắp xếp theo timestamp giảm dần
+      enrichedMessages.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+
+      return { success: true, messages: enrichedMessages };
+    } catch (err) {
+      logger.error('Lỗi khi lấy tin nhắn ghim:', err);
+      throw new AppError('Không thể lấy tin nhắn ghim', 500);
     }
-
-    const validMessages = messages
-      .filter(msg => msg && msg.isPinned && msg.status !== MESSAGE_STATUSES.RECALLED)
-      .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-
-    return { success: true, messages: validMessages };
-  } catch (err) {
-    logger.error('Lỗi khi lấy tin nhắn ghim:', err);
-    throw new AppError('Không thể lấy tin nhắn ghim', 500);
-  }
-};
+  };
 
 const deleteMessage = async (userId, messageId) => {
   try {
