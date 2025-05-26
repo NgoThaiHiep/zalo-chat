@@ -732,6 +732,33 @@ const getGroupMessagesController = async (req, res) => {
   }
 };
 
+const markGroupMessageAsSeenController = async (req, res) => {
+  try {
+    const { groupId, messageId } = req.params;
+    const userId = req.user.id;
+    const result = await groupService.markGroupMessageAsSeen(groupId, userId, messageId);
+
+    // Emit a Socket.IO event if needed
+    req.io.of('/group').to(`group:${groupId}`).emit('messageSeen', {
+      groupId,
+      messageId,
+      seenBy: userId,
+    });
+
+    res.status(200).json({
+      success: true,
+      message: result.message,
+      data: result,
+    });
+  } catch (error) {
+    logger.error('Lỗi khi đánh dấu tin nhắn nhóm là đã xem', { error: error.message });
+    res.status(error.statusCode || 500).json({
+      success: false,
+      message: error.message || 'Lỗi server khi đánh dấu tin nhắn nhóm là đã xem',
+    });
+  }
+};
+
 module.exports = {
   assignMemberRoleController,
   createGroupController,
@@ -757,5 +784,7 @@ module.exports = {
   getGroupInfoController,
   deleteGroupMessageController,
   restoreGroupMessageController,
+  getGroupMessagesController,
+  markGroupMessageAsSeenController,
   upload,
 };

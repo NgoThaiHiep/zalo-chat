@@ -13,7 +13,6 @@ const initializeChatSocket = (chatIo) => {
     socket.join(`user:${userId}`);
     logger.info('[ChatSocket] User joined room', { userId, room: `user:${userId}` });
 
-    // Tham gia các phòng cuộc trò chuyện của user
     const joinConversationRooms = async () => {
       try {
         const conversations = await MessageService.getConversationsForUser(userId);
@@ -90,6 +89,12 @@ const initializeChatSocket = (chatIo) => {
 
         if (receiverId) {
           chatIo.to(`user:${receiverId}`).emit('receiveMessage', newMessage);
+          // Phát tín hiệu để cập nhật danh sách chat-item cho cả sender và receiver
+          const conversationRoom = `conversation:${[userId, receiverId].sort().join(':')}`;
+          chatIo.to(conversationRoom).emit('updateChatList', {
+            conversationId: conversationRoom,
+            message: newMessage,
+          });
         }
 
         logger.info('[ChatSocket] Message sent', { messageId: newMessage.messageId, senderId: userId, receiverId });
@@ -129,6 +134,13 @@ const initializeChatSocket = (chatIo) => {
         chatIo.to(`user:${userId}`).emit('receiveMessage', result);
         chatIo.to(`user:${targetReceiverId}`).emit('receiveMessage', result);
 
+        // Cập nhật danh sách chat-item cho cả sender và receiver
+        const conversationRoomSender = `conversation:${[userId, targetReceiverId].sort().join(':')}`;
+        chatIo.to(conversationRoomSender).emit('updateChatList', {
+          conversationId: conversationRoomSender,
+          message: result,
+        });
+
         logger.info('[ChatSocket] Message forwarded', { messageId, userId, targetReceiverId });
         callback({ success: true, data: result });
       } catch (error) {
@@ -148,6 +160,12 @@ const initializeChatSocket = (chatIo) => {
 
         chatIo.to(`group:${targetGroupId}`).emit('newGroupMessage', {
           groupId: targetGroupId,
+          message: result,
+        });
+
+        // Cập nhật danh sách chat-item cho nhóm
+        chatIo.to(`group:${targetGroupId}`).emit('updateChatList', {
+          conversationId: targetGroupId,
           message: result,
         });
 
@@ -256,6 +274,13 @@ const initializeChatSocket = (chatIo) => {
         if (result.receiverId !== userId) {
           chatIo.to(`user:${result.receiverId}`).emit('receiveMessage', result);
         }
+
+        // Cập nhật danh sách chat-item
+        const conversationRoom = `conversation:${[userId, result.receiverId].sort().join(':')}`;
+        chatIo.to(conversationRoom).emit('updateChatList', {
+          conversationId: conversationRoom,
+          message: result,
+        });
 
         logger.info('[ChatSocket] Message retried', { messageId, userId });
         callback({ success: true, data: result });

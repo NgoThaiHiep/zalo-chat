@@ -54,6 +54,11 @@ module.exports = (groupIo) => {
         }
         const message = await groupService.sendGroupMessage(data.groupId, userId, data);
         groupIo.to(`group:${data.groupId}`).emit('newGroupMessage', { groupId: data.groupId, message });
+        // Phát tín hiệu để cập nhật danh sách chat-item
+        groupIo.to(`group:${data.groupId}`).emit('updateChatList', {
+          conversationId: data.groupId,
+          message,
+        });
         callback({ success: true, data: message });
         logger.info('[GroupSocket] Group message sent', {
           groupId: data.groupId,
