@@ -25,7 +25,7 @@ const {
   getGroupMessagesController,
   forwardGroupMessageToUserController,
   forwardGroupMessageController,
- 
+  markGroupMessageAsSeenController,
 } = require('../controllers/groupController');
 const { uploadProfileImages } = require('../middlewares/uploadMiddleware');
 const upload = require('../middlewares/upload');
@@ -107,4 +107,7 @@ router.get('/messages/:groupId', getGroupMessagesController);
 router.delete('/pin/messages/:groupId/:messageId', pinGroupMessageController);
 
 router.delete('/pin/messages/:groupId/:messageId', pinGroupMessageController); // Bỏ ghim tin nhắn nhóm
+
+// Đánh dấu tin nhắn nhóm đã xem
+router.patch('/messages/seen/:groupId/:messageId', authMiddleware, markGroupMessageAsSeenController);
 module.exports = router;

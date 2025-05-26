@@ -1584,3 +1584,6 @@
 {"error":"Hội thoại đã được ghim!","level":"error","message":"[pinConversationController] Error","timestamp":"2025-05-25T16:04:41.415Z"}
 {"error":"Hội thoại đã được ghim!","level":"error","message":"[pinConversationController] Error","timestamp":"2025-05-25T16:05:08.077Z"}
 {"error":"Hội thoại đã được ghim!","level":"error","message":"[pinConversationController] Error","timestamp":"2025-05-25T16:05:25.090Z"}
+{"error":"Người dùng không tồn tại!","level":"error","message":"[pinConversationController] Error","timestamp":"2025-05-25T17:43:37.227Z"}
+{"error":"Nhóm không tồn tại!","level":"error","message":"Lỗi khi lấy tin nhắn nhóm","timestamp":"2025-05-25T18:08:18.118Z"}
+{"error":"Người dùng không tồn tại!","level":"error","message":"[pinConversationController] Error","timestamp":"2025-05-25T19:18:06.584Z"}

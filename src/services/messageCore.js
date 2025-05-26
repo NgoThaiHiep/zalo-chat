@@ -1,4 +1,3 @@
-// src/services/messageCore.js
 const { dynamoDB, s3 } = require('../config/aws.config');
 const { v4: uuidv4 } = require('uuid');
 const logger = require('../config/logger');
@@ -124,7 +123,7 @@ const sendMessageCore = async (message, tableName, bucketName) => {
         quality,
         replyToMessageId: replyToMessageId || null,
         isPinned: false,
-        status: initialStatus,
+        status: initialStatus, // Tôn trọng initialStatus được truyền vào
         timestamp: new Date().toISOString(),
         expiresAt: expiresAt ? parsedExpiresAt.toISOString() : null,
       }
@@ -143,7 +142,7 @@ const sendMessageCore = async (message, tableName, bucketName) => {
         quality,
         replyToMessageId: replyToMessageId || null,
         isPinned: false,
-        status: initialStatus,
+        status: initialStatus, // Tôn trọng initialStatus được truyền vào
         timestamp: new Date().toISOString(),
         expiresAt: expiresAt ? parsedExpiresAt.toISOString() : null,
       };

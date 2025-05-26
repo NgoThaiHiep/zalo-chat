@@ -1185,11 +1185,15 @@ const sendGroupMessage = async (groupId, senderId, messageData) => {
     quality,
     replyToMessageId: replyToMessageId || null,
     file: file || null,
+    status: MESSAGE_STATUSES.SENT,
     timestamp: new Date().toISOString(),
   };
 
   const savedMessage = await sendMessageCore(newMessage, TABLE_NAME, bucketName);
-  
+  console.log('Saved message:', savedMessage);
+  if (savedMessage.status !== MESSAGE_STATUSES.SENT) {
+    logger.warn('Message saved with incorrect status:', { messageId: savedMessage.messageId, status: savedMessage.status });
+  }
   // Cập nhật lastMessage cho tất cả thành viên trong nhóm
   await updateLastMessageForGroup(groupId, savedMessage);
 
@@ -2021,7 +2025,65 @@ const isUserGroupMember = async (groupId, userId) => {
     if (err.statusCode === 403) return false;
     throw err; 
   }
+
 }
+
+const markGroupMessageAsSeen = async (groupId, userId, messageId) => {
+  logger.info(`Marking group message as seen`, { groupId, userId, messageId });
+
+  // 1. Kiểm tra tham số đầu vào
+  if (!groupId || !isValidUUID(groupId) || !userId || !isValidUUID(userId) || !messageId || !isValidUUID(messageId)) {
+    throw new AppError('Tham số không hợp lệ', 400);
+  }
+
+  // 2. Kiểm tra nhóm tồn tại và userId là thành viên
+  const groupResult = await dynamoDB.get({ TableName: 'Groups', Key: { groupId } }).promise();
+  if (!groupResult.Item) {
+    throw new AppError('Nhóm không tồn tại!', 404);
+  }
+  const group = groupResult.Item;
+  if (!group.members.includes(userId)) {
+    throw new AppError('Bạn không phải thành viên của nhóm này!', 403);
+  }
+
+  // 3. Kiểm tra tin nhắn tồn tại
+  const messageResult = await dynamoDB.query({
+    TableName: 'GroupMessages',
+    IndexName: 'groupId-messageId-index',
+    KeyConditionExpression: 'groupId = :groupId AND messageId = :messageId',
+    ExpressionAttributeValues: {
+      ':groupId': groupId,
+      ':messageId': messageId,
+    },
+    Limit: 1,
+  }).promise();
+
+  if (!messageResult.Items || messageResult.Items.length === 0) {
+    throw new AppError('Tin nhắn không tồn tại!', 404);
+  }
+
+  const message = messageResult.Items[0];
+
+  // 4. Kiểm tra trạng thái tin nhắn
+  if (message.status === MESSAGE_STATUSES.SEEN) {
+    return { message: 'Tin nhắn đã được đánh dấu là đã xem' };
+  }
+  if (message.status === MESSAGE_STATUSES.RECALLED || message.status === MESSAGE_STATUSES.ADMINDRECALLED) {
+    throw new AppError('Không thể đánh dấu tin nhắn đã thu hồi là đã xem', 400);
+  }
+
+  // 5. Cập nhật trạng thái tin nhắn thành 'seen'
+  await dynamoDB.update({
+    TableName: 'GroupMessages',
+    Key: { groupId, timestamp: message.timestamp },
+    UpdateExpression: 'SET #status = :seen',
+    ExpressionAttributeNames: { '#status': 'status' },
+    ExpressionAttributeValues: { ':seen': MESSAGE_STATUSES.SEEN },
+  }).promise();
+
+  logger.info(`Group message marked as seen`, { groupId, userId, messageId });
+  return { message: 'Tin nhắn đã được đánh dấu là đã xem' };
+};
 
 module.exports = {
   assignMemberRole ,
@@ -2051,4 +2113,5 @@ module.exports = {
   isUserAdmin,
   isUserGroupMember,
   unpinGroupMessage,
+  markGroupMessageAsSeen,
 };
